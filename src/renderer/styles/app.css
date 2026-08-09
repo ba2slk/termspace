@@ -1,0 +1,1688 @@
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * Scrollbars. The default widget brings a track, arrows and a heavy bar, which
+ * shouts next to everything else here. Drop the track, keep the thumb.
+ */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  /* Inset via a transparent border, so the bar floats off the edge. The
+     radius is the thumb's own plus that border, or the corners flatten. */
+  border: 3px solid transparent;
+  border-radius: calc(var(--radius-xs) + 3px);
+  background: var(--thumb-faint);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--thumb-hover-strong);
+  background-clip: padding-box;
+}
+
+/*
+ * Thinner inside a terminal: it belongs to one panel rather than the whole
+ * sheet, and even a few pixels visibly narrow a small pane. Same thickness as
+ * the canvas scrollbar, so the two directions match.
+ */
+.xterm-viewport::-webkit-scrollbar {
+  width: var(--scroll-w);
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  border: none;
+  border-radius: var(--radius-xs);
+  background: var(--thumb);
+  background-clip: padding-box;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--thumb-hover);
+  background-clip: padding-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-ui);
+  /* Text selection is only in the way outside a terminal; re-enabled inside. */
+  user-select: none;
+  cursor: default;
+}
+
+/* ── Shell ────────────────────────────────────────────── */
+
+#app {
+  display: grid;
+  grid-template-rows: var(--bar-h) 1fr;
+  height: 100%;
+}
+
+/* ── Title bar ────────────────────────────────────────── */
+
+/*
+ * The app draws the row the OS menu bar used to take. It is also the handle for
+ * moving the window, so the background drags and only the buttons opt out.
+ */
+.app-bar {
+  /* The rail is positioned against this. Without it the rail escapes to the
+     window and draws across the sidebar at the very bottom of the screen. */
+  position: relative;
+  display: flex;
+  /*
+   * Controls sit against the bar's bottom edge, with the air above them. The
+   * canvas already keeps 6px below, so slack down here would stack on top of it
+   * and open a band between the title and the panes.
+   */
+  align-items: flex-end;
+  padding: 4px 4px 0;
+  color: var(--fg-faint);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.app-bar__side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 108px;
+  -webkit-app-region: no-drag;
+}
+
+.app-bar__side--end {
+  justify-content: flex-end;
+}
+
+.app-bar__title {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+/*
+ * The canvas is scrolled from here. Fixed width rather than the whole row: the
+ * bar either side has to stay draggable, and a drag region cannot receive a
+ * wheel at all — the window manager takes the event first.
+ */
+.app-bar__pan {
+  -webkit-app-region: no-drag;
+  flex: 0 1 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctl-h);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background var(--dur) ease-out,
+    color var(--dur) ease-out;
+}
+
+/* Hovering shows how far the strip reaches; without it the edges are guesswork. */
+.app-bar__pan:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+  cursor: ew-resize;
+}
+
+.app-bar__pan--off {
+  -webkit-app-region: drag;
+}
+
+.app-bar__pan--off:hover {
+  background: none;
+  color: var(--fg-dim);
+  cursor: default;
+}
+
+.app-bar__btn,
+.app-bar__win {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctl-h);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+.app-bar__btn {
+  width: 28px;
+}
+
+.app-bar__win {
+  width: 32px;
+}
+
+.app-bar__btn:hover,
+.app-bar__win:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.app-bar__win--close:hover {
+  background: var(--danger);
+  color: var(--bg-canvas);
+}
+
+/* ── Command menu ─────────────────────────────────────── */
+
+.command-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 250px;
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-overlay);
+}
+
+.command-menu[hidden] {
+  display: none;
+}
+
+.command-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.command-menu__item:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+
+.command-menu__item:disabled {
+  color: var(--fg-faint);
+}
+
+.command-menu__hint {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.command-menu__separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* ── Workspace ────────────────────────────────────────── */
+
+/*
+ * The sidebar sits outside the canvas. Sliding with it would carry away the one
+ * thing saying where you are. The gap between them is the resize handle, same
+ * rule as between panes: visible 6px, grabbable 12px.
+ */
+.workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sidebar-w, 220px) 1fr;
+  height: 100%;
+  min-height: 0;
+  padding-left: var(--edge);
+  /*
+   * No grid gap. The canvas already insets by --edge, so adding --gap here would
+   * make this one seam 12px while every other is 6px.
+   */
+  gap: 0;
+}
+
+.workspace.canvas--sidebar-hidden {
+  grid-template-columns: 0 1fr;
+  padding-left: 0;
+}
+
+.workspace.canvas--sidebar-hidden > .sidebar,
+.workspace.canvas--sidebar-hidden > .sidebar__grip {
+  display: none;
+}
+
+/* ── Session sidebar ──────────────────────────────────── */
+
+/*
+ * Shares the panel look — same border and corners — but is laid out in the grid
+ * rather than absolutely.
+ */
+.sidebar {
+  /*
+   * Name the column explicitly. Leaving it to DOM order means one append call
+   * can swap the whole layout left to right.
+   */
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: var(--edge) 0;
+  overflow: hidden;
+}
+
+/* Laid over the 6px seam, same rule as the handles between panes. */
+.sidebar__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-w, 220px) + var(--edge) + var(--gap) / 2 - var(--hit) / 2);
+  width: var(--hit);
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 6px 0 10px;
+}
+
+.sidebar__title {
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+}
+
+.sidebar__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+.sidebar__action:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.sidebar__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 8px;
+}
+
+.sidebar__row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.sidebar__row:hover {
+  background: var(--fill-hover-faint);
+}
+
+/* The session on screen — exactly one row is lit. */
+.sidebar__row--current {
+  background: var(--fill-selected);
+}
+
+/* Where the wheel dial points; the session opens once the wheel rests. */
+.sidebar__row--preview {
+  outline: 1px solid var(--border-active);
+  outline-offset: -1px;
+}
+
+.sidebar__open {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 8px;
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar__row--current .sidebar__open {
+  color: var(--fg);
+}
+
+.sidebar__open:disabled {
+  color: var(--danger);
+}
+
+/* Only running sessions light up. Which are alive has to be visible. */
+.sidebar__dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--border-focus);
+}
+
+/* Running. No glow — a halo would make the list noisy. */
+.sidebar__dot--on {
+  background: var(--live);
+  border-color: var(--live);
+}
+
+/* A pane of this session rang while you were somewhere else. */
+.sidebar__dot--wants {
+  background: var(--wants);
+  border-color: var(--wants);
+}
+
+.sidebar__name {
+  /* Only as wide as the name. flex: 1 would push the count to the far edge,
+     when name and count should read as one thing. */
+  flex: 0 1 auto;
+  font-size: var(--fs-ui-lg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__meta {
+  flex: 0 0 auto;
+  /* Push the slack right, keeping name and count together. */
+  margin-right: auto;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.sidebar__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-faint);
+  cursor: default;
+  opacity: 0;
+}
+
+.sidebar__row:hover .sidebar__close {
+  opacity: 1;
+}
+
+.sidebar__close:hover {
+  background: var(--bg-raised);
+  color: var(--danger);
+}
+
+.sidebar__error {
+  flex: 0 0 100%;
+  padding: 0 6px 6px 25px;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+  line-height: 1.5;
+}
+
+.sidebar__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 8px;
+  color: var(--fg-dim);
+  line-height: 1.6;
+}
+
+.sidebar__empty > code {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+  word-break: break-all;
+}
+
+/* ── Canvas ───────────────────────────────────────────── */
+
+.canvas {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden; /* Scrolling is done with transform, not browser overflow. */
+}
+
+/*
+ * Fixed seams down both sides. The canvas inset scrolls away with the content,
+ * so panes would butt against the sidebar on the left and the window frame on
+ * the right; these bands hold the 6px at any offset.
+ */
+.canvas-gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--edge);
+  background: var(--bg-canvas);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.canvas-gutter--right {
+  left: auto;
+  right: 0;
+}
+
+/* Before any session is open. */
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
+.canvas-empty[hidden] {
+  display: none;
+}
+
+.canvas-empty__mark {
+  width: 96px;
+  height: 96px;
+  color: var(--fg-faint);
+}
+
+
+/* Quiet on purpose: it names the app without competing with the list. */
+.canvas-empty__word {
+  margin-top: -4px;
+  font-size: var(--fs-ui);
+  letter-spacing: 0.14em;
+  color: var(--fg-faint);
+}
+
+/* Labels right, chords left, so both columns read down their inner edge. */
+.canvas-empty__keys {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 7px 14px;
+  align-items: baseline;
+  margin: 14px 0 0;
+  font-size: var(--fs-ui-sm);
+}
+
+.canvas-empty__keys > dt {
+  text-align: right;
+  color: var(--fg-faint);
+}
+
+.canvas-empty__keys > dd {
+  margin: 0;
+  text-align: left;
+  color: var(--fg-dim);
+}
+
+/* A footnote to the list above, not a fifth row: dimmer and set apart. */
+.canvas-empty__more {
+  margin: 12px 0 0;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.canvas-track {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.session-host {
+  position: absolute;
+  inset: 0;
+}
+
+.session-host[hidden] {
+  display: none;
+}
+
+/*
+ * The canvas scrollbar.
+ *
+ * Shown whenever the canvas overflows rather than only while scrolling — it is
+ * the only thing saying more exists off screen, and a hint that hides says
+ * nothing. Left and right ends line up with the pane edges; its length and
+ * position are set in canvas-view.
+ */
+.scroll-indicator {
+  position: absolute;
+  /* Clear of the pane outline above it; see CANVAS_BOTTOM. */
+  bottom: 3px;
+  height: var(--scroll-w);
+  border-radius: var(--radius-xs);
+  background: var(--thumb);
+  transition: background var(--dur) ease-out;
+  cursor: grab;
+  z-index: 3;
+}
+
+/* Grabbable without being any thicker: the bar keeps its size, the target grows. */
+.scroll-indicator::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--scroll-hit) * -1) 0;
+}
+
+.canvas--thumb-dragging .scroll-indicator {
+  cursor: grabbing;
+}
+
+.scroll-indicator[hidden] {
+  display: none;
+}
+
+/* ── Panels ───────────────────────────────────────────── */
+
+/*
+ * The floating panel look, shared by canvas terminals (.pane) and app chrome
+ * (.sidebar). Same shape, different things — one class for both would make
+ * "select every terminal pane" pick up the sidebar too.
+ */
+.panel {
+  overflow: hidden;
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* No shadow: on a dark background it only muddies the edge. */
+}
+
+.pane {
+  position: absolute;
+  /*
+   * Match the terminal background. Left as the panel colour, the body's inset
+   * padding shows as a mismatched band inside the rounded corners the moment
+   * the palette changes. The panel colour stays as a fallback.
+   */
+  background: var(--term-bg, var(--bg-pane));
+}
+
+/*
+ * Focus.
+ *
+ * With no header or status bar inside a panel, the border is the only signal,
+ * and one step of brightness is not enough to find among six panes. Said twice:
+ * brighten the focused border, and dim everyone else's content. Either alone
+ * leaves you searching.
+ */
+.pane--focused {
+  border-color: var(--border-active);
+  /* A hard 1px ring outside the border, not a blur. It ends inside the 6px gap,
+     so it neither reaches the neighbour nor changes the layout. */
+  box-shadow: 0 0 0 1px var(--ring-active);
+}
+
+.pane__body {
+  position: relative;
+  height: 100%;
+  padding: 4px 6px;
+  user-select: text;
+}
+
+/*
+ * Dim the content of unfocused panes.
+ *
+ * Changing the pane background does nothing — xterm paints its own opaquely, so
+ * only a scrim on top is visible. Never dark enough to stop the neighbouring
+ * logs being read.
+ */
+.pane:not(.pane--focused) .pane__body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-idle);
+  /* A selection drag must not be blocked by the scrim. */
+  pointer-events: none;
+}
+
+/* Outside the active region: the browser skips layout and paint for this subtree. */
+.pane--frozen .pane__body {
+  content-visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Scrollback search ────────────────────────────────── */
+
+/* Sits inside the focused pane's body, top right, over the terminal. */
+.search-bar {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--fs-ui-sm);
+}
+
+.search-bar__input {
+  width: 160px;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-ui-sm);
+}
+
+.search-bar--empty .search-bar__input {
+  color: var(--danger);
+}
+
+.search-bar__count {
+  min-width: 3.5ch;
+  text-align: right;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-bar__button {
+  padding: 2px 5px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-ui-sm);
+  cursor: pointer;
+}
+
+.search-bar__button:hover {
+  color: var(--fg);
+  background: var(--fill-hover);
+}
+
+.search-bar__button--on {
+  color: var(--fg);
+  background: var(--fill-active);
+}
+
+/* ── Overview ─────────────────────────────────────────── */
+
+/* Over the whole canvas; the session keeps running underneath. */
+.overview {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overview-scrim);
+  outline: none;
+}
+
+/* The scaled canvas; cards are placed absolutely inside it. */
+.overview__map {
+  position: relative;
+}
+
+.overview__card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  overflow: hidden;
+  background: var(--bg-pane);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* Same two-part grammar as the canvas: brighter border plus a hard ring. */
+.overview__card--selected {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 1px var(--ring-active);
+}
+
+.overview__card--error {
+  border-color: var(--danger);
+}
+
+.overview__card--error .overview__title {
+  color: var(--danger);
+}
+
+.overview__title {
+  color: var(--fg);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+}
+
+.overview__card--running .overview__title::after {
+  content: ' ●';
+  color: var(--live);
+  font-size: 9px;
+}
+
+/*
+ * Rang while you were elsewhere. The border carries it rather than a badge —
+ * a card is small, and a badge would cover the title it sits next to.
+ */
+.overview__card--wants {
+  border-color: var(--wants);
+}
+
+.overview__card--wants .overview__title::before {
+  content: '● ';
+  color: var(--wants);
+  font-size: 9px;
+}
+
+/* What the program calls itself (OSC 0/2) — quieter than the command above it. */
+.overview__reported {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.overview__command {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Where the real viewport sits on the map right now. Border only, and heavy:
+   the 1px card borders around it would drown a 1px marker, while a fill wash
+   dimmed the cards it covered. */
+.overview__viewport {
+  position: absolute;
+  border: 2px solid var(--overview-viewport-border);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+/* ── Resize handles ───────────────────────────────────── */
+
+/* Invisible: 12px laid over the 6px gap, revealed only by the cursor. */
+.resize-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.resize-handle--column {
+  cursor: col-resize;
+  width: var(--hit);
+}
+
+.resize-handle--pane {
+  cursor: row-resize;
+  height: var(--hit);
+}
+
+/* While dragging, the terminal must not take the mouse. */
+.canvas--dragging .pane__body {
+  pointer-events: none;
+}
+
+/* ── Key chips ────────────────────────────────────────── */
+
+.kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: var(--fs-ui-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+}
+
+.chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-row__plus {
+  color: var(--fg-faint);
+}
+
+/* ── Empty state and full-screen sheets ───────────────── */
+
+/*
+ * Backdrop behind a sheet.
+ *
+ * A sheet floats with 6px clear on every side, and behind it is a live canvas.
+ * Without this layer the terminal shows through that seam.
+ */
+.sheet-layer {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-canvas);
+  z-index: 4;
+}
+
+.sheet-layer[hidden] {
+  display: none;
+}
+
+.sheet {
+  position: absolute;
+  inset: var(--edge);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.button {
+  padding: 5px 12px;
+  /* Labels carry their key in brackets; wrapped, they read as two things. */
+  white-space: nowrap;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: var(--border-focus);
+}
+
+.key-hints {
+  margin-top: 18px;
+}
+
+.session-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.session-row__meta {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+/* ── Error card and exit banner ───────────────────────── */
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 12px;
+  overflow: auto;
+  color: var(--fg-dim);
+  line-height: 1.6;
+}
+
+.error-card__title {
+  color: var(--danger);
+}
+
+.error-card__path {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+  word-break: break-all;
+}
+
+.exit-banner {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  z-index: 1;
+}
+
+/* ── Settings ─────────────────────────────────────────── */
+
+.settings {
+  /* Long enough to read top down, unlike the list screen. */
+  align-items: center;
+}
+
+.settings__body {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 0 32px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/*
+ * Title and close stay put. Settings run past one screen, and scrolling back up
+ * just to close would be a chore.
+ */
+.settings__bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0 14px;
+  background: var(--bg-pane);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings__title {
+  font-size: var(--fs-title);
+  color: var(--fg);
+}
+
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings__heading {
+  margin: 0;
+  font-size: var(--fs-ui);
+  font-weight: normal;
+  color: var(--fg-dim);
+  letter-spacing: 0.04em;
+}
+
+/* No box: the rows breathe on the page itself, separated by space alone. */
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 0;
+}
+
+.settings__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings__text > small {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-dim);
+  line-height: 1.6;
+}
+
+.settings__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.settings__value {
+  min-width: 74px;
+  text-align: right;
+  color: var(--fg);
+}
+
+/*
+ * Reserved even when there is nothing to restore: hiding it outright would
+ * move the control beside it the first time a value left its default.
+ */
+.settings__reset {
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg-faint);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings__reset:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.settings__reset:disabled {
+  visibility: hidden;
+}
+
+/* The default slider widget shouts; match the rest of the screen. */
+.settings input[type='range'] {
+  appearance: none;
+  width: 220px;
+  height: 3px;
+  border-radius: var(--radius-dot);
+  background: var(--border-focus);
+  cursor: default;
+}
+
+.settings input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--fg);
+}
+
+/* Tabs sit in the sticky bar, so a long shortcut list never scrolls them away. */
+.settings__tabs {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+  margin-left: 24px;
+}
+
+.settings__tab {
+  padding: 5px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings__tab:hover {
+  color: var(--fg);
+}
+
+.settings__tab--on {
+  border-color: var(--border);
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.keys__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.keys__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+}
+
+.keys__search:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.keys__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.keys__group {
+  margin: 18px 0 2px;
+  font-size: var(--fs-ui);
+  font-weight: normal;
+  color: var(--fg-dim);
+}
+
+.keys__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.keys__label {
+  color: var(--fg);
+}
+
+.keys__chords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* The chord and its remove button read as one control, so they share a border. */
+.keys__chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.keys__chord {
+  padding: 4px 10px;
+  background: var(--bg-raised);
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.keys__chord:hover {
+  background: var(--bg-canvas);
+}
+
+.keys__chord--recording {
+  border: 1px dashed var(--border-active);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-dim);
+  font-family: inherit;
+}
+
+.keys__remove,
+.keys__add,
+.keys__reset {
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--fg-faint);
+  font: inherit;
+  cursor: pointer;
+}
+
+.keys__add,
+.keys__reset {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.keys__remove:hover,
+.keys__add:hover,
+.keys__reset:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.keys__unbound {
+  color: var(--fg-faint);
+}
+
+.keys__warnings {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
+}
+
+.keys__warning {
+  font-size: var(--fs-ui-sm);
+  color: var(--danger);
+}
+
+.keys__empty {
+  margin: 18px 0;
+  color: var(--fg-dim);
+}
+
+.settings__note {
+  margin: 0;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-dim);
+  line-height: 1.8;
+}
+
+/* The rc line is copied by hand as often as by button, so it must select cleanly. */
+.settings__snippet {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-ui-sm);
+  white-space: pre;
+  user-select: text;
+}
+
+.settings__subnote {
+  display: block;
+  padding-bottom: 10px;
+  color: var(--fg-dim);
+  font-size: var(--fs-ui-sm);
+  line-height: 1.7;
+}
+
+.settings__close {
+  flex: 0 0 auto;
+}
+
+/* Binary settings. Two segments read better than a slider between 0 and 1. */
+.settings__toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.settings__segment {
+  padding: 5px 14px;
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font: inherit;
+  cursor: default;
+}
+
+.settings__segment:hover {
+  color: var(--fg);
+}
+
+.settings__segment--on {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+/* Divider in the app bar, separating window controls from pane controls. */
+.app-bar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 5px;
+  background: var(--border);
+}
+
+.app-bar__btn:disabled {
+  opacity: 0.35;
+}
+
+.app-bar__btn:disabled:hover {
+  background: none;
+  color: var(--fg-faint);
+}
+
+/* For values that suit neither a slider nor a toggle, like a font name. */
+.settings__select {
+  max-width: 260px;
+  padding: 4px 8px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: default;
+}
+
+.settings__select:hover:not(:disabled) {
+  border-color: var(--border-focus);
+}
+
+.settings__select:disabled {
+  color: var(--fg-faint);
+}
+
+/* ── Save session ─────────────────────────────────────── */
+
+.button:disabled {
+  color: var(--fg-faint);
+  border-color: var(--border);
+}
+
+/* The one thing this dialog is for; it should stand apart. */
+.button--accent {
+  background: var(--bg-raised);
+  border-color: var(--border-focus);
+  color: var(--fg);
+}
+
+.button--accent:hover:not(:disabled) {
+  border-color: var(--border-active);
+}
+
+/* Overwriting someone's file is irreversible, so it carries colour. */
+.button--danger,
+.button--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Only asks for a name, so it does not cover the screen. */
+.save-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Leave the canvas partly visible: what is being saved should show through. */
+  background: var(--scrim-dialog);
+}
+
+/*
+ * Wide enough that a warning, a path and a labelled row each stay on one line.
+ * It scales with the interface size, or a larger font would wrap the very
+ * sentences the extra width was bought for.
+ */
+.save-session__card {
+  width: min(calc(560px * var(--ui-scale)), calc(100% - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+  border-color: var(--border-focus);
+}
+
+.save-session__title {
+  font-size: var(--fs-title);
+  color: var(--fg);
+}
+
+.save-session__lead {
+  margin: 0;
+  color: var(--fg-dim);
+  line-height: 1.6;
+}
+
+/*
+ * Both rows share one grid, so the longest label sets where every input starts.
+ * A guessed minimum width staggered them instead: "Base directory" outgrows any
+ * value narrow enough to look tidy next to "Name", and each locale differs.
+ */
+.save-session__fields {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  align-items: center;
+  gap: 14px 10px;
+}
+
+.save-session__field {
+  display: contents;
+  color: var(--fg-dim);
+}
+
+/* Each cell names its column: the name row has no button, and without this the
+ * grid would place the next row's label in the empty third column. */
+.save-session__field > span,
+.save-session__field > label {
+  grid-column: 1;
+  white-space: nowrap;
+}
+
+.save-session__browse {
+  grid-column: 3;
+}
+
+.save-session__input {
+  grid-column: 2;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+}
+
+.save-session__input:focus {
+  outline: none;
+  border-color: var(--border-active);
+}
+
+.save-session__path {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+  word-break: break-all;
+}
+
+.save-session__status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.save-session__status--warn {
+  color: var(--danger);
+}
+
+.save-session__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Header actions, sitting together on the right. */
+.sidebar__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Transient notice ─────────────────────────────────── */
+
+/*
+ * Bottom corner. Centred it would interrupt rather than notify — this fires
+ * hundreds of times a day.
+ */
+.toast {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 6;
+  padding: 6px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+  font-size: var(--fs-ui-sm);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--dur) ease-out;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+.toast--leaving {
+  opacity: 0;
+}
+
+/*
+ * The terminal's own scrollbar.
+ *
+ * xterm 6 draws a VS Code derived scrollbar rather than the browser's, so
+ * ::-webkit-scrollbar rules are ignored entirely. Its width is inline, hence
+ * the !important.
+ */
+.xterm-scrollable-element > .scrollbar.vertical,
+.xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: var(--scroll-w) !important;
+}
+
+.xterm-scrollable-element > .scrollbar.vertical > .slider {
+  border-radius: var(--radius-xs);
+}
+
+/*
+ * The character being composed, before the IME commits it.
+ *
+ * xterm paints this overlay #000 on #FFF whatever the palette is, so a black
+ * block lands on the line you are typing and its edge reads as a stray rule
+ * across the row above. Take the terminal's own colours and mark the text the
+ * way every other terminal marks a preedit: underlined.
+ */
+.xterm .composition-view {
+  background: var(--term-bg, #1b1b1b);
+  color: var(--term-fg, #cfcbc4);
+  /* Underline the text, not the box: the box is measured one cell wide and a
+     Hangul syllable takes two, so it ends mid-character. */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  /* The overlay replaces the cell, so it must occlude the cursor drawn beneath
+     it. It cannot do that exactly: this box is a DOM rect placed with
+     fractional CSS maths, while the cursor is a raster on the WebGL canvas
+     snapped to whole device pixels. Under a fractional display scale the two
+     disagree by about a pixel and the cursor leaks out as a blinking sliver.
+     A ring in the background colour covers the gap on every side without
+     touching layout. */
+  box-shadow: 0 0 0 1px var(--term-bg, #1b1b1b);
+}
+
+/* No horizontal bar: a terminal wraps lines rather than running them off. */
+.xterm-scrollable-element > .scrollbar.horizontal {
+  display: none !important;
+}
+
+/* Swatches beside the name — a palette name says nothing about its colours. */
+.settings__control--theme {
+  gap: 10px;
+}
+
+.settings__swatches {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 4px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.settings__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-dot);
+}
+
+/* ── Close confirmation ───────────────────────────────── */
+
+/* Asking about something irreversible, so the backdrop is heavier. */
+.confirm-close {
+  background: var(--scrim-confirm);
+}
+
+.confirm-close__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.confirm-close__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.confirm-close__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.confirm-close__meta {
+  flex: 0 0 auto;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+/* Irreversible menu commands. Colour is the only warning before the dialog. */
+.command-menu__item--danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.command-menu__item--danger:hover:not(:disabled) {
+  background: var(--fill-danger);
+}
+
+/* The shortcut is a shortcut, not a label — it appears when the mouse is there. */
+.sidebar__hint {
+  flex: 0 0 auto;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+  opacity: 0;
+  transition: opacity var(--dur) ease-out;
+}
+
+.sidebar__row:hover .sidebar__hint {
+  opacity: 1;
+}
+
+/* Pointing at the strip lights up the bar it moves. */
+.app-bar--pannable ~ .workspace .scroll-indicator {
+  background: var(--thumb-lit);
+}

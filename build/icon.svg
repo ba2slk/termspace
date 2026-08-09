@@ -1,0 +1,138 @@
+<!--
+  Termspace app icon — a ringed world.
+
+  The planet is an outline; the ring is solid and runs well past the planet on
+  both sides, which is the app in one picture: what you are looking at is only
+  the middle of something wider.
+
+  Ring and outline are both white, so where they cross they would fuse into one
+  blob. The ring is stroked in the tile's own black before it is filled, which
+  opens a gap and lets the outline read as passing underneath.
+
+  This file is the source. build/icon*.png are generated from it by
+  scripts/make-icons.mjs — never edit the PNGs by hand.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Flat, not a gradient: #1e1e1e to #050505 is 25 tonal steps, and spread
+         over 228px each one lands as a 9px band you can count. -->
+
+    <!-- The glossy top edge, one pixel of light catching the bevel. -->
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Same light as the ring, so the two read as one object: the axis runs
+         perpendicular to the ring, from its lit side to its shaded one. The
+         outline is a tube, and its crest runs down the middle of the stroke the
+         whole way round — which no single gradient across the circle can put
+         there, so it is a narrow bright stroke laid over a wider dim one. -->
+    <!-- Radial, because the outline's thickness runs outward from the centre at
+         every point on the circle — the one axis a linear gradient cannot
+         follow all the way round. The stroke spans 51 to 61, so every stop
+         lives in the last sixth of the gradient. -->
+    <radialGradient id="tube" gradientUnits="userSpaceOnUse"
+                    cx="128" cy="128" r="61">
+      <stop offset="0.836" stop-color="#cbc6be"/>
+      <stop offset="0.855" stop-color="#dcd7cf"/>
+      <stop offset="0.874" stop-color="#e9e5de"/>
+      <stop offset="0.893" stop-color="#f4f1eb"/>
+      <stop offset="0.910" stop-color="#fbf9f4"/>
+      <stop offset="0.926" stop-color="#ffffff"/>
+      <stop offset="0.942" stop-color="#fcfaf5"/>
+      <stop offset="0.958" stop-color="#f4f1ea"/>
+      <stop offset="0.972" stop-color="#e9e4dd"/>
+      <stop offset="0.986" stop-color="#dbd6ce"/>
+      <stop offset="1" stop-color="#cbc6be"/>
+    </radialGradient>
+
+    <!-- The radial gradient gives the tube its section but knows nothing about
+         where the light is, so the far side is darkened over the top of it. -->
+    <linearGradient id="shade" gradientUnits="userSpaceOnUse"
+                    x1="93.5" y1="83.9" x2="162.5" y2="172.1">
+      <stop offset="0" stop-color="#0b0b0b" stop-opacity="0"/>
+      <stop offset="0.30" stop-color="#0b0b0b" stop-opacity="0.03"/>
+      <stop offset="0.50" stop-color="#0b0b0b" stop-opacity="0.09"/>
+      <stop offset="0.68" stop-color="#0b0b0b" stop-opacity="0.17"/>
+      <stop offset="0.84" stop-color="#0b0b0b" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#0b0b0b" stop-opacity="0.30"/>
+    </linearGradient>
+
+    <!-- Nothing in a render has a cut edge. The ring's contact shadow and the
+         darkening where it meets the planet are the same blur, one offset along
+         the light and one not. -->
+    <filter id="soften" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+
+    <!-- Wider, because the gap swallows the first 7px of anything drawn under
+         the ring and a tight blur would never clear it. -->
+    <filter id="softenWide" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+
+    <clipPath id="tileClip">
+      <rect x="14" y="14" width="228" height="228" rx="52"/>
+    </clipPath>
+
+    <filter id="cast" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7"
+                    flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+
+    <!-- Straight-sided and pointed rather than an ellipse: a ring this close to
+         edge-on has no visible curve left, only the taper to its tips. -->
+    <path id="ring"
+          d="M -124 0 Q -46 -13 0 -13 Q 46 -13 124 0 Q 46 13 0 13 Q -46 13 -124 0 Z"/>
+
+    <!-- Across the ring's thickness, not along it, and bright in the middle
+         rather than at one edge: light falling off in one direction is a bevel,
+         a flat plane tilted to the light. A convex surface catches it along the
+         crest and loses it toward both edges, and the last stop lifts the shaded
+         edge again — the bounce that keeps glazed ceramic from going dead there.
+         Declared in user space so it rotates with the ring. -->
+    <linearGradient id="relief" gradientUnits="userSpaceOnUse"
+                    x1="0" y1="-13" x2="0" y2="13">
+      <stop offset="0" stop-color="#d3cec6"/>
+      <stop offset="0.08" stop-color="#dedad2"/>
+      <stop offset="0.16" stop-color="#e8e4dd"/>
+      <stop offset="0.24" stop-color="#f1ede7"/>
+      <stop offset="0.32" stop-color="#f8f5f0"/>
+      <stop offset="0.39" stop-color="#fdfbf7"/>
+      <stop offset="0.45" stop-color="#ffffff"/>
+      <stop offset="0.52" stop-color="#fdfbf7"/>
+      <stop offset="0.59" stop-color="#f7f4ee"/>
+      <stop offset="0.66" stop-color="#efebe4"/>
+      <stop offset="0.73" stop-color="#e4dfd8"/>
+      <stop offset="0.80" stop-color="#d6d1c9"/>
+      <stop offset="0.87" stop-color="#c7c2ba"/>
+      <stop offset="0.93" stop-color="#bab5ad"/>
+      <stop offset="0.97" stop-color="#b2ada5"/>
+      <stop offset="1" stop-color="#c2bdb5"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#cast)">
+    <rect x="14" y="14" width="228" height="228" rx="52" fill="#0b0b0b"/>
+  </g>
+
+  <g clip-path="url(#tileClip)">
+    <circle cx="128" cy="128" r="56" fill="none" stroke="url(#tube)" stroke-width="10"/>
+    <circle cx="128" cy="128" r="56" fill="none" stroke="url(#shade)" stroke-width="10"/>
+
+    <g transform="translate(128 128) rotate(-38)">
+      <use href="#ring" fill="#000000" opacity="0.32" filter="url(#softenWide)"/>
+      <use href="#ring" fill="#000000" opacity="0.46" filter="url(#soften)"
+           transform="translate(1 11)"/>
+      <!-- The gap: a hard edge is what tells the eye which form is on top, and
+           the soft shadow beyond it is what tells it how far above. -->
+      <use href="#ring" fill="none" stroke="#0b0b0b" stroke-width="14"
+           stroke-linejoin="round"/>
+      <use href="#ring" fill="url(#relief)"/>
+    </g>
+  </g>
+
+  <rect x="14.5" y="14.5" width="227" height="227" rx="51.5"
+        fill="none" stroke="url(#rim)" stroke-width="1"/>
+</svg>

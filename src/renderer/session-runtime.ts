@@ -1,0 +1,859 @@
+/**
+ * Turns one SessionSpec into a live screen. This is the only assembly point,
+ * and so contains no maths — layout-model and layout-geometry did that.
+ */
+import type {
+  AppSettings,
+  Bindings,
+  ConfigIssue,
+  LayoutSnapshot,
+  PaneSpec,
+  SessionSpec,
+  TerminalTheme,
+} from '../shared/protocol'
+import { api } from './api'
+import { t } from './i18n'
+import { createCanvasView, type CanvasView } from './canvas-view'
+import { renderConfigError, renderExitBanner } from './error-card'
+import { columnHeightIn, maxColumnWidth, visiblePaneIds } from './layout-geometry'
+import { isAppAction, resolveAction } from './keymap'
+import {
+  addColumn,
+  allPanes,
+  closePane,
+  createLayout,
+  findPane,
+  focusDir,
+  movePane,
+  resizeColumn,
+  resizePane,
+  splitPane,
+  type ColumnSeed,
+  type Direction,
+  type Layout,
+} from './layout-model'
+import { createOverviewView } from './overview-view'
+import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
+import { attachResizeDrag } from './resize-drag'
+import { createSearchBar } from './search-bar'
+import { createTerminalPane, type TerminalPane } from './terminal-pane'
+
+/** A SIGWINCH storm during a drag makes full-screen apps redraw constantly. */
+const PTY_RESIZE_DEBOUNCE_MS = 100
+const RESIZE_STEP_PX = 40
+/** How long a size must hold still before the terminal grids follow it. */
+const SIZE_SETTLE_MS = 90
+/** How long the view must hold still before WebGL contexts are taken. */
+const ATTACH_SETTLE_MS = 120
+
+/**
+ * Ids must be unique across sessions: pty-host keys on paneId globally and
+ * sessions outlive switching, so a per-session counter would collide.
+ */
+let nextId = 0
+const newId = (prefix: string): string => `${prefix}${++nextId}`
+
+/**
+ * Who holds a WebGL context, across every session on the page.
+ *
+ * The cap is the page's, but a session leaving is not a reason to spend it:
+ * sessions keep their contexts and give them up only when the one on screen
+ * genuinely runs out of slots.
+ */
+interface ContextHolder {
+  readonly isActive: () => boolean
+  readonly held: () => number
+  /** Give up at most `count` contexts; returns how many actually went. */
+  readonly release: (count: number) => number
+}
+
+const contextHolders = new Set<ContextHolder>()
+
+function pageContexts(): number {
+  let total = 0
+  for (const holder of contextHolders) total += holder.held()
+  return total
+}
+
+/** Take slots back from sessions that are off screen, oldest holder first. */
+function freeContexts(count: number, mine: ContextHolder): void {
+  let freed = 0
+  for (const holder of contextHolders) {
+    if (freed >= count) return
+    if (holder === mine || holder.isActive()) continue
+    freed += holder.release(count - freed)
+  }
+}
+
+export interface SessionRuntime {
+  readonly spec: SessionSpec
+  /** Whether this session takes keyboard input; hidden ones must not. */
+  setActive(active: boolean): void
+  /** Reapply settings to every live terminal. */
+  applySettings(settings: AppSettings): void
+  /**
+   * Menu commands, sharing the shortcut path so the two can't diverge.
+   */
+  splitFocused(side: 'up' | 'down'): void
+  addColumnBesideFocused(side: 'left' | 'right'): void
+  /** Run one command in a new pane, splitting below the focused one. */
+  openCommandPane(command: string): void
+  closeFocusedPane(): void
+  /** Whether a vertical split fits; drives the button's enabled state. */
+  canSplit(): boolean
+  /**
+   * A pane rang or sent a notification. False when the pane is not this
+   * session's, so the caller can find whose it is.
+   */
+  noteAttention(paneId: string): boolean
+  /** Whether any pane of this session is still asking to be looked at. */
+  wantsAttention(): boolean
+  /** The pane being watched: focused, and only while this session is on screen. */
+  watchedPaneId(): string | null
+  /** The current layout, handed to main when saving. */
+  snapshot(): LayoutSnapshot
+  /** Slide the canvas sideways, for surfaces outside it. */
+  panCanvas(delta: number, deltaMode: number): void
+  /**
+   * Session became visible again: remeasure without moving the view.
+   */
+  refresh(): void
+  /**
+   * Only the canvas width changed. Remeasure and redraw without moving the
+   * view — collapsing the sidebar says nothing about where you are looking.
+   */
+  relayout(): void
+  destroy(): void
+}
+
+export interface StartSessionOptions {
+  readonly spec: SessionSpec
+  /** Absolute path of the session YAML, shown on config error cards. */
+  readonly file: string
+  readonly host: HTMLElement
+  /** Settings as a function, since they change while the app runs. */
+  readonly settings: () => AppSettings
+  /** Keybindings, likewise — the settings screen edits them live. */
+  readonly bindings: () => Bindings
+  /**
+   * Current palette. The shell resolves the name, since it holds the user list.
+   */
+  readonly theme: () => TerminalTheme
+  /** Title changed; the app bar draws it. */
+  readonly onTitle: (title: string) => void
+  /** Something reached the clipboard — invisible, so it needs announcing. */
+  readonly onCopied: (chars: number) => void
+  /** A pane was added or removed; the session list shows the count. */
+  readonly onPanesChanged: () => void
+  /** A pane started or stopped asking to be looked at; the sidebar shows it. */
+  readonly onAttentionChanged: () => void
+  /** Focus moved to another pane; main decides notifications by what is watched. */
+  readonly onWatchedPaneChanged: () => void
+  readonly onEnd: () => void
+}
+
+interface PaneRecord {
+  readonly terminal: TerminalPane
+  resizeTimer: number | null
+}
+
+export function startSession(options: StartSessionOptions): SessionRuntime {
+  const { spec, host } = options
+  // Toggled by main.ts when switching sessions.
+  let active = false
+
+  // Spec to layout seeds; error entries take a slot too.
+  const paneSpecs = new Map<string, PaneSpec>()
+  const paneErrors = new Map<string, ConfigIssue>()
+  const seeds: ColumnSeed[] = spec.columns.map((column) => ({
+    id: newId('c'),
+    width: column.width,
+    panes: column.panes.map((entry) => {
+      const id = newId('p')
+      if (entry.kind === 'pane') paneSpecs.set(id, entry)
+      else paneErrors.set(id, entry.issue)
+      return {
+        id,
+        title: entry.kind === 'pane' ? entry.title : t.runtime.configError,
+        heightRatio: entry.heightRatio,
+      }
+    }),
+  }))
+
+  let layout = createLayout(seeds)
+  const records = new Map<string, PaneRecord>()
+  const searchBar = createSearchBar()
+
+  // ── Renderer budget ──────────────────────────────────
+  let frozen: string[] = []
+  let attached: string[] = []
+  const lastSeen = new Map<string, number>()
+  let seenClock = 0
+  /** Pending grid resize while a size is still moving; see settleSizes. */
+  let settleTimer: number | null = null
+  let attachTimer: number | null = null
+
+  const canvas: CanvasView = createCanvasView(host, {
+    onPaneMouseDown: (paneId) => {
+      if (paneId === layout.focusedPaneId) return
+      setLayout({ ...layout, focusedPaneId: paneId })
+    },
+    onPaneClick: (paneId) => {
+      // Focusing another pane already scrolls to it; only the pane that is
+      // focused already would otherwise sit half off screen with nothing to do.
+      if (paneId === layout.focusedPaneId) revealFocused()
+    },
+    onScroll: () => {
+      updateBudget()
+      // The canvas can be wheeled under the open map; the marker must follow.
+      overview.syncViewport()
+    },
+    scrollBoost: () => options.settings().scrollBoost,
+    shiftPans: () => options.settings().shiftPanning === 1,
+  })
+
+  /*
+   * Panes that rang while you were elsewhere. Cleared by looking at the pane,
+   * which is the whole answer to "did I see it?" — nothing else dismisses it.
+   */
+  const attention = new Set<string>()
+
+  const overview = createOverviewView(host, {
+    layout: () => layout,
+    viewport: () => canvas.getViewport(),
+    isError: (paneId) => paneErrors.has(paneId),
+    commands: (paneIds) => api.foregroundCommands(paneIds),
+    titles: (paneIds) => api.paneTitles(paneIds),
+    wants: (paneId) => attention.has(paneId),
+    onJump: (paneId) => {
+      if (paneId !== layout.focusedPaneId) {
+        setLayout({ ...layout, focusedPaneId: paneId })
+        return
+      }
+      // Same pane: setLayout would be a no-op, but the view should still settle on it.
+      revealFocused()
+    },
+  })
+
+  const detachDrag = attachResizeDrag(canvas.root, {
+    onColumnDrag: (columnId, dx) =>
+      setLayout(resizeColumn(layout, columnId, dx, columnWidthCap()), 'settle'),
+    onPaneDrag: (paneId, dy) => setLayout(resizePane(layout, paneId, dy, columnHeight()), 'settle'),
+    onDragEnd: () => syncSizes(),
+    viewport: () => {
+      const state = canvas.scrollState()
+      return { left: state.left, width: state.viewport }
+    },
+    /*
+     * Widen first, then scroll: the column growing is what lengthens the canvas
+     * the scroll moves into, so the room is made by the same step that uses it.
+     */
+    onColumnEdgePush: (columnId, step) => {
+      const next = resizeColumn(layout, columnId, step, columnWidthCap())
+      if (next === layout) return false // At the width cap; do not slide on
+      setLayout(next, 'settle')
+      canvas.scrollByExact(step)
+      return true
+    },
+  })
+
+  const holder: ContextHolder = {
+    isActive: () => active,
+    held: () => attached.length,
+    release: (count) => {
+      // Least recently seen first: the panes least likely to be looked at next.
+      const order = [...attached].sort(
+        (a, b) => (lastSeen.get(a) ?? -Infinity) - (lastSeen.get(b) ?? -Infinity),
+      )
+      const victims = new Set(order.slice(0, count))
+      for (const paneId of victims) records.get(paneId)?.terminal.detachRenderer()
+      attached = attached.filter((id) => !victims.has(id))
+      return victims.size
+    },
+  }
+  contextHolders.add(holder)
+
+  function budgetDecision(): BudgetDecision {
+    // Error cards have no terminal and would only consume WebGL slots.
+    const hasTerminal = (paneId: string): boolean => records.has(paneId)
+    const visible = visiblePaneIds(canvas.getRects(), canvas.getViewport()).filter(hasTerminal)
+    for (const paneId of visible) lastSeen.set(paneId, ++seenClock)
+
+    return decideBudget({
+      allPaneIds: allPanes(layout).map((p) => p.id).filter(hasTerminal),
+      visible,
+      frozen,
+      attached,
+      focusedPaneId: layout.focusedPaneId,
+      lastSeen,
+      active,
+    })
+  }
+
+  /**
+   * Giving a context back is immediate; taking one waits for things to settle.
+   *
+   * A WebGL context is a page-wide resource the browser reclaims lazily. Asking
+   * for a dozen of them on every session switch outruns that reclaim, and past
+   * the browser's own cap it force-releases the oldest — a pane left white.
+   * Until the attach lands the pane still draws, through the DOM renderer.
+   */
+  function updateBudget(): void {
+    const decision = budgetDecision()
+
+    for (const paneId of decision.thaw) {
+      // Clear content-visibility first, or the size can't be measured.
+      canvas.setPaneFrozen(paneId, false)
+      const record = records.get(paneId)
+      record?.terminal.thaw()
+      record?.terminal.setSize()
+    }
+    for (const paneId of decision.freeze) {
+      records.get(paneId)?.terminal.freeze()
+      canvas.setPaneFrozen(paneId, true)
+    }
+    for (const paneId of decision.detach) records.get(paneId)?.terminal.detachRenderer()
+
+    frozen = frozen
+      .filter((id) => !decision.thaw.includes(id))
+      .concat(decision.freeze)
+    attached = attached.filter((id) => !decision.detach.includes(id))
+
+    if (decision.attach.length > 0) scheduleAttach()
+  }
+
+  function scheduleAttach(): void {
+    if (attachTimer !== null) window.clearTimeout(attachTimer)
+    attachTimer = window.setTimeout(() => {
+      attachTimer = null
+      // Decide again: a burst of switches has left the earlier answer stale.
+      const decision = budgetDecision()
+      // Sessions off screen are still holding slots; take only what is short.
+      const shortfall = decision.attach.length - (MAX_WEBGL_CONTEXTS - pageContexts())
+      if (shortfall > 0) freeContexts(shortfall, holder)
+      const room = Math.max(0, MAX_WEBGL_CONTEXTS - pageContexts())
+      const take = decision.attach.slice(0, room)
+      for (const paneId of take) records.get(paneId)?.terminal.attachRenderer()
+      attached = attached.concat(take)
+    }, ATTACH_SETTLE_MS)
+  }
+
+  // ── State ────────────────────────────────────────────
+
+  function publishTitle(): void {
+    options.onTitle(spec.name)
+  }
+
+  function columnHeight(): number {
+    return columnHeightIn(host.clientHeight)
+  }
+
+  function columnWidthCap(): number {
+    return maxColumnWidth(host.clientWidth)
+  }
+
+  /**
+   * Bring the focused pane back into view, wherever the canvas has been left.
+   *
+   * Focus moves scroll on their own; this is for the cases where focus does not
+   * change — a click on the focused pane, a map jump to it, Alt+G, and moving
+   * the focused pane, where the pane travels and the focus does not.
+   */
+  function revealFocused(): void {
+    canvas.scrollToPane(layout.focusedPaneId, layout)
+    records.get(layout.focusedPaneId)?.terminal.focus()
+  }
+
+  /** Have every terminal remeasure after a DOM size change. */
+  function syncSizes(): void {
+    if (settleTimer !== null) {
+      window.clearTimeout(settleTimer)
+      settleTimer = null
+    }
+    for (const record of records.values()) record.terminal.setSize()
+  }
+
+  /*
+   * The same, for a size that is still changing.
+   *
+   * xterm clears its glyph model on resize and repaints a frame later, so a
+   * grid resized on every frame of a drag shows one empty frame per frame —
+   * which is what the flicker was. The boxes follow the pointer live; the
+   * grids catch up once the motion stops.
+   */
+  function settleSizes(): void {
+    if (settleTimer !== null) window.clearTimeout(settleTimer)
+    settleTimer = window.setTimeout(() => {
+      settleTimer = null
+      syncSizes()
+    }, SIZE_SETTLE_MS)
+  }
+
+  function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
+    const focusChanged = next.focusedPaneId !== layout.focusedPaneId
+    const previousFocus = layout.focusedPaneId
+    const paneCountBefore = allPanes(layout).length
+    layout = next
+    canvas.render(layout)
+    if (sizes === 'now') syncSizes()
+    else settleSizes()
+
+    if (focusChanged) {
+      options.onWatchedPaneChanged()
+      // Looking at it is what dismisses it.
+      if (attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      // The bar belongs to the focused pane; a bar left on an unfocused one lies.
+      searchBar.close()
+      records.get(previousFocus)?.terminal.setFocused(false)
+      const record = records.get(layout.focusedPaneId)
+      record?.terminal.setFocused(true)
+      record?.terminal.focus()
+      canvas.scrollToPane(layout.focusedPaneId, layout)
+    }
+    updateBudget()
+    if (allPanes(layout).length !== paneCountBefore) options.onPanesChanged()
+  }
+
+  // ── Pane creation ────────────────────────────────────
+
+  function spawnPane(paneId: string, paneSpec: PaneSpec, terminal: TerminalPane): void {
+    void api
+      .spawn({
+        paneId,
+        cwd: paneSpec.cwd,
+        shell: spec.shell,
+        command: paneSpec.command,
+        prefill: paneSpec.prefill,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      })
+      .then((result) => {
+        if (result.ok) return
+        // Keep the pane and write the reason into it.
+        terminal.write(
+          `\r\n\x1b[38;2;207;122;106m${result.message ?? t.runtime.spawnFailed}\x1b[0m\r\n`,
+        )
+      })
+  }
+
+  function mountPane(paneId: string): void {
+    const body = canvas.paneBody(paneId)
+    if (body === null) return
+
+    const issue = paneErrors.get(paneId)
+    if (issue !== undefined) {
+      renderConfigError(body, issue, options.file)
+      return // do not spawn a pty
+    }
+
+    const paneSpec = paneSpecs.get(paneId)
+    if (paneSpec === undefined) return
+
+    const { fontSize, lineHeight, scrollback, fontFamily, scrollBoost } = options.settings()
+    const terminal = createTerminalPane({
+      paneId,
+      appearance: {
+        fontSize,
+        lineHeight,
+        scrollback,
+        fontFamily,
+        scrollBoost,
+        theme: options.theme(),
+      },
+      onInput: (data) => api.write(paneId, data),
+      // The addon detaches itself on context loss; untrack it or it never returns.
+      onRendererLost: () => {
+        attached = attached.filter((id) => id !== paneId)
+      },
+      onSelected: (text) => {
+        if (options.settings().copyOnSelect !== 1) return
+        api.writeClipboard(text)
+        options.onCopied(text.length)
+      },
+      onResize: (cols, rows) => {
+        const record = records.get(paneId)
+        if (record === undefined) return
+        if (record.resizeTimer !== null) window.clearTimeout(record.resizeTimer)
+        record.resizeTimer = window.setTimeout(() => {
+          record.resizeTimer = null
+          api.resize(paneId, cols, rows)
+        }, PTY_RESIZE_DEBOUNCE_MS)
+      },
+    })
+
+    body.append(terminal.element)
+    records.set(paneId, { terminal, resizeTimer: null })
+    terminal.setSize()
+    spawnPane(paneId, paneSpec, terminal)
+  }
+
+  function unmountPane(paneId: string): void {
+    const record = records.get(paneId)
+    if (record === undefined) return
+    if (record.resizeTimer !== null) window.clearTimeout(record.resizeTimer)
+    record.terminal.dispose()
+    records.delete(paneId)
+    attached = attached.filter((id) => id !== paneId)
+    frozen = frozen.filter((id) => id !== paneId)
+    lastSeen.delete(paneId)
+    api.kill(paneId)
+  }
+
+  // ── Actions ──────────────────────────────────────────
+
+  function removePane(paneId: string): void {
+    const next = closePane(layout, paneId)
+    unmountPane(paneId)
+    paneSpecs.delete(paneId)
+    paneErrors.delete(paneId)
+    if (next === null) {
+      options.onEnd() // that was the session's last pane — back to the list screen
+      return
+    }
+    setLayout(next)
+  }
+
+  function applyResize(dir: Direction): void {
+    const found = findPane(layout, layout.focusedPaneId)
+    if (found === null) return
+    if (dir === 'left' || dir === 'right') {
+      setLayout(
+        resizeColumn(
+          layout,
+          found.column.id,
+          dir === 'right' ? RESIZE_STEP_PX : -RESIZE_STEP_PX,
+          columnWidthCap(),
+        ),
+        'settle',
+      )
+      /*
+       * Widths are absolute, so a column grows to the right and the far edge of
+       * the one being widened walks off screen. The scroll follows it, which
+       * from the viewer's side reads as the column growing leftward from the
+       * right edge. Drags are left alone — the canvas sliding under a held
+       * pointer is worse than the clipping.
+       */
+      canvas.scrollToPane(layout.focusedPaneId, layout)
+    } else {
+      setLayout(
+        resizePane(
+          layout,
+          layout.focusedPaneId,
+          dir === 'down' ? RESIZE_STEP_PX : -RESIZE_STEP_PX,
+          columnHeight(),
+        ),
+        'settle',
+      )
+    }
+  }
+
+  function focusedCwd(): string {
+    return paneSpecs.get(layout.focusedPaneId)?.cwd ?? spec.cwd
+  }
+
+  function addPane(id: string, cwd: string, command: string | null = null): void {
+    paneSpecs.set(id, {
+      kind: 'pane',
+      // Follow parsePane: the command's first word names the pane.
+      title: command?.trim().split(/\s+/)[0] ?? 'shell',
+      command,
+      prefill: null,
+      cwd,
+      heightRatio: 0,
+    })
+    mountPane(id)
+    syncSizes()
+    updateBudget()
+    // setLayout ran before this record existed, so focus has to be applied here.
+    if (layout.focusedPaneId === id) {
+      const record = records.get(id)
+      record?.terminal.setFocused(true)
+      record?.terminal.focus()
+    }
+  }
+
+  function splitFocused(side: 'up' | 'down'): void {
+    const id = newId('p')
+    const cwd = focusedCwd() // read before focus moves away
+    const next = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, side)
+    if (next === layout) return // blocked by the minimum height — failure means no change
+    setLayout(next)
+    addPane(id, cwd)
+  }
+
+  function openCommandPane(command: string): void {
+    const id = newId('p')
+    const cwd = focusedCwd()
+    const split = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, 'down')
+    if (split !== layout) {
+      setLayout(split)
+      addPane(id, cwd, command)
+      return
+    }
+    // The column is at minimum height — open beside it instead of failing silently.
+    const found = findPane(layout, layout.focusedPaneId)
+    if (found === null) return
+    setLayout(
+      addColumn(layout, found.column.id, {
+        id: newId('c'),
+        width: options.settings().defaultColumnWidth,
+        pane: { id, title: 'shell' },
+        side: 'right',
+      }),
+    )
+    addPane(id, cwd, command)
+  }
+
+  function addColumnBesideFocused(side: 'left' | 'right'): void {
+    const found = findPane(layout, layout.focusedPaneId)
+    if (found === null) return
+    const id = newId('p')
+    const cwd = focusedCwd()
+    setLayout(
+      addColumn(layout, found.column.id, {
+        id: newId('c'),
+        width: options.settings().defaultColumnWidth,
+        pane: { id, title: 'shell' },
+        side,
+      }),
+    )
+    addPane(id, cwd)
+  }
+
+  function canSplit(): boolean {
+    return (
+      splitPane(layout, layout.focusedPaneId, columnHeight(), { id: '__probe', title: '' }) !==
+      layout
+    )
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    // Every live session has a listener on window, and stopPropagation doesn't
+    // stop siblings on the same node, so each must decide if it's its turn.
+    if (!active) return
+    const action = resolveAction(event, options.bindings())
+    // The open overview owns every key; nothing may fall through to a pty.
+    if (overview.isOpen) {
+      if (overview.handleKey(event, action?.t === 'overview')) {
+        event.preventDefault()
+        event.stopPropagation()
+        // Closed without a jump (Esc, Alt+M): hand the keyboard back to the pane.
+        if (!overview.isOpen) records.get(layout.focusedPaneId)?.terminal.focus()
+      }
+      return
+    }
+    if (action === null) return // not the app's — pass it through to the terminal
+    // App-level actions belong outside a session, or they go unheard with none open.
+    if (isAppAction(action)) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    switch (action.t) {
+      case 'focus':
+        setLayout(focusDir(layout, action.dir))
+        break
+      case 'resize':
+        applyResize(action.dir)
+        break
+      case 'split':
+        splitFocused(action.side)
+        break
+      case 'move':
+        setLayout(movePane(layout, action.dir, columnHeight(), newId('c')))
+        // The pane keeps focus while moving, so nothing else would scroll after
+        // it — and a pane sent into a column off screen would simply vanish.
+        revealFocused()
+        break
+      case 'add-column':
+        addColumnBesideFocused(action.side)
+        break
+      case 'close-pane':
+        removePane(layout.focusedPaneId)
+        break
+      case 'copy': {
+        // xterm owns the selection; WebGL draws to canvas so the DOM has none.
+        const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
+        if (selection !== '') {
+          api.writeClipboard(selection)
+          options.onCopied(selection.length)
+        }
+        break
+      }
+      case 'paste':
+        void api.readClipboard().then((text) => {
+          if (text === '') return
+          // Through xterm for bracketed paste, so multi-line input isn't executed.
+          records.get(layout.focusedPaneId)?.terminal.paste(text)
+        })
+        break
+      case 'search': {
+        const body = canvas.paneBody(layout.focusedPaneId)
+        const record = records.get(layout.focusedPaneId)
+        // An error card has no scrollback to search.
+        if (body === null || record === undefined) break
+        searchBar.open(body, record.terminal, record.terminal.getSelection())
+        break
+      }
+      case 'overview':
+        overview.toggle()
+        break
+      case 'reveal-focus':
+        revealFocused()
+        break
+    }
+  }
+
+  // ── External events ──────────────────────────────────
+
+  const offData = api.onData((paneId, data) => records.get(paneId)?.terminal.write(data))
+
+  const offExit = api.onExit(({ paneId, exitCode, signal }) => {
+    if (!records.has(paneId)) return
+    // A clean exit closes the pane; a failure leaves it so the reason is readable.
+    if (exitCode === 0 && (signal === null || signal === 0)) {
+      removePane(paneId)
+      return
+    }
+    const body = canvas.paneBody(paneId)
+    if (body === null) return
+    // Never auto-close — the output says why it died.
+    renderExitBanner(body, {
+      exitCode,
+      signal,
+      onRestart: () => {
+        const paneSpec = paneSpecs.get(paneId)
+        const record = records.get(paneId)
+        if (paneSpec === undefined || record === undefined) return
+        spawnPane(paneId, paneSpec, record.terminal)
+      },
+    })
+  })
+
+  const resizeObserver = new ResizeObserver(() => {
+    canvas.render(layout)
+    settleSizes()
+    updateBudget()
+  })
+  resizeObserver.observe(host)
+
+  window.addEventListener('keydown', onKeyDown, true)
+
+  // ── Startup ──────────────────────────────────────────
+
+  active = true
+  publishTitle()
+  canvas.render(layout)
+  for (const pane of allPanes(layout)) mountPane(pane.id)
+  setLayout(layout)
+  records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+  records.get(layout.focusedPaneId)?.terminal.focus()
+
+  return {
+    spec,
+    applySettings(next) {
+      const appearance = {
+        fontSize: next.fontSize,
+        lineHeight: next.lineHeight,
+        scrollback: next.scrollback,
+        fontFamily: next.fontFamily,
+        scrollBoost: next.scrollBoost,
+        theme: options.theme(),
+      }
+      for (const record of records.values()) record.terminal.applyAppearance(appearance)
+    },
+    setActive(next) {
+      active = next
+      options.onWatchedPaneChanged()
+      // Arriving is a look too. A pane that rang while this session was off
+      // screen is usually the focused one, so nothing is clicked on the way in
+      // and a mark waiting on a focus change would never come down.
+      if (next && attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      if (!next) {
+        searchBar.close()
+        overview.close()
+        records.get(layout.focusedPaneId)?.terminal.setFocused(false)
+        // Stop the panes working while nobody is looking. The WebGL contexts
+        // stay: the session arriving takes them only if it runs short of slots.
+        updateBudget()
+      }
+    },
+    splitFocused,
+    addColumnBesideFocused,
+    openCommandPane,
+    closeFocusedPane: () => removePane(layout.focusedPaneId),
+    canSplit,
+
+    panCanvas: (delta, deltaMode) => canvas.panBy(delta, deltaMode),
+
+    wantsAttention: () => attention.size > 0,
+
+    watchedPaneId: () => (active ? layout.focusedPaneId : null),
+
+    noteAttention(paneId) {
+      if (!records.has(paneId)) return false
+      // The focused pane is already being looked at, so it has nothing to ask for.
+      if (paneId === layout.focusedPaneId && active) return true
+      if (attention.has(paneId)) return true
+      attention.add(paneId)
+      overview.refreshIfOpen()
+      options.onAttentionChanged()
+      return true
+    },
+
+    snapshot() {
+      // cwd is left to main: only it holds the pty and sees where the shell moved.
+      return {
+        columns: layout.columns.map((column) => ({
+          width: column.width,
+          panes: column.panes.map((pane) => {
+            const paneSpec = paneSpecs.get(pane.id)
+            return {
+              paneId: pane.id,
+              title: pane.title,
+              command: paneSpec?.command ?? null,
+              prefill: paneSpec?.prefill ?? null,
+              fallbackCwd: paneSpec?.cwd ?? spec.cwd,
+              heightRatio: pane.heightRatio,
+            }
+          }),
+        })),
+      }
+    },
+    relayout() {
+      canvas.render(layout)
+      syncSizes()
+      // A narrower canvas can leave the scroll past its end; clamp without moving.
+      canvas.clampScroll(layout)
+      updateBudget()
+    },
+
+    refresh() {
+      // The host measured zero while hidden, so everything needs remeasuring.
+      active = true
+      publishTitle()
+      canvas.render(layout)
+      syncSizes()
+      // Do not scroll to the focused pane. Coming back to a session must show
+      // exactly what was left behind; the window may have been resized while
+      // hidden, so only pull the scroll back into range.
+      canvas.clampScroll(layout)
+      updateBudget()
+      records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+      records.get(layout.focusedPaneId)?.terminal.focus()
+    },
+    destroy() {
+      contextHolders.delete(holder)
+      searchBar.close()
+      overview.destroy()
+      window.removeEventListener('keydown', onKeyDown, true)
+      if (settleTimer !== null) window.clearTimeout(settleTimer)
+      if (attachTimer !== null) window.clearTimeout(attachTimer)
+      resizeObserver.disconnect()
+      detachDrag()
+      offData()
+      offExit()
+      for (const paneId of [...records.keys()]) unmountPane(paneId)
+      canvas.destroy()
+    },
+  }
+}

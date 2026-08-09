@@ -1,0 +1,23 @@
+appId: dev.termspace.app
+productName: Termspace
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+# node-pty is native and cannot be bundled, so it stays outside the asar.
+# Without this the module loads in dev and fails only in the packaged app.
+asarUnpack:
+  - node_modules/node-pty/**/*
+linux:
+  target:
+    - AppImage
+  # Ties the window to the launcher entry; without it the dock shows two icons.
+  syncDesktopName: true
+  category: System
+  synopsis: A horizontal-canvas terminal emulator
+  description: >
+    A terminal emulator that lays panes out on a horizontal canvas wider than
+    the viewport. Panes past the window edge are not lost — they stay where you
+    put them, and the arrow keys slide the viewport over to them.

@@ -1,0 +1,57 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSessionSidebar, type SidebarHooks } from './session-sidebar'
+import type { SessionSummary } from '../shared/protocol'
+
+function summary(over: Partial<SessionSummary> = {}): SessionSummary {
+  return { id: 'work', name: 'work', file: '/s/work.yaml', paneCount: 2, error: null, ...over }
+}
+
+const hooks = (): SidebarHooks => ({
+  onOpen: vi.fn(),
+  onClose: vi.fn(),
+  onCreateExample: vi.fn(),
+  onRefresh: vi.fn(),
+  onWidthChange: vi.fn(),
+  gotoHint: (index: number) => `Alt+${String(index + 1)}`,
+  onCreateBlank: vi.fn(),
+  onContextMenu: vi.fn(),
+})
+
+let host: HTMLElement
+
+beforeEach(() => {
+  document.body.innerHTML = '<div id="workspace"></div>'
+  host = document.getElementById('workspace')!
+})
+
+function metaText(): string {
+  return document.querySelector('.sidebar__meta')?.textContent ?? ''
+}
+
+describe('session sidebar pane count', () => {
+  it('shows the file count for a session that is not running', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.render([summary({ paneCount: 2 })], new Map(), null)
+    expect(metaText()).toBe('2')
+  })
+
+  it('shows the live count for a running session, not the file count', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    // Split twice at runtime: the YAML still says 2.
+    sidebar.render([summary({ paneCount: 2 })], new Map([['work', 4]]), null)
+    expect(metaText()).toBe('4')
+  })
+
+  it('marks a session running when it has a live count', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.render([summary()], new Map([['work', 2]]), null)
+    expect(document.querySelectorAll('.sidebar__dot--on')).toHaveLength(1)
+    expect(document.querySelectorAll('.sidebar__close')).toHaveLength(1)
+  })
+
+  it('keeps the error marker over any count', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.render([summary({ error: 'YAML 문법 오류' })], new Map(), null)
+    expect(metaText()).toBe('!')
+  })
+})

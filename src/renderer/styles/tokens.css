@@ -1,0 +1,107 @@
+/* Design tokens. Defined here only; referenced everywhere else through var(). */
+:root {
+  --bg-canvas: #141414;
+  --bg-pane: #1b1b1b;
+  --bg-raised: #262624;
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border-focus: rgba(255, 255, 255, 0.16);
+  /* Border of the pane taking keys — findable at a glance among many. */
+  --border-active: rgba(255, 255, 255, 0.34);
+  /* A hard 1px ring outside that border, not a blurred shadow. */
+  --ring-active: rgba(255, 255, 255, 0.11);
+  /* Scrim over unfocused panes; enough to recede, not to hide. */
+  --scrim-idle: rgba(10, 10, 10, 0.3);
+
+  /* Alive. Low saturation, no glow — a status light, not a warning. */
+  --live: #6f9d68;
+  /* A pane asking to be looked at. Warmer than --live so the two dots differ
+     at a glance, short of --danger, which means something is broken. */
+  --wants: #c9a227;
+
+  --fg: #cfcbc4;
+  --fg-dim: #8a8781;
+  --fg-faint: #5c5a56;
+  --danger: #cf7a6a;
+
+  /*
+   * The one shadow in the app. Panels say "floating" with a border and a gap,
+   * but a menu opens over live content with nothing behind it, so it needs a
+   * little separation. Tight and shallow — a wide blur only muddies dark edges.
+   */
+  --shadow-overlay: 0 4px 14px rgba(0, 0, 0, 0.45);
+
+  /* Scrollback search highlights. xterm decorations need opaque #RRGGBB. */
+  --search-match-bg: #4a4636;
+  --search-match-active-bg: #806f35;
+
+  /* Behind the overview map: dark enough to read the map, light enough to
+     say the session is still there. */
+  --overview-scrim: rgba(10, 10, 10, 0.55);
+  /* The viewport marker: must stand apart from the card borders around it. */
+  --overview-viewport-border: rgba(255, 255, 255, 0.8);
+
+  /*
+   * White fills over the dark ground. One ramp, so every hover and selection
+   * reads as the same system; values chosen by eye, not arithmetic.
+   */
+  --fill-hover-faint: rgba(255, 255, 255, 0.04);
+  --fill-hover: rgba(255, 255, 255, 0.06);
+  --fill-selected: rgba(255, 255, 255, 0.07);
+  --fill-active: rgba(255, 255, 255, 0.1);
+  /* The danger fill is --danger at 10%; color-mix keeps them in sync. */
+  --fill-danger: color-mix(in srgb, var(--danger) 10%, transparent);
+
+  /* Scrollbar thumbs: page chrome at rest/hover, terminal at rest/hover,
+     and the canvas indicator when the title-bar strip lights it up. */
+  --thumb-faint: rgba(255, 255, 255, 0.12);
+  --thumb: rgba(255, 255, 255, 0.18);
+  --thumb-hover: rgba(255, 255, 255, 0.2);
+  --thumb-hover-strong: rgba(255, 255, 255, 0.24);
+  --thumb-lit: rgba(255, 255, 255, 0.4);
+
+  /* Overlay backdrops, by weight of what they interrupt: saving shows the
+     canvas through; confirming a close is heavier on purpose. */
+  --scrim-dialog: rgba(10, 10, 10, 0.62);
+  --scrim-confirm: rgba(10, 10, 10, 0.78);
+
+  --radius: 8px;
+  --radius-sm: 4px;
+  /* Scrollbar thumbs and other hairline chrome. */
+  --radius-xs: 3px;
+  /* Tiny markers — swatches, the drag ridge. */
+  --radius-dot: 2px;
+  --gap: 6px;
+  --edge: 6px;
+  --hit: 12px;
+  /* Every control in the title bar. Grows with the text it sits beside. */
+  --ctl-h: calc(26px * var(--ui-scale));
+  /* That control plus 4px of air above it; the bar is bottom aligned. */
+  --bar-h: calc(var(--ctl-h) + 4px);
+  /* Every scrollbar in the app, sideways or down, is this thick. */
+  --scroll-w: 5px;
+  /* Grown above and below the canvas thumb: 5px is not something to aim at. */
+  --scroll-hit: 6px;
+  --dur: 180ms;
+
+  --font-mono: 'JetBrains Mono', 'Noto Sans Mono CJK KR', monospace;
+
+  /*
+   * The app's own size, set from the uiScale setting. It multiplies the chrome's
+   * text and the controls built around that text, and nothing else: --gap,
+   * --edge and --hit are canvas geometry mirrored in layout-geometry.ts, and a
+   * column's width is an absolute pixel count that must mean the same thing at
+   * every scale. The terminal has its own size setting.
+   */
+  --ui-scale: 1;
+
+  /* Body UI. */
+  --fs-ui: calc(13px * var(--ui-scale));
+  /* Secondary text: descriptions and shortcut hints. */
+  --fs-ui-sm: calc(12px * var(--ui-scale));
+  /* Things you point at rather than read in bulk, like session names. */
+  --fs-ui-lg: calc(14px * var(--ui-scale));
+  --fs-title: calc(17px * var(--ui-scale));
+  --fs-term: 13px;
+  --lh-term: 1.35;
+}

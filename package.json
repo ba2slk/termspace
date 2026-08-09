@@ -1,0 +1,64 @@
+{
+  "name": "termspace",
+  "version": "1.0.0",
+  "description": "A scrolling-tiling terminal for small screens — panes on a horizontal canvas wider than the window",
+  "author": "ba2slk",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ba2slk/termspace.git"
+  },
+  "homepage": "https://github.com/ba2slk/termspace",
+  "bugs": "https://github.com/ba2slk/termspace/issues",
+  "keywords": [
+    "terminal",
+    "terminal-emulator",
+    "electron",
+    "xterm",
+    "tiling",
+    "scrolling-tiling",
+    "tmux-alternative",
+    "linux"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "out/main/index.js",
+  "desktopName": "termspace.desktop",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "dist": "electron-vite build && electron-builder --linux AppImage --publish never",
+    "icons": "node scripts/make-icons.mjs",
+    "install:local": "node scripts/install-local.mjs",
+    "verify:app": "node scripts/verify-app.mjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-unicode11": "0.9.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.2.0",
+    "@types/node": "22.19.1",
+    "electron": "43.3.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "happy-dom": "20.11.1",
+    "sharp": "0.35.3",
+    "typescript": "7.0.2",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  }
+}

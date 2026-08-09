@@ -1,0 +1,20 @@
+node_modules
+dist/
+out/
+release/
+*.log
+*.AppImage
+.DS_Store
+.vite/
+*.tsbuildinfo
+.superpowers/
+.claude/
+.env
+.env.*
+.vscode/
+.idea/
+*.swp
+
+# Working notes kept on this machine, not part of the published project.
+docs/specs/
+docs/perf-diagnosis-*.md
