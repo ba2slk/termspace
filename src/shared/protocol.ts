@@ -316,6 +316,11 @@ export interface TermspaceApi {
   /** A pane rang or sent a notification. Returns an unsubscribe function. */
   onAttention(handler: (attention: PaneAttention) => void): () => void
   /**
+   * A desktop notification was clicked: go to the pane that sent it, whichever
+   * session it belongs to. Returns an unsubscribe function.
+   */
+  onFocusPane(handler: (paneId: string) => void): () => void
+  /**
    * The one pane the user is actually looking at — focused, in the session on
    * screen. Null when no session is up.
    *

@@ -108,6 +108,11 @@ export interface SessionRuntime {
   noteAttention(paneId: string): boolean
   /** Whether any pane of this session is still asking to be looked at. */
   wantsAttention(): boolean
+  /**
+   * Focus a pane and scroll it into view. False when the pane is not this
+   * session's, so the caller can find whose it is.
+   */
+  focusPane(paneId: string): boolean
   /** The pane being watched: focused, and only while this session is on screen. */
   watchedPaneId(): string | null
   /** The current layout, handed to main when saving. */
@@ -786,6 +791,15 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     panCanvas: (delta, deltaMode) => canvas.panBy(delta, deltaMode),
 
     wantsAttention: () => attention.size > 0,
+
+    focusPane(paneId) {
+      if (!records.has(paneId)) return false
+      // setLayout is a no-op for the pane that is already focused, but the
+      // canvas may have been scrolled away from it since.
+      if (paneId === layout.focusedPaneId) revealFocused()
+      else setLayout({ ...layout, focusedPaneId: paneId })
+      return true
+    },
 
     watchedPaneId: () => (active ? layout.focusedPaneId : null),
 

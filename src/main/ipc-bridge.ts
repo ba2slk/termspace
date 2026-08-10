@@ -14,6 +14,7 @@ import type {
   SpawnResult,
 } from '../shared/protocol'
 import { RC_LINE } from './shell-integration'
+import { activateWindow } from './window-manager'
 import { loadSettings, saveSettings, settingsFile } from './app-settings'
 import { loadKeybindings, saveKeybindings } from './keybindings-file'
 import { listMonoFonts } from './font-list'
@@ -129,10 +130,20 @@ export function registerIpcHandlers(
     const watched = win.isFocused() && attention.paneId === visiblePaneId
     if (watched) return
     if (!Notification.isSupported()) return
-    new Notification({
+    const notification = new Notification({
       title: attention.title === '' ? APP_NAME : attention.title,
       body: attention.body,
-    }).show()
+    })
+    /*
+     * Clicking is the user saying "take me there". The window has to come
+     * forward and the canvas has to travel to the pane that rang — it may be
+     * off screen, or in a session that is not the one on display.
+     */
+    notification.on('click', () => {
+      activateWindow(win)
+      send('app:focus-pane', attention.paneId)
+    })
+    notification.show()
   }
 
   const batcher = new OutputBatcher({

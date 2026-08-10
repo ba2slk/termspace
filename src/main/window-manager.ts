@@ -42,6 +42,33 @@ function safeWrite(stream: NodeJS.WriteStream, text: string): void {
   }
 }
 
+/** Time for the compositor to drop the surface before it is mapped again. */
+const REMAP_DELAY_MS = 60
+
+/**
+ * Bring the window forward from a background event.
+ *
+ * show()/focus()/moveTop()/setAlwaysOnTop() are all refused under Wayland's
+ * focus-stealing prevention, which only trusts a *new* surface with focus.
+ * Unmapping and remapping produces one, and is the only sequence that was
+ * measured to work; see docs/engineering-notes.md.
+ */
+export function activateWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  if (process.platform !== 'linux') {
+    win.show()
+    win.focus()
+    return
+  }
+  win.hide()
+  setTimeout(() => {
+    if (win.isDestroyed()) return
+    win.show()
+    win.focus()
+  }, REMAP_DELAY_MS)
+}
+
 export function createMainWindow(locale: string): BrowserWindow {
   // The app draws its own title bar; the default menu bar is unused here.
   Menu.setApplicationMenu(null)
