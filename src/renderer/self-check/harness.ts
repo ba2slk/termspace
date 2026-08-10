@@ -4,7 +4,15 @@
  * The checks themselves live in `core`, `motion`, `chrome` and `sessions`; this
  * is what all of them need — waiting, key synthesis, DOM lookups, screenshots.
  */
+import {
+  ACTION_IDS,
+  chordFromEvent,
+  DEFAULT_BINDINGS,
+  DEFAULT_BINDINGS_MAC,
+  DIGIT_CODE,
+} from '../../shared/keybindings'
 import { api } from '../api'
+import { IS_MAC } from '../platform'
 
 export type Report = Record<string, string>
 
@@ -35,14 +43,59 @@ export const KEY_OF_CODE: Readonly<Record<string, string>> = {
   Enter: 'Enter',
 }
 
+/**
+ * Every default chord in its Linux spelling, paired with the mac one for the
+ * same action. Both tables list the same actions in the same order, so the
+ * pairing is positional.
+ */
+const MAC_CHORD: ReadonlyMap<string, string> = new Map(
+  ACTION_IDS.flatMap((id) =>
+    DEFAULT_BINDINGS[id].flatMap((chord, i) => {
+      const mac = DEFAULT_BINDINGS_MAC[id][i]
+      return mac === undefined ? [] : [[chord, mac] as const]
+    }),
+  ),
+)
+
+/**
+ * The checks name their chords the way a Linux user types them. On mac the same
+ * action lives on a different chord — Cmd, and not always a plain mirror — so a
+ * press is translated through the action it stands for. A chord that is not a
+ * default (one a check has just bound itself, or one meant to reach the pty) is
+ * pressed exactly as written on both platforms.
+ */
+function forThisPlatform(code: string, mods: Partial<KeyboardEventInit>): KeyboardEventInit {
+  const asPressed = { code, ...mods }
+  if (!IS_MAC) return asPressed
+  const linux = chordFromEvent({
+    code,
+    ctrlKey: mods.ctrlKey === true,
+    altKey: mods.altKey === true,
+    shiftKey: mods.shiftKey === true,
+    metaKey: mods.metaKey === true,
+  })
+  const mac = linux === null ? undefined : MAC_CHORD.get(linux)
+  if (mac === undefined) return asPressed
+  const parts = mac.split('+')
+  return {
+    // The digit chords are stored collapsed, so the pressed key stays the key.
+    code: parts[parts.length - 1] === DIGIT_CODE ? code : (parts[parts.length - 1] as string),
+    ctrlKey: parts.includes('Ctrl'),
+    altKey: parts.includes('Alt'),
+    shiftKey: parts.includes('Shift'),
+    metaKey: parts.includes('Meta'),
+  }
+}
+
 export function press(code: string, mods: Partial<KeyboardEventInit> = {}): void {
+  const init = forThisPlatform(code, mods)
   window.dispatchEvent(
     new KeyboardEvent('keydown', {
-      code,
       key: KEY_OF_CODE[code] ?? '',
       bubbles: true,
       cancelable: true,
       ...mods,
+      ...init,
     }),
   )
 }
