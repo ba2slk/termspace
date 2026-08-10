@@ -66,7 +66,9 @@ export function createEmptyCanvas(): EmptyCanvas {
       for (const [action, chord] of chords) {
         const bound = bindings[action]
         chord.textContent =
-          bound.length === 0 ? t.keys.unbound : bound.map(formatChord).join(' / ')
+          bound.length === 0
+            ? t.keys.unbound
+            : bound.map((chord) => formatChord(chord)).join(' / ')
       }
     },
     setHidden(hidden) {

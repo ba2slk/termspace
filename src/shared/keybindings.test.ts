@@ -215,3 +215,39 @@ describe('the action list', () => {
     )
   })
 })
+
+describe('meta chords', () => {
+  it('maps metaKey to Meta+ on mac', () => {
+    expect(
+      chordFromEvent({ code: 'KeyU', altKey: false, ctrlKey: false, shiftKey: false, metaKey: true }, true),
+    ).toBe('Meta+KeyU')
+  })
+
+  it('keeps canonical order Ctrl+Alt+Shift+Meta', () => {
+    expect(
+      chordFromEvent({ code: 'KeyF', altKey: false, ctrlKey: true, shiftKey: true, metaKey: true }, true),
+    ).toBe('Ctrl+Shift+Meta+KeyF')
+  })
+
+  it('still rejects metaKey off mac', () => {
+    expect(
+      chordFromEvent({ code: 'KeyU', altKey: false, ctrlKey: false, shiftKey: false, metaKey: true }),
+    ).toBeNull()
+  })
+
+  it('parses cmd/meta/command names', () => {
+    expect(parseChord('Cmd+Shift+KeyW')).toBe('Shift+Meta+KeyW')
+    expect(parseChord('meta+Comma')).toBe('Meta+Comma')
+    expect(parseChord('Command+KeyF')).toBe('Meta+KeyF')
+  })
+
+  it('formats mac-style symbols on mac', () => {
+    expect(formatChord('Shift+Meta+KeyW', true)).toBe('⇧⌘W')
+    expect(formatChord('Meta+ArrowLeft', true)).toBe('⌘←')
+    expect(formatChord('Ctrl+Alt+Shift+Meta+KeyA', true)).toBe('⌃⌥⇧⌘A')
+  })
+
+  it('labels Meta as Cmd off mac', () => {
+    expect(formatChord('Meta+KeyF')).toBe('Cmd + F')
+  })
+})
