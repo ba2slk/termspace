@@ -277,6 +277,14 @@ describe('mac defaults', () => {
     for (const id of ACTION_IDS) expect(DEFAULT_BINDINGS_MAC[id].length).toBeGreaterThan(0)
   })
 
+  it('matches the default table chord for chord', () => {
+    // The self-check translates a Linux chord to its mac twin by position, so an
+    // unbalanced row would silently translate to the wrong key.
+    for (const id of ACTION_IDS) {
+      expect(DEFAULT_BINDINGS_MAC[id].length, id).toBe(DEFAULT_BINDINGS[id].length)
+    }
+  })
+
   it('follows mac conventions for the household names', () => {
     expect(DEFAULT_BINDINGS_MAC.copy).toEqual(['Meta+KeyC'])
     expect(DEFAULT_BINDINGS_MAC.paste).toEqual(['Meta+KeyV'])
