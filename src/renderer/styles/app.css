@@ -96,6 +96,16 @@ body {
   user-select: none;
 }
 
+/*
+ * mac: the native traffic lights sit over the left of this row (hiddenInset),
+ * so the controls start after them. The padding belongs to the bar itself,
+ * which drags — only the buttons opt out — so the cleared strip still moves the
+ * window, as the area around traffic lights does everywhere else on mac.
+ */
+.is-mac .app-bar {
+  padding-left: 78px; /* traffic-light inset (hiddenInset) */
+}
+
 .app-bar__side {
   display: flex;
   align-items: center;

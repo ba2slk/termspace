@@ -21,6 +21,10 @@ import { t } from './i18n'
 import { IS_MAC } from './platform'
 import { themeById, type TerminalTheme } from '../shared/terminal-themes'
 
+// The title bar has to clear the native traffic lights on mac; the platform
+// cannot change while the window is open, so this is set once.
+document.body.classList.toggle('is-mac', IS_MAC)
+
 const shell = document.getElementById('app')!
 const workspace = document.getElementById('workspace')!
 const canvasHost = document.getElementById('canvas')!
