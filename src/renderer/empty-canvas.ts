@@ -8,6 +8,7 @@
  */
 import { formatChord, type ActionId, type Bindings } from '../shared/keybindings'
 import { createAppMark, MARK_CANVAS } from './app-mark'
+import { IS_MAC } from './platform'
 import { t } from './i18n'
 
 /**
@@ -68,7 +69,7 @@ export function createEmptyCanvas(): EmptyCanvas {
         chord.textContent =
           bound.length === 0
             ? t.keys.unbound
-            : bound.map((chord) => formatChord(chord)).join(' / ')
+            : bound.map((chord) => formatChord(chord, IS_MAC)).join(' / ')
       }
     },
     setHidden(hidden) {

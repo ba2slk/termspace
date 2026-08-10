@@ -12,6 +12,7 @@ import type {
   TerminalTheme,
 } from '../shared/protocol'
 import { api } from './api'
+import { IS_MAC } from './platform'
 import { t } from './i18n'
 import { createCanvasView, type CanvasView } from './canvas-view'
 import { renderConfigError, renderExitBanner } from './error-card'
@@ -636,7 +637,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // Every live session has a listener on window, and stopPropagation doesn't
     // stop siblings on the same node, so each must decide if it's its turn.
     if (!active) return
-    const action = resolveAction(event, options.bindings())
+    const action = resolveAction(event, options.bindings(), IS_MAC)
     // The open overview owns every key; nothing may fall through to a pty.
     if (overview.isOpen) {
       if (overview.handleKey(event, action?.t === 'overview')) {

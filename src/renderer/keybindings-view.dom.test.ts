@@ -6,8 +6,16 @@ import {
   type ActionId,
   type Bindings,
 } from '../shared/keybindings'
-import { createKeybindingsPanel, type KeybindingsPanel } from './keybindings-view'
 import { t } from './i18n'
+import type { KeybindingsPanel } from './keybindings-view'
+
+/*
+ * The panel spells its chords for the platform, read from the bridge as the
+ * module loads — so the stub has to be on window before the import.
+ */
+vi.stubGlobal('termspace', { platform: 'linux' })
+
+const { createKeybindingsPanel } = await import('./keybindings-view')
 
 let bindings: Bindings
 let panel: KeybindingsPanel
