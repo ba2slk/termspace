@@ -53,6 +53,8 @@ const RISK_TEXT = {
   'control-char': t.keys.riskControlChar,
   'shell-word': t.keys.riskShellWord,
   'plain-key': t.keys.riskPlainKey,
+  'system-key': t.keys.riskSystemKey,
+  'menu-owned': t.keys.riskMenuOwned,
 } as const
 
 /** Which chord slot is being recorded. `index` past the end means a new one. */
@@ -182,7 +184,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     const warnings = document.createElement('div')
     warnings.className = 'keys__warnings'
     for (const chord of list) {
-      const risk = chordRisk(chord)
+      const risk = chordRisk(chord, IS_MAC, id)
       if (risk !== null) warnings.append(warning(`${formatChord(chord, IS_MAC)} — ${RISK_TEXT[risk]}`))
       const claimants = conflicts.get(chord)
       if (claimants !== undefined) {

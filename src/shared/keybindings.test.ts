@@ -139,6 +139,44 @@ describe('chordRisk', () => {
       for (const chord of DEFAULT_BINDINGS[id]) expect(chordRisk(chord)).toBeNull()
     }
   })
+
+  it('leaves Option alone on mac, where the terminal owns it', () => {
+    expect(chordRisk('Alt+KeyB', true)).toBeNull()
+    expect(chordRisk('Alt+KeyF', true)).toBeNull()
+  })
+
+  it('still flags a control character on mac', () => {
+    expect(chordRisk('Ctrl+KeyC', true)).toBe('control-char')
+    expect(chordRisk('KeyA', true)).toBe('plain-key')
+  })
+
+  it('flags the four Cmd keys the system takes first', () => {
+    for (const code of ['KeyQ', 'KeyW', 'KeyH', 'KeyM']) {
+      expect(chordRisk(`Meta+${code}`, true)).toBe('system-key')
+    }
+    // Only bare Cmd: the mac defaults put real actions behind Shift+Cmd+W/M.
+    expect(chordRisk('Shift+Meta+KeyW', true)).toBeNull()
+    expect(chordRisk('Shift+Meta+KeyM', true)).toBeNull()
+  })
+
+  it('flags Cmd+C/V for anything but copy and paste, which the menu delivers', () => {
+    expect(chordRisk('Meta+KeyC', true, 'split-down')).toBe('menu-owned')
+    expect(chordRisk('Meta+KeyV', true, 'split-down')).toBe('menu-owned')
+    expect(chordRisk('Meta+KeyC', true, 'copy')).toBeNull()
+    expect(chordRisk('Meta+KeyV', true, 'paste')).toBeNull()
+  })
+
+  it('says nothing about Cmd off mac, where the chord cannot fire at all', () => {
+    for (const code of ['KeyQ', 'KeyW', 'KeyH', 'KeyM', 'KeyC', 'KeyV']) {
+      expect(chordRisk(`Meta+${code}`)).toBeNull()
+    }
+  })
+
+  it('clears every mac default binding', () => {
+    for (const id of ACTION_IDS) {
+      for (const chord of DEFAULT_BINDINGS_MAC[id]) expect(chordRisk(chord, true, id)).toBeNull()
+    }
+  })
 })
 
 describe('findConflicts', () => {

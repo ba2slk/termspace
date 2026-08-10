@@ -352,9 +352,16 @@ export function formatChord(chord: string, isMac = false): string {
  * Why a chord is a bad idea — the terminal, not the app, normally owns it.
  * Advisory only: the warning is shown and the binding is still saved.
  */
-export type ChordRisk = 'control-char' | 'shell-word' | 'plain-key'
+export type ChordRisk = 'control-char' | 'shell-word' | 'plain-key' | 'system-key' | 'menu-owned'
 
-export function chordRisk(chord: string): ChordRisk | null {
+/** Cmd+C and Cmd+V arrive through the menu, which always means these two. */
+const MENU_ACTION: Readonly<Record<string, ActionId>> = { KeyC: 'copy', KeyV: 'paste' }
+
+/**
+ * `action` is the row the chord sits on, and only mac needs it: Cmd+C is right
+ * for copy and useless for anything else.
+ */
+export function chordRisk(chord: string, isMac = false, action?: ActionId): ChordRisk | null {
   const parts = chord.split('+')
   const code = parts[parts.length - 1] as string
   const mods = new Set(parts.slice(0, -1))
@@ -363,8 +370,19 @@ export function chordRisk(chord: string): ChordRisk | null {
 
   // Ctrl+letter is a control character on the wire: Ctrl+C is SIGINT.
   if (only('Ctrl') && /^Key[A-Z]$/.test(code)) return 'control-char'
-  // Readline's word motions, which every shell inherits.
-  if (only('Alt') && (code === 'KeyB' || code === 'KeyF')) return 'shell-word'
+  if (isMac && only('Meta')) {
+    // mac hands these to the menu bar before the page ever sees the key.
+    if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyH' || code === 'KeyM') return 'system-key'
+    // The Edit menu's accelerators, which forward to copy and paste and
+    // nothing else — so on any other action the key silently does the wrong
+    // thing rather than nothing.
+    const owner = MENU_ACTION[code]
+    if (owner !== undefined && action !== owner) return 'menu-owned'
+  }
+  // Readline's word motions, which every shell inherits. Not on mac: the mac
+  // table leaves Option to the terminal, so an Option chord there is the
+  // user's own deliberate choice, not a collision the defaults walked into.
+  if (!isMac && only('Alt') && (code === 'KeyB' || code === 'KeyF')) return 'shell-word'
   // Anything unmodified is typing, apart from the function keys.
   if (mods.size === 0 && !/^F(?:[1-9]|1[0-2])$/.test(code)) return 'plain-key'
   return null
