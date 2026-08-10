@@ -89,18 +89,31 @@ Commands running at save time are captured too, with two rules:
 Saving reads what each pane is running from `/proc`, which is blind to aliases:
 run `qatn` and the file gets the several hundred characters it expands into.
 
-For bash, the shell can be asked instead. `Ctrl` + `,` › Shell integration
-shows one line to add to your `~/.bashrc`:
+For bash and zsh, the shell can be asked instead. `Ctrl` + `,` › Shell
+integration shows one line to add to your rc file.
+
+bash — `~/.bashrc`:
 
 ```bash
 [ -f ~/.config/termspace/shell-integration.bash ] && . ~/.config/termspace/shell-integration.bash
 ```
 
-After that a saved session records the line you actually submitted — the alias
-name, and the same for anything recalled with ↑ or completed with Tab.
+zsh — `~/.zshrc`:
 
-Termspace never edits `~/.bashrc`; you add that line and it stays yours.
-Without it nothing changes, and zsh and fish keep reading `/proc` for now.
+```bash
+[ -f ~/.config/termspace/shell-integration.zsh ] && . ~/.config/termspace/shell-integration.zsh
+```
+
+After that a saved session records the line you actually submitted — the alias
+name, and the same for anything recalled with ↑ or completed with Tab. The zsh
+hook also reports the working directory as `OSC 7`, which is where the cwd of a
+saved pane comes from on macOS: there is no `/proc` to read it from.
+
+Panes already open keep the shell they started with, so reopen the session
+after adding the line.
+
+Termspace never edits your rc file; you add that line and it stays yours.
+Without it nothing changes, and fish keeps reading `/proc` for now.
 
 ## Signals a pane can send
 
