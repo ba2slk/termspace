@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/macos-support]
   pull_request:
 
 jobs:
@@ -22,3 +22,40 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
+
+  mac:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # node-pty is native, so the runner builds its own.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # The runner has a live GUI session, so the app window really draws and
+      # capturePage() produces real pixels. Serial because a shared runner is
+      # slow; four side-by-side app instances are tuned for the dev machine.
+      - run: mkdir -p verify-shots
+      - run: npm run verify:app -- --serial
+        env:
+          VITE_SHOT_DIR: ${{ github.workspace }}/verify-shots
+
+      - run: npm run dist:mac
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-verify-screenshots
+          path: |
+            verify-shots/*.png
+            release/*.dmg
+            release/*.zip
