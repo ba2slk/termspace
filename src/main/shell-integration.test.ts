@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { platform, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawn } from 'node-pty'
 import { describe, expect, it } from 'vitest'
 import { HOOK_SCRIPT } from './shell-integration'
 
@@ -16,27 +17,21 @@ import { HOOK_SCRIPT } from './shell-integration'
  *
  * The environment below is therefore not incidental: a seeded shared history
  * and a PROMPT_COMMAND are what it takes to see that failure.
+ *
+ * The shell runs under node-pty rather than `script`: the hook only speaks on a
+ * terminal, and the two `script` implementations disagree about both their
+ * argv and whether stdin may be a pipe. node-pty is also what the app itself
+ * uses, so this drives the hook the way a pane does.
  */
 
-const hasScript = ((): boolean => {
+const hasBash = ((): boolean => {
   try {
-    execFileSync('sh', ['-c', 'command -v script'], { stdio: 'ignore' })
+    execFileSync('sh', ['-c', 'command -v bash'], { stdio: 'ignore' })
     return true
   } catch {
     return false
   }
 })()
-
-/*
- * `script` takes its command differently on each platform: util-linux wants one
- * string after -c, BSD (macOS) takes the argv after the typescript file and has
- * no -c at all.
- */
-function scriptArgs(argv: readonly string[]): string[] {
-  return platform() === 'darwin'
-    ? ['-q', '/dev/null', ...argv]
-    : ['-qec', argv.join(' '), '/dev/null']
-}
 
 const PRIOR = 'PRIOR_COMMAND_FROM_ANOTHER_SHELL'
 const SEQUENCE = /\u001b\]1173;([^\u0007]*)\u0007/g
@@ -47,8 +42,58 @@ interface Session {
   readonly output: string
 }
 
+/** Feed lines to an interactive bash on a pty and collect everything it printed. */
+async function runBash(rcfile: string, termProgram: string, lines: readonly string[]): Promise<string> {
+  const term = spawn('bash', ['--rcfile', rcfile, '-i'], {
+    name: 'xterm-256color',
+    cols: 120,
+    rows: 40,
+    env: { ...process.env, TERM_PROGRAM: termProgram, TERM: 'xterm-256color' },
+  })
+
+  let output = ''
+  let exited = false
+  term.onData((data) => {
+    output += data
+  })
+  term.onExit(() => {
+    exited = true
+  })
+
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+  /*
+   * Wait for the shell to go quiet rather than for a prompt string: readline
+   * only takes a line once it has finished drawing, and PS1 differs per rcfile.
+   */
+  const settle = async (): Promise<void> => {
+    let seen = -1
+    while (seen !== output.length && !exited) {
+      seen = output.length
+      await sleep(150)
+    }
+  }
+
+  const deadline = setTimeout(() => {
+    term.kill()
+  }, 20_000)
+  try {
+    await settle()
+    for (const line of lines) {
+      term.write(`${line}\r`)
+      await settle()
+    }
+    term.write('exit\r')
+    for (let i = 0; i < 100 && !exited; i++) await sleep(50)
+  } finally {
+    clearTimeout(deadline)
+    if (!exited) term.kill()
+  }
+  return output
+}
+
 /** Run one interactive bash under a pty, feed it lines, read back what the hook sent. */
-function runHookedShell(lines: readonly string[]): Session {
+async function runHookedShell(lines: readonly string[]): Promise<Session> {
   const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
   try {
     writeFileSync(join(dir, 'hook.bash'), HOOK_SCRIPT)
@@ -69,16 +114,7 @@ function runHookedShell(lines: readonly string[]): Session {
       ].join('\n'),
     )
 
-    const output = execFileSync(
-      'script',
-      scriptArgs(['bash', '--rcfile', join(dir, 'rc'), '-i']),
-      {
-        input: `${[...lines, 'exit'].join('\n')}\n`,
-        env: { ...process.env, TERM_PROGRAM: 'Termspace', TERM: 'xterm-256color' },
-        encoding: 'utf8',
-        timeout: 20_000,
-      },
-    )
+    const output = await runBash(join(dir, 'rc'), 'Termspace', lines)
 
     let sourced = false
     const commands: string[] = []
@@ -95,42 +131,33 @@ function runHookedShell(lines: readonly string[]): Session {
   }
 }
 
-describe.skipIf(!hasScript)('the bash hook', () => {
-  it('reports each submitted line once, and nothing it was not given', () => {
-    const session = runHookedShell(['echo hello', 'compound', 'echo done'])
+describe.skipIf(!hasBash)('the bash hook', () => {
+  it('reports each submitted line once, and nothing it was not given', async () => {
+    const session = await runHookedShell(['echo hello', 'compound', 'echo done'])
 
     expect(session.sourced).toBe(true)
     // 'compound' once rather than once per component, and by name, not by body.
     expect(session.commands).toEqual(['echo hello', 'compound', 'echo done', 'exit'])
-  })
+  }, 30_000)
 
-  it('never reports a command another shell left in the shared history', () => {
-    expect(runHookedShell(['echo hello']).commands).not.toContain(PRIOR)
-  })
+  it('never reports a command another shell left in the shared history', async () => {
+    expect((await runHookedShell(['echo hello'])).commands).not.toContain(PRIOR)
+  }, 30_000)
 
-  it('leaves the exit status of the previous command alone', () => {
+  it('leaves the exit status of the previous command alone', async () => {
     // The trap runs before every command, and a careless one clobbers $?.
-    const session = runHookedShell(['false', 'echo status=$?'])
+    const session = await runHookedShell(['false', 'echo status=$?'])
     expect(session.output).toContain('status=1')
-  })
+  }, 30_000)
 
-  it('stays silent outside Termspace', () => {
+  it('stays silent outside Termspace', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
     try {
       writeFileSync(join(dir, 'hook.bash'), HOOK_SCRIPT)
-      const output = execFileSync(
-        'script',
-        scriptArgs(['bash', '--rcfile', join(dir, 'hook.bash'), '-i']),
-        {
-          input: 'echo hello\nexit\n',
-          env: { ...process.env, TERM_PROGRAM: 'SomeOtherTerminal', TERM: 'xterm-256color' },
-          encoding: 'utf8',
-          timeout: 20_000,
-        },
-      )
+      const output = await runBash(join(dir, 'hook.bash'), 'SomeOtherTerminal', ['echo hello'])
       expect([...output.matchAll(SEQUENCE)]).toEqual([])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })
