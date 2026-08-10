@@ -213,6 +213,8 @@ const en = {
     riskControlChar: 'The terminal sends this as a control character.',
     riskShellWord: 'The shell uses this to move by word.',
     riskPlainKey: 'A key with no modifier is ordinary typing.',
+    riskSystemKey: 'macOS takes this key for itself.',
+    riskMenuOwned: 'The Edit menu holds this key for copy and paste.',
     conflict: (actions: string) => `Also bound to ${actions}.`,
 
     'focus-left': 'Focus the pane to the left',
@@ -478,6 +480,8 @@ const ko: Catalog = {
     riskControlChar: '터미널이 제어 문자로 보내는 키입니다.',
     riskShellWord: '셸이 단어 단위 이동에 쓰는 키입니다.',
     riskPlainKey: '조합 없는 키는 그냥 글자 입력입니다.',
+    riskSystemKey: 'macOS가 먼저 가져가는 키입니다.',
+    riskMenuOwned: '편집 메뉴가 복사·붙여넣기용으로 쓰는 키입니다.',
     conflict: (actions: string) => `${actions}에도 걸려 있습니다.`,
 
     'focus-left': '왼쪽 pane으로 포커스',
