@@ -33,6 +33,7 @@ import {
   press,
   type Report,
   sleep,
+  waitFor,
   watchPtyBytes,
 } from './harness'
 import { checkClipboard, checkRevealFocus, checkWheelScroll } from './motion'
@@ -145,7 +146,14 @@ export async function run(): Promise<void> {
   const report: Report = {}
   const bytes = watchPtyBytes()
   try {
-    await sleep(800)
+    /*
+     * Boot fetches settings, keybindings and the session list over IPC, and a
+     * shortcut pressed before the bindings land matches nothing. The listed
+     * sessions are the last thing boot draws, so they are the ready signal —
+     * a fixed sleep was too short on a cold, shared machine.
+     */
+    await waitFor(() => document.querySelector('.sidebar__row') !== null, 20_000)
+    await sleep(300)
     for (const name of names) {
       const group = GROUPS[name]
       if (group === undefined) throw new Error(`no such group: ${name}`)

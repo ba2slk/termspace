@@ -184,9 +184,14 @@ export async function checkWheelScroll(report: Report): Promise<void> {
    */
   const appBarBox = document.querySelector<HTMLElement>('.app-bar')?.getBoundingClientRect()
   const stripBox = document.querySelector<HTMLElement>('.app-bar__pan')?.getBoundingClientRect()
-  const topPane = document
-    .querySelector<HTMLElement>('.session-host:not([hidden]) .pane')
-    ?.getBoundingClientRect()
+  /*
+   * The highest pane, not the first in the DOM: panes are placed absolutely and
+   * keep their creation order, so after a move or a close the first element is
+   * not the one nearest the bar.
+   */
+  const topPane = [...document.querySelectorAll<HTMLElement>('.session-host:not([hidden]) .pane')]
+    .map((pane) => pane.getBoundingClientRect())
+    .sort((a, b) => a.top - b.top)[0]
   if (appBarBox !== undefined && stripBox !== undefined && topPane !== undefined) {
     const stripGap = topPane.top - stripBox.bottom
     report['barToPaneGap'] = `${(topPane.top - appBarBox.bottom).toFixed(1)}px`

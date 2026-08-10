@@ -452,23 +452,33 @@ export async function checkGridFillsPane(report: Report): Promise<void> {
 
   let worst = 0
   let worstCells = 0
-  for (const host of awake()) {
-    const screen = host.querySelector<HTMLElement>('.xterm-screen')
-    const term = (host as unknown as { __term?: { cols: number } }).__term
-    if (screen === null || term === undefined) continue
-    const drawn = screen.getBoundingClientRect().width
-    if (drawn === 0) continue // occluded or mid-swap; unmeasurable, not broken
-    const gap = host.clientWidth - drawn
-    const cells = gap / (drawn / term.cols)
-    if (gap > worst) {
-      worst = gap
-      worstCells = cells
+  const measure = (): number => {
+    worst = 0
+    worstCells = 0
+    for (const host of awake()) {
+      const screen = host.querySelector<HTMLElement>('.xterm-screen')
+      const term = (host as unknown as { __term?: { cols: number } }).__term
+      if (screen === null || term === undefined) continue
+      const drawn = screen.getBoundingClientRect().width
+      if (drawn === 0) continue // occluded or mid-swap; unmeasurable, not broken
+      const gap = host.clientWidth - drawn
+      const cells = gap / (drawn / term.cols)
+      if (gap > worst) {
+        worst = gap
+        worstCells = cells
+      }
     }
+    return worstCells
   }
   /*
    * One cell can always be left over — a column that does not fit does not fit.
    * The scrollbar the fit reserves takes roughly two more.
+   *
+   * A pane that was just resized refits on the next observed frame, so wait for
+   * the answer rather than reading whichever moment this check happened to land
+   * in — on a loaded machine that moment is often mid-refit.
    */
+  await waitFor(() => measure() < 3, 8000)
   report['gridFillsPane'] =
     worstCells < 3
       ? `ok (${worst.toFixed(0)}px left over)`
