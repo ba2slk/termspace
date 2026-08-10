@@ -1,5 +1,6 @@
 import { api } from '../api'
 import { t } from '../i18n'
+import { maxColumnWidth } from '../layout-geometry'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   capture,
@@ -337,6 +338,13 @@ export async function checkImeInput(report: Report): Promise<void> {
  * app can't read back is worthless.
  */
 export async function checkSaveSession(report: Report): Promise<void> {
+  /*
+   * Capturing what a pane runs needs the hook sourced by the user's own rc, so
+   * a machine that never added RC_LINE (a CI runner) can't be asked for it.
+   * Read it before writing anything: this is about the shell, not the save.
+   */
+  const hooked = (await api.shellIntegrationStatus()).active
+
   // Start a long-running job first, so the save has something to capture.
   const capturePane = focusedId()
   if (capturePane !== undefined) {
@@ -426,9 +434,11 @@ export async function checkSaveSession(report: Report): Promise<void> {
     roundTrip.spec?.columns.flatMap((c) =>
       c.panes.map((p) => (p.kind === 'pane' ? p.command : null)),
     ) ?? []
-  report['savedCapturedCommand'] = commands.includes('sleep 300')
-    ? 'ok'
-    : `FAIL (${commands.map(String).join(',') || 'none'})`
+  report['savedCapturedCommand'] = !hooked
+    ? 'skipped (no pane has the shell hook; rc line not installed here)'
+    : commands.includes('sleep 300')
+      ? 'ok'
+      : `FAIL (${commands.map(String).join(',') || 'none'})`
   // Undo: the sleeping pane must not outlive this check.
   if (capturePane !== undefined) {
     api.write(capturePane, '\x03')
@@ -685,12 +695,21 @@ export async function checkNewSession(report: Report): Promise<void> {
   const handle = columnHandles[0] as HTMLElement | undefined
   const paneBefore = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane')
   const widthBefore = paneBefore?.getBoundingClientRect().width ?? 0
+  /*
+   * Widening stops at a column that already fills the viewport, which is where
+   * a small screen (a CI runner's 1024x768) starts every column. Drag away from
+   * whichever bound is closer, so the handle is exercised on any display.
+   */
+  // The session host is the canvas viewport the runtime measures its cap against.
+  const canvasWidth = document.querySelector<HTMLElement>('.session-host:not([hidden])')?.clientWidth ?? 0
+  const grow = widthBefore < maxColumnWidth(canvasWidth) - 40
+  const dx = grow ? 160 : -160
   if (handle !== undefined) {
     const box = handle.getBoundingClientRect()
     const at = { clientX: box.left + box.width / 2, clientY: box.top + 100, bubbles: true }
     handle.dispatchEvent(new PointerEvent('pointerdown', { ...at, pointerId: 1 }))
     handle.dispatchEvent(
-      new PointerEvent('pointermove', { ...at, clientX: at.clientX + 160, pointerId: 1 }),
+      new PointerEvent('pointermove', { ...at, clientX: at.clientX + dx, pointerId: 1 }),
     )
     handle.dispatchEvent(new PointerEvent('pointerup', { ...at, pointerId: 1 }))
     await sleep(400)
@@ -698,10 +717,9 @@ export async function checkNewSession(report: Report): Promise<void> {
   const widthAfter =
     document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane')?.getBoundingClientRect()
       .width ?? 0
-  report['soloColumnResizes'] =
-    widthAfter > widthBefore + 40
-      ? `ok (${String(Math.round(widthBefore))} → ${String(Math.round(widthAfter))}px)`
-      : `FAIL (${String(Math.round(widthBefore))} → ${String(Math.round(widthAfter))}px)`
+  const moved = grow ? widthAfter > widthBefore + 40 : widthAfter < widthBefore - 40
+  const trace = `${String(Math.round(widthBefore))} → ${String(Math.round(widthAfter))}px, ${grow ? 'wider' : 'narrower'}`
+  report['soloColumnResizes'] = moved ? `ok (${trace})` : `FAIL (${trace})`
 }
 
 /**
