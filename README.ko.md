@@ -12,6 +12,7 @@
   <a href="https://github.com/ba2slk/termspace/releases"><img src="https://img.shields.io/github/v/release/ba2slk/termspace?style=flat&color=08C" alt="최신 릴리스" /></a>
   <img src="https://img.shields.io/badge/license-MIT-08C?style=flat" alt="License: MIT" />
   <img src="https://img.shields.io/badge/Linux-4493F8?style=flat" alt="지원 플랫폼: Linux" />
+  <img src="https://img.shields.io/badge/macOS-4493F8?style=flat" alt="지원 플랫폼: macOS" />
 </p>
 
 <p align="center"><a href="README.md">English</a></p>
@@ -32,7 +33,7 @@ Termspace는 화면보다 넓은 캔버스에 터미널 패인을 늘어놓습�
 노트북 화면에 필요한 창이 다 안 들어올 때, 프로젝트를 여러 개 열어두고 오갈 때,
 오래 걸리는 작업이나 에이전트를 띄워두고 다른 일을 할 때 유용합니다.
 
-아직 **리눅스만** 지원합니다.
+**리눅스와 macOS**를 지원합니다. 윈도우는 지원하지 않습니다.
 
 ## 기능
 
@@ -49,14 +50,17 @@ Termspace는 화면보다 넓은 캔버스에 터미널 패인을 늘어놓습�
 
 ## 설치
 
-[Releases](https://github.com/ba2slk/termspace/releases)에서 AppImage를 받습니다.
+빌드는 [Releases](https://github.com/ba2slk/termspace/releases)에 올라옵니다. 소스에서
+빌드하는 방법은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다.
+
+### 리눅스
+
+AppImage를 받습니다.
 
 ```bash
 chmod +x Termspace-*.AppImage
 ./Termspace-*.AppImage
 ```
-
-소스에서 빌드하는 방법은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다.
 
 <details>
 <summary>실행하자마자 샌드박스 오류를 내며 죽는다면</summary>
@@ -80,6 +84,22 @@ sudo apparmor_parser -r /etc/apparmor.d/termspace
 어느 쪽이든 렌더러 격리와 CSP는 그대로 동작합니다.
 
 </details>
+
+### macOS
+
+Releases에서 아키텍처에 맞는 dmg를 받습니다 (애플 실리콘은 `arm64`, 인텔은 `x64`).
+
+**첫 실행.** Termspace는 ad-hoc 서명만 되어 있고 공증(notarization)을 받지 않아서,
+Gatekeeper가 첫 실행을 막습니다. "손상되었습니다" 또는 "확인되지 않은 개발자"라고 뜨는데,
+둘 다 내려받은 파일에 macOS의 격리(quarantine) 표시가 붙어 있다는 뜻이고 파일 자체는
+멀쩡합니다. 아래 중 하나를 한 번만 하면 됩니다.
+
+- **터미널:** Termspace.app을 응용 프로그램으로 옮긴 뒤
+  `xattr -dr com.apple.quarantine /Applications/Termspace.app`
+- **터미널 없이:** 더블 클릭해서 한 번 막힌 다음, 시스템 설정 → 개인정보 보호 및 보안 →
+  "그래도 열기". macOS 14 이하에서는 우클릭 → 열기도 됩니다.
+- **소스에서 빌드:** `npm install && npm run dist:mac` — 직접 빌드한 앱에는 격리 표시가
+  붙지 않습니다.
 
 ## 세션
 
@@ -142,6 +162,12 @@ detach/attach 기능은 없습니다. 창을 닫으면 안에서 돌던 프로�
 
 나머지 키 입력은 모두 포커스된 패인으로 그대로 전달됩니다. 위 단축키는 `Ctrl` + `,` ›
 단축키에서 전부 바꿀 수 있습니다.
+
+macOS에서는 같은 표가 `Cmd` 위에 얹히고, 맥 관례가 있는 자리는 관례를 따릅니다.
+`Cmd` + `C` / `V` / `F` / `S` / `,`, 사이드바는 `Cmd` + `B`, 이전 / 다음 세션은
+`Shift+Cmd` + `[` / `]`, 전체 보기는 `Shift+Cmd` + `M`입니다 (`Cmd` + `M`은 최소화).
+`Option`은 터미널 몫으로 남겨 두어서 `Option` + 글자는 셸에서 원래대로 특수 문자를
+입력하고, `Cmd` + `Q` `W` `H` `M`은 시스템 동작 그대로입니다.
 
 ## 설정
 

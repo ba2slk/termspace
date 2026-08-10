@@ -414,12 +414,12 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
 
-### Shell integration (bash)
+### Shell integration (bash and zsh)
 
 The OSC round trip itself is automated — the check emits the hook's sequences with
 `printf` (see "Shell integration (automated half)" above). What remains here is the part
-that needs the line from `Ctrl+,` › Shell integration in your own `~/.bashrc`, which the
-check will never edit.
+that needs the line from `Ctrl+,` › Shell integration in your own rc file, which the
+check will never edit — `~/.bashrc` for bash, `~/.zshrc` for zsh.
 
 - [ ] With the line added and a session reopened, `Ctrl+,` shows the integration as
       loaded
@@ -431,3 +431,42 @@ check will never edit.
       trap on every command, and a careless one would clobber it
 - [ ] Nothing appears on screen from the hook itself, in Termspace or in another terminal
       reading the same `~/.bashrc`
+- [ ] The `DEBUG` trap items above are bash's. For zsh, run the alias and the recall
+      cases against the `~/.zshrc` line and confirm the same two records
+
+## macOS (real hardware)
+
+CI builds the mac app and runs the unit tests, but it never opens a window. Everything
+below needs a real Mac and a person in front of it. Each line says what "pass" means.
+
+- [ ] **First launch.** The Gatekeeper path in the README works as written: the block
+      appears, one of the three routes clears it, and the app opens afterwards. Pass =
+      the route the tester chose leaves a launchable app
+- [ ] **Cmd bindings and Option.** Focus, split, resize, overview and session switching
+      fire on `Cmd`, and `Option` + a letter still types the special character in the
+      shell (`Option` + `a` → `å`) instead of triggering an app action. Pass = both
+      halves hold
+- [ ] **Non-conventional placements.** `Cmd` + `G` (scroll back to the focused pane) and
+      `Cmd` + `U` `I` `O` `P` (resize) have no mac convention behind them. Pass = each
+      fires its app action and collides with nothing the tester expected that key to do
+- [ ] **Trackpad scrolling.** Two-finger scroll and the inertia after lifting feel
+      continuous, over the canvas and inside a terminal's scrollback. Pass = no steps,
+      stalls or runaway drift in either place
+- [ ] **Korean IME.** Composition in a terminal pane draws the in-progress syllable in
+      place and commits once. Pass = what appears matches what was typed, with no
+      duplicated or stranded jamo
+- [ ] **Retina text.** Terminal glyphs are sharp on a Retina display, not upscaled from a
+      1x buffer. Pass = crisp at the default font size, and after `Cmd` + `+` / `-`
+- [ ] **Traffic lights.** Hover shows the glyphs and each button does its job; the
+      buttons sit vertically centered in the title bar with roughly 6px of clearance
+      before the first one. Pass = no overlap or crowding, checked at a larger interface
+      scale too
+- [ ] **Application menu.** Edit → Copy and Paste work in a terminal pane *and* in a
+      settings text field, and `Cmd` + `Q` `W` `H` `M` quit, close, hide and minimize.
+      Pass = all six behave
+- [ ] **Keybindings capture.** The Shortcuts screen cannot record `Cmd` + `C` or
+      `Cmd` + `V` as a chord, because the application menu owns them first. Pass = the
+      limitation is confirmed as documented, with no crash and no half-recorded binding
+- [ ] **zsh integration.** With the `~/.zshrc` line installed, a saved session captures
+      the command that was running, and records the directory a pane was `cd`'d into
+      (mac has no `/proc`, so this comes from the hook's `OSC 7`). Pass = both observed

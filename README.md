@@ -12,6 +12,7 @@
   <a href="https://github.com/ba2slk/termspace/releases"><img src="https://img.shields.io/github/v/release/ba2slk/termspace?style=flat&color=08C" alt="Latest release" /></a>
   <img src="https://img.shields.io/badge/license-MIT-08C?style=flat" alt="License: MIT" />
   <img src="https://img.shields.io/badge/Linux-4493F8?style=flat" alt="Platform: Linux" />
+  <img src="https://img.shields.io/badge/macOS-4493F8?style=flat" alt="Platform: macOS" />
 </p>
 
 <p align="center"><a href="README.ko.md">한국어</a></p>
@@ -35,7 +36,7 @@ running in the same directories.
 keep several projects open at once, or run long jobs and agents that finish
 while you're looking somewhere else.
 
-**Linux only** for now.
+**Linux and macOS.** Windows is not supported.
 
 ## Features
 
@@ -52,14 +53,17 @@ while you're looking somewhere else.
 
 ## Install
 
-Grab the AppImage from [Releases](https://github.com/ba2slk/termspace/releases):
+Builds are on the [releases page](https://github.com/ba2slk/termspace/releases).
+Building from source is in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Linux
+
+Grab the AppImage:
 
 ```bash
 chmod +x Termspace-*.AppImage
 ./Termspace-*.AppImage
 ```
-
-Building from source is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <details>
 <summary>It exits immediately with a sandbox error</summary>
@@ -83,6 +87,24 @@ sudo apparmor_parser -r /etc/apparmor.d/termspace
 Renderer isolation and the CSP are in place either way.
 
 </details>
+
+### macOS
+
+Download the dmg for your architecture (`arm64` for Apple Silicon, `x64` for
+Intel) from the releases page.
+
+**First launch.** Termspace is ad-hoc code-signed and not notarized, so
+Gatekeeper blocks the first open — you may see "damaged" or "unverified
+developer". Both mean the download carries macOS's quarantine flag; the file
+is intact. Do one of these once:
+
+- **Terminal:** drag Termspace.app to Applications, then
+  `xattr -dr com.apple.quarantine /Applications/Termspace.app`
+- **No terminal:** double-click (it will be blocked), then System Settings →
+  Privacy & Security → "Open Anyway". On macOS 14 and earlier,
+  right-click → Open also works.
+- **Build from source:** `npm install && npm run dist:mac` — locally built
+  apps carry no quarantine flag.
 
 ## Sessions
 
@@ -145,6 +167,13 @@ tmux itself.
 
 Everything else goes straight to the focused pane. Every binding is
 rebindable in `Ctrl` + `,` › Shortcuts.
+
+On macOS the same table sits on `Cmd`, and the mac convention wins where there
+is one: `Cmd` + `C` / `V` / `F` / `S` / `,`, `Cmd` + `B` for the sidebar,
+`Shift+Cmd` + `[` / `]` for previous / next session, and `Shift+Cmd` + `M` for
+the overview, since `Cmd` + `M` minimizes. `Option` is left to the terminal, so
+`Option` + a letter still types the character the shell expects, and
+`Cmd` + `Q` `W` `H` `M` stay the system's.
 
 ## Settings
 
