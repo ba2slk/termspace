@@ -3,10 +3,12 @@
  * keys with it, the main process validates the file against it.
  *
  * A chord is a canonical string — modifiers in a fixed order, then the physical
- * `code`: `Ctrl+Alt+Shift+KeyU`. Matching on `code` rather than `key` is what
- * keeps a binding working under any keyboard layout.
+ * `code`: `Ctrl+Alt+Shift+Meta+KeyU`. Matching on `code` rather than `key` is
+ * what keeps a binding working under any keyboard layout.
  *
- * Super never appears: it belongs to the window manager.
+ * `Meta` is Cmd on macOS. Off mac the same physical key is Super and belongs to
+ * the window manager, so a Meta chord there never matches a key press — but it
+ * still parses, so one keybindings file can serve both platforms.
  */
 
 export type ActionId =
@@ -185,14 +187,16 @@ export function digitIndex(code: string): number | null {
  * A pressed key as a chord string, or null when it cannot be one — a bare
  * modifier, or anything held with Super.
  */
-export function chordFromEvent(event: KeyChord): string | null {
-  if (event.metaKey) return null
+export function chordFromEvent(event: KeyChord, isMac = false): string | null {
+  // Off mac, Meta is Super and belongs to the window manager.
+  if (event.metaKey && !isMac) return null
   const code = collapseDigit(event.code)
   if (!isCode(code)) return null
   return (
     (event.ctrlKey ? 'Ctrl+' : '') +
     (event.altKey ? 'Alt+' : '') +
     (event.shiftKey ? 'Shift+' : '') +
+    (event.metaKey ? 'Meta+' : '') +
     code
   )
 }
@@ -211,6 +215,7 @@ export function parseChord(text: unknown): string | null {
   let ctrlKey = false
   let altKey = false
   let shiftKey = false
+  let metaKey = false
   for (const part of parts.slice(0, -1)) {
     switch (part.toLowerCase()) {
       case 'ctrl':
@@ -224,11 +229,18 @@ export function parseChord(text: unknown): string | null {
       case 'shift':
         shiftKey = true
         break
+      case 'meta':
+      case 'cmd':
+      case 'command':
+        metaKey = true
+        break
       default:
         return null // Super, or a typo. Either way the binding is not usable.
     }
   }
-  return chordFromEvent({ code, ctrlKey, altKey, shiftKey, metaKey: false })
+  // Always the permissive form: a mac chord in a Linux file is inert, not
+  // invalid, so the platform filter belongs at key-press time, not read time.
+  return chordFromEvent({ code, ctrlKey, altKey, shiftKey, metaKey }, true)
 }
 
 const CODE_LABEL: Readonly<Record<string, string>> = {
@@ -266,16 +278,27 @@ function codeLabel(code: string): string {
   return code
 }
 
+const MAC_MOD: Readonly<Record<string, string>> = {
+  Ctrl: '⌃',
+  Alt: '⌥',
+  Shift: '⇧',
+  Meta: '⌘',
+}
+
 /**
  * What the user sees on the chip. Modifier names are the same in both locales.
  *
  * Spaced around the plus: `Alt+→` runs the modifier into an arrow that is
  * itself a symbol, and the eye has to separate them. `Alt + →` does it for you.
+ * macOS spells its own chords in symbols with nothing between them, and a mac
+ * user reads `⇧⌘W` faster than any spelled-out form.
  */
-export function formatChord(chord: string): string {
+export function formatChord(chord: string, isMac = false): string {
   const parts = chord.split('+')
   const code = parts[parts.length - 1] as string
-  return [...parts.slice(0, -1), codeLabel(code)].join(' + ')
+  const mods = parts.slice(0, -1)
+  if (isMac) return mods.map((mod) => MAC_MOD[mod] ?? mod).join('') + codeLabel(code)
+  return [...mods.map((mod) => (mod === 'Meta' ? 'Cmd' : mod)), codeLabel(code)].join(' + ')
 }
 
 /**
