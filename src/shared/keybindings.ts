@@ -94,6 +94,53 @@ export const DEFAULT_BINDINGS: Bindings = {
   'font-reset': ['Ctrl+Digit0', 'Ctrl+Numpad0'],
 }
 
+/**
+ * The mac table mirrors onto Cmd. Option is left to the terminal (it types
+ * characters and serves as readline Meta), and the system's own Cmd+Q/W/H/M
+ * are never claimed. Where a mac convention exists (Cmd+C/V/F/S/comma,
+ * Cmd+1..9, Cmd+Shift+[ ]), it wins over a mechanical mirror.
+ */
+export const DEFAULT_BINDINGS_MAC: Bindings = {
+  'focus-left': ['Meta+ArrowLeft'],
+  'focus-right': ['Meta+ArrowRight'],
+  'focus-up': ['Meta+ArrowUp'],
+  'focus-down': ['Meta+ArrowDown'],
+  'resize-left': ['Meta+KeyU', 'Ctrl+Meta+ArrowLeft'],
+  'resize-down': ['Meta+KeyI', 'Ctrl+Meta+ArrowDown'],
+  'resize-up': ['Meta+KeyO', 'Ctrl+Meta+ArrowUp'],
+  'resize-right': ['Meta+KeyP', 'Ctrl+Meta+ArrowRight'],
+  'move-left': ['Shift+Meta+KeyU'],
+  'move-down': ['Shift+Meta+KeyI'],
+  'move-up': ['Shift+Meta+KeyO'],
+  'move-right': ['Shift+Meta+KeyP'],
+  'split-up': ['Shift+Meta+ArrowUp'],
+  'split-down': ['Shift+Meta+ArrowDown'],
+  'add-column-left': ['Shift+Meta+ArrowLeft'],
+  'add-column-right': ['Shift+Meta+ArrowRight'],
+  'close-pane': ['Shift+Meta+KeyW'],
+  'reveal-focus': ['Meta+KeyG'],
+  // Cmd+M minimizes; the overview moves behind Shift.
+  overview: ['Shift+Meta+KeyM'],
+  search: ['Meta+KeyF'],
+  copy: ['Meta+KeyC'],
+  paste: ['Meta+KeyV'],
+  'toggle-sidebar': ['Meta+KeyB'],
+  'goto-session': [`Meta+${DIGIT_CODE}`],
+  'prev-session': ['Shift+Meta+BracketLeft'],
+  'next-session': ['Shift+Meta+BracketRight'],
+  settings: ['Meta+Comma'],
+  'save-layout': ['Meta+KeyS'],
+  fullscreen: ['Ctrl+Meta+KeyF'],
+  // On most layouts + is Shift+=, so Cmd++ arrives with Shift held.
+  'font-increase': ['Meta+Equal', 'Shift+Meta+Equal', 'Meta+NumpadAdd'],
+  'font-decrease': ['Meta+Minus', 'Meta+NumpadSubtract'],
+  'font-reset': ['Meta+Digit0', 'Meta+Numpad0'],
+}
+
+export function defaultBindingsFor(isMac: boolean): Bindings {
+  return isMac ? DEFAULT_BINDINGS_MAC : DEFAULT_BINDINGS
+}
+
 export type ActionGroup = 'pane' | 'layout' | 'terminal' | 'app'
 
 /** Display order for the settings list. Every action appears exactly once. */
@@ -348,16 +395,19 @@ export function buildLookup(bindings: Bindings): ReadonlyMap<string, ActionId> {
   return lookup
 }
 
-export function isDefault(bindings: Bindings, id: ActionId): boolean {
+export function isDefault(bindings: Bindings, id: ActionId, isMac = false): boolean {
   const mine = bindings[id]
-  const theirs = DEFAULT_BINDINGS[id]
+  const theirs = defaultBindingsFor(isMac)[id]
   return mine.length === theirs.length && mine.every((chord, i) => chord === theirs[i])
 }
 
 /** Only what differs from the defaults, which is all the file needs to hold. */
-export function changedBindings(bindings: Bindings): Record<string, readonly string[]> {
+export function changedBindings(
+  bindings: Bindings,
+  isMac = false,
+): Record<string, readonly string[]> {
   const changed: Record<string, readonly string[]> = {}
-  for (const id of ACTION_IDS) if (!isDefault(bindings, id)) changed[id] = bindings[id]
+  for (const id of ACTION_IDS) if (!isDefault(bindings, id, isMac)) changed[id] = bindings[id]
   return changed
 }
 
@@ -365,13 +415,14 @@ export function changedBindings(bindings: Bindings): Record<string, readonly str
  * A file's contents as usable bindings. Unknown actions and unusable chords are
  * dropped rather than rejected — one bad line must not cost the user the rest.
  */
-export function normalizeBindings(raw: unknown): Bindings {
+export function normalizeBindings(raw: unknown, isMac = false): Bindings {
   const input = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const defaults = defaultBindingsFor(isMac)
   const result: Record<string, readonly string[]> = {}
   for (const id of ACTION_IDS) {
     const value = input[id]
     if (value === undefined) {
-      result[id] = DEFAULT_BINDINGS[id]
+      result[id] = defaults[id]
       continue
     }
     // A single string is what a hand-written file most often holds.

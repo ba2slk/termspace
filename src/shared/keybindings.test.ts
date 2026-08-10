@@ -6,6 +6,8 @@ import {
   chordRisk,
   changedBindings,
   DEFAULT_BINDINGS,
+  DEFAULT_BINDINGS_MAC,
+  defaultBindingsFor,
   DIGIT_CODE,
   digitIndex,
   findConflicts,
@@ -249,5 +251,56 @@ describe('meta chords', () => {
 
   it('labels Meta as Cmd off mac', () => {
     expect(formatChord('Meta+KeyF')).toBe('Cmd + F')
+  })
+})
+
+describe('mac defaults', () => {
+  it('has no plain Cmd+Q/W/H/M — reserved by the system', () => {
+    for (const chords of Object.values(DEFAULT_BINDINGS_MAC)) {
+      for (const chord of chords) {
+        expect(['Meta+KeyQ', 'Meta+KeyW', 'Meta+KeyH', 'Meta+KeyM']).not.toContain(chord)
+      }
+    }
+  })
+
+  it('has no bare-Alt chords — Option types characters on a Mac', () => {
+    for (const chords of Object.values(DEFAULT_BINDINGS_MAC)) {
+      for (const chord of chords) expect(chord.split('+')).not.toContain('Alt')
+    }
+  })
+
+  it('is conflict-free', () => {
+    expect(findConflicts(DEFAULT_BINDINGS_MAC).size).toBe(0)
+  })
+
+  it('covers every action', () => {
+    for (const id of ACTION_IDS) expect(DEFAULT_BINDINGS_MAC[id].length).toBeGreaterThan(0)
+  })
+
+  it('follows mac conventions for the household names', () => {
+    expect(DEFAULT_BINDINGS_MAC.copy).toEqual(['Meta+KeyC'])
+    expect(DEFAULT_BINDINGS_MAC.paste).toEqual(['Meta+KeyV'])
+    expect(DEFAULT_BINDINGS_MAC.search).toEqual(['Meta+KeyF'])
+    expect(DEFAULT_BINDINGS_MAC.settings).toEqual(['Meta+Comma'])
+    expect(DEFAULT_BINDINGS_MAC['save-layout']).toEqual(['Meta+KeyS'])
+  })
+
+  it('every chord is canonical', () => {
+    for (const chords of Object.values(DEFAULT_BINDINGS_MAC)) {
+      for (const chord of chords) expect(parseChord(chord)).toBe(chord)
+    }
+  })
+
+  it('defaultBindingsFor picks the table by platform', () => {
+    expect(defaultBindingsFor(true)).toBe(DEFAULT_BINDINGS_MAC)
+    expect(defaultBindingsFor(false)).toBe(DEFAULT_BINDINGS)
+  })
+
+  it('threads the platform through the default-consuming helpers', () => {
+    expect(normalizeBindings({}, true)).toEqual(DEFAULT_BINDINGS_MAC)
+    expect(normalizeBindings({})).toEqual(DEFAULT_BINDINGS)
+    for (const id of ACTION_IDS) expect(isDefault(DEFAULT_BINDINGS_MAC, id, true)).toBe(true)
+    expect(changedBindings(DEFAULT_BINDINGS_MAC, true)).toEqual({})
+    expect(changedBindings(DEFAULT_BINDINGS)).toEqual({})
   })
 })
