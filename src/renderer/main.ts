@@ -3,7 +3,7 @@ import './styles/tokens.css'
 import './styles/app.css'
 import type { AppSettings, Bindings, SessionSummary } from '../shared/protocol'
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults'
-import { DEFAULT_BINDINGS, formatChord, type ActionId } from '../shared/keybindings'
+import { defaultBindingsFor, formatChord, type ActionId } from '../shared/keybindings'
 import { shorten } from '../shared/home-path'
 import { api } from './api'
 import { createAppBar } from './app-bar'
@@ -18,6 +18,7 @@ import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
 import { createToast } from './toast'
 import { t } from './i18n'
+import { IS_MAC } from './platform'
 import { themeById, type TerminalTheme } from '../shared/terminal-themes'
 
 const shell = document.getElementById('app')!
@@ -38,7 +39,7 @@ let home = ''
 let settings: AppSettings = DEFAULT_SETTINGS
 
 /** Replaced whole, never mutated — keymap caches its lookup on identity. */
-let bindings: Bindings = DEFAULT_BINDINGS
+let bindings: Bindings = defaultBindingsFor(IS_MAC)
 
 /**
  * Scrim strength for unfocused panes, passed as one CSS variable rather than
@@ -113,7 +114,7 @@ function revealListWhenEmpty(): void {
  */
 function hintFor(id: ActionId): string {
   const chord = bindings[id][0]
-  return chord === undefined ? '' : formatChord(chord)
+  return chord === undefined ? '' : formatChord(chord, IS_MAC)
 }
 
 function commandItems(): readonly CommandItem[] {
@@ -197,7 +198,7 @@ const sidebar = createSessionSidebar(workspace, {
   // The list numbers rows 1-9; the modifier is whatever that action is bound to.
   gotoHint: (index) => {
     const chord = bindings['goto-session'][0]
-    return chord === undefined ? '' : formatChord(chord).replace('1~9', String(index + 1))
+    return chord === undefined ? '' : formatChord(chord, IS_MAC).replace('1~9', String(index + 1))
   },
   onContextMenu: (at, sessionId) => {
     appBar.closeMenus()
@@ -560,7 +561,7 @@ function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
 function onAppKeyDown(event: KeyboardEvent): void {
   // A dialog in front owns the keys; each handles its own Esc.
   if (settingsView.visible || saveSessionView.visible || confirmView.visible) return
-  const action = resolveAction(event, bindings)
+  const action = resolveAction(event, bindings, IS_MAC)
   if (action === null || !isAppAction(action)) return
   event.preventDefault()
   event.stopPropagation()

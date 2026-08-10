@@ -220,6 +220,12 @@ export interface LoadSessionResult {
 }
 
 export interface TermspaceApi {
+  /**
+   * `process.platform`, as data rather than a call: the renderer has no Node,
+   * and the platform cannot change while the window is open. Typed as a string
+   * because the renderer's tsconfig carries no Node types.
+   */
+  readonly platform: string
   listSessions(): Promise<readonly SessionSummary[]>
   loadSession(name: string): Promise<LoadSessionResult>
   /** Create the example session and return its path. */

@@ -12,7 +12,7 @@ import {
   ACTION_GROUPS,
   chordFromEvent,
   chordRisk,
-  DEFAULT_BINDINGS,
+  defaultBindingsFor,
   findConflicts,
   formatChord,
   isDefault,
@@ -23,6 +23,7 @@ import {
   type Bindings,
 } from '../shared/keybindings'
 import { t } from './i18n'
+import { IS_MAC } from './platform'
 
 export interface KeybindingsPanel {
   readonly element: HTMLElement
@@ -96,7 +97,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
      */
     const bare = needle.replace(/\s+/g, '')
     return bindings[id].some((chord) =>
-      formatChord(chord).toLowerCase().replace(/\s+/g, '').includes(bare),
+      formatChord(chord, IS_MAC).toLowerCase().replace(/\s+/g, '').includes(bare),
     )
   }
 
@@ -107,7 +108,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'keys__chord'
-    button.textContent = formatChord(chord)
+    button.textContent = formatChord(chord, IS_MAC)
     button.addEventListener('click', () => {
       recording = { id, index }
       render()
@@ -166,13 +167,13 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     }
 
     // Nothing to restore when the row is already stock, so no button either.
-    if (!isDefault(bindings, id)) {
+    if (!isDefault(bindings, id, IS_MAC)) {
       const reset = document.createElement('button')
       reset.type = 'button'
       reset.className = 'keys__reset'
       reset.textContent = '↺'
       reset.title = t.keys.resetRow
-      reset.addEventListener('click', () => commit(withChords(bindings, id, DEFAULT_BINDINGS[id])))
+      reset.addEventListener('click', () => commit(withChords(bindings, id, defaultBindingsFor(IS_MAC)[id])))
       chords.append(reset)
     }
 
@@ -182,11 +183,11 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     warnings.className = 'keys__warnings'
     for (const chord of list) {
       const risk = chordRisk(chord)
-      if (risk !== null) warnings.append(warning(`${formatChord(chord)} — ${RISK_TEXT[risk]}`))
+      if (risk !== null) warnings.append(warning(`${formatChord(chord, IS_MAC)} — ${RISK_TEXT[risk]}`))
       const claimants = conflicts.get(chord)
       if (claimants !== undefined) {
         const others = claimants.filter((other) => other !== id).map((other) => t.keys[other])
-        warnings.append(warning(`${formatChord(chord)} — ${t.keys.conflict(others.join(', '))}`))
+        warnings.append(warning(`${formatChord(chord, IS_MAC)} — ${t.keys.conflict(others.join(', '))}`))
       }
     }
     if (warnings.childElementCount > 0) rowEl.append(warnings)
@@ -227,7 +228,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
   resetAll.type = 'button'
   resetAll.className = 'button keys__reset-all'
   resetAll.textContent = t.keys.resetAll
-  resetAll.addEventListener('click', () => commit(DEFAULT_BINDINGS))
+  resetAll.addEventListener('click', () => commit(defaultBindingsFor(IS_MAC)))
 
   bar.append(search, resetAll)
 
@@ -259,7 +260,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     const bindings = hooks.bindings()
     const conflicts = findConflicts(bindings)
 
-    resetAll.disabled = ACTION_GROUPS.every(({ ids }) => ids.every((id) => isDefault(bindings, id)))
+    resetAll.disabled = ACTION_GROUPS.every(({ ids }) => ids.every((id) => isDefault(bindings, id, IS_MAC)))
 
     const drawn: HTMLElement[] = []
     for (const { group, ids } of ACTION_GROUPS) {
@@ -294,7 +295,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
         render()
         return true
       }
-      const chord = chordFromEvent(event)
+      const chord = chordFromEvent(event, IS_MAC)
       // A lone modifier is the start of a chord, not one — keep waiting.
       if (chord === null) return true
       setChord(recording.id, recording.index, chord)

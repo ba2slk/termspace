@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isAppAction, resolveAction, type KeyChord } from './keymap'
-import { DEFAULT_BINDINGS, DIGIT_CODE, withChords } from '../shared/keybindings'
+import { DEFAULT_BINDINGS, DEFAULT_BINDINGS_MAC, DIGIT_CODE, withChords } from '../shared/keybindings'
 
 const chord = (code: string, mods: Partial<KeyChord> = {}): KeyChord => ({
   code,
@@ -319,5 +319,21 @@ describe('resolveAction — rebound', () => {
     // 'search' comes before 'toggle-sidebar' in the action order.
     const bindings = rebind('search', ['Alt+KeyS'])
     expect(resolveAction(chord('KeyS', { altKey: true }), bindings)).toEqual({ t: 'search' })
+  })
+})
+
+describe('resolveAction — mac mode', () => {
+  it('resolves a Cmd chord', () => {
+    expect(
+      resolveAction(chord('ArrowLeft', { metaKey: true }), DEFAULT_BINDINGS_MAC, true),
+    ).toEqual({ t: 'focus', dir: 'left' })
+  })
+
+  it('lets Option+letter fall through to the pty', () => {
+    expect(resolveAction(chord('KeyU', { altKey: true }), DEFAULT_BINDINGS_MAC, true)).toBeNull()
+  })
+
+  it('still refuses Meta off mac, where it is Super', () => {
+    expect(resolveAction(chord('ArrowLeft', { metaKey: true }), DEFAULT_BINDINGS_MAC)).toBeNull()
   })
 })

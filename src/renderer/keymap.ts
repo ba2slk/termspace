@@ -124,8 +124,12 @@ function lookupFor(bindings: Bindings): ReadonlyMap<string, ActionId> {
 }
 
 /** null means the key belongs to the focused pane's pty. */
-export function resolveAction(chord: KeyChord, bindings: Bindings = DEFAULT_BINDINGS): Action | null {
-  const text = chordFromEvent(chord)
+export function resolveAction(
+  chord: KeyChord,
+  bindings: Bindings = DEFAULT_BINDINGS,
+  isMac = false,
+): Action | null {
+  const text = chordFromEvent(chord, isMac)
   if (text === null) return null
   const id = lookupFor(bindings).get(text)
   if (id === undefined) return null

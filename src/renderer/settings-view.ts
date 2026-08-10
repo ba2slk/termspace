@@ -6,10 +6,11 @@
  * hand for anyone keeping it in dotfiles.
  */
 import type { AppSettings, Bindings, ShellIntegrationStatus, TerminalTheme } from '../shared/protocol'
-import { DEFAULT_BINDINGS } from '../shared/keybindings'
+import { defaultBindingsFor } from '../shared/keybindings'
 import { DEFAULT_SETTINGS, isDefaultSetting } from '../shared/settings-defaults'
 import { BUILT_IN_THEMES } from '../shared/terminal-themes'
 import { api } from './api'
+import { IS_MAC } from './platform'
 import { createKeybindingsPanel, type KeybindingsPanel } from './keybindings-view'
 import { t } from './i18n'
 
@@ -159,7 +160,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
   /** User palettes, appended after the bundled ones. */
   let userThemes: readonly TerminalTheme[] = []
 
-  let bindings: Bindings = DEFAULT_BINDINGS
+  let bindings: Bindings = defaultBindingsFor(IS_MAC)
   let tab: 'general' | 'keys' = 'general'
 
   /*

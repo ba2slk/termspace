@@ -10,6 +10,9 @@ import { dirname, join } from 'node:path'
 import { parse as parseYaml, stringify } from 'yaml'
 import { changedBindings, normalizeBindings, type Bindings } from '../shared/keybindings'
 
+/** Which default table the file is read against. Fixed for the process's life. */
+const IS_MAC = process.platform === 'darwin'
+
 export function keybindingsFile(env: NodeJS.ProcessEnv): string {
   const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
   return join(base, 'termspace', 'keybindings.yaml')
@@ -27,15 +30,15 @@ const HEADER = `# Termspace keybindings
 
 export async function loadKeybindings(env: NodeJS.ProcessEnv): Promise<Bindings> {
   try {
-    return normalizeBindings(parseYaml(await readFile(keybindingsFile(env), 'utf8')))
+    return normalizeBindings(parseYaml(await readFile(keybindingsFile(env), 'utf8')), IS_MAC)
   } catch {
-    return normalizeBindings({}) // Missing or malformed — use defaults
+    return normalizeBindings({}, IS_MAC) // Missing or malformed — use defaults
   }
 }
 
 export async function saveKeybindings(env: NodeJS.ProcessEnv, raw: unknown): Promise<Bindings> {
-  const bindings = normalizeBindings(raw)
-  const changed = changedBindings(bindings)
+  const bindings = normalizeBindings(raw, IS_MAC)
+  const changed = changedBindings(bindings, IS_MAC)
   const path = keybindingsFile(env)
 
   // Back to stock: remove the file rather than leave an empty one behind.
