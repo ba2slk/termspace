@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    # feat/macos-support runs per-push while the branch has no PR;
+    # remove with the branch.
     branches: [main, feat/macos-support]
   pull_request:
 
