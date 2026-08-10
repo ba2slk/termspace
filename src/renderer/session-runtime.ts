@@ -100,6 +100,12 @@ export interface SessionRuntime {
   /** Run one command in a new pane, splitting below the focused one. */
   openCommandPane(command: string): void
   closeFocusedPane(): void
+  /**
+   * The clipboard actions for callers that are not the keymap: on mac the
+   * application menu owns Cmd+C/V, so the keydown never reaches the page.
+   */
+  copySelection(): void
+  pasteIntoFocused(): void
   /** Whether a vertical split fits; drives the button's enabled state. */
   canSplit(): boolean
   /**
@@ -633,6 +639,22 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     )
   }
 
+  function copySelection(): void {
+    // xterm owns the selection; WebGL draws to canvas so the DOM has none.
+    const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
+    if (selection === '') return
+    api.writeClipboard(selection)
+    options.onCopied(selection.length)
+  }
+
+  function pasteIntoFocused(): void {
+    void api.readClipboard().then((text) => {
+      if (text === '') return
+      // Through xterm for bracketed paste, so multi-line input isn't executed.
+      records.get(layout.focusedPaneId)?.terminal.paste(text)
+    })
+  }
+
   function onKeyDown(event: KeyboardEvent): void {
     // Every live session has a listener on window, and stopPropagation doesn't
     // stop siblings on the same node, so each must decide if it's its turn.
@@ -676,21 +698,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       case 'close-pane':
         removePane(layout.focusedPaneId)
         break
-      case 'copy': {
-        // xterm owns the selection; WebGL draws to canvas so the DOM has none.
-        const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
-        if (selection !== '') {
-          api.writeClipboard(selection)
-          options.onCopied(selection.length)
-        }
+      case 'copy':
+        copySelection()
         break
-      }
       case 'paste':
-        void api.readClipboard().then((text) => {
-          if (text === '') return
-          // Through xterm for bracketed paste, so multi-line input isn't executed.
-          records.get(layout.focusedPaneId)?.terminal.paste(text)
-        })
+        pasteIntoFocused()
         break
       case 'search': {
         const body = canvas.paneBody(layout.focusedPaneId)
@@ -787,6 +799,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     addColumnBesideFocused,
     openCommandPane,
     closeFocusedPane: () => removePane(layout.focusedPaneId),
+    copySelection,
+    pasteIntoFocused,
     canSplit,
 
     panCanvas: (delta, deltaMode) => canvas.panBy(delta, deltaMode),

@@ -1,6 +1,7 @@
-import { BrowserWindow, Menu, screen, shell } from 'electron'
+import { app, BrowserWindow, Menu, screen, shell } from 'electron'
 import { join } from 'node:path'
 import { APP_NAME } from '../shared/version'
+import { stringsFor } from '../shared/ui-strings'
 
 /**
  * Where a self-check window sits, so several can run at once.
@@ -69,9 +70,48 @@ export function activateWindow(win: BrowserWindow): void {
   }, REMAP_DELAY_MS)
 }
 
+/**
+ * The mac application menu.
+ *
+ * mac reserves Cmd+Q/H/M/W for the menu bar, so an app without one cannot quit
+ * or hide from the keyboard. Those come from the roles, which the OS labels in
+ * its own language; only the labels written here need the catalogue.
+ *
+ * Copy and Paste are custom rather than roles: a role acts on the document
+ * selection, and xterm draws to a canvas, so selected terminal text is
+ * invisible to it. These forward to the renderer, which already knows how to
+ * reach the terminal — and Electron matches an accelerator against the menu
+ * before the page sees the key, so this is the delivery path for Cmd+C/V.
+ */
+function applicationMenu(locale: string): Menu {
+  // An empty locale means "follow the system", as it does in the renderer,
+  // where navigator.language stands in for app.getLocale().
+  const t = stringsFor(locale === '' ? app.getLocale() : locale).appMenu
+  // A click's window is typed as BaseWindow, which has no renderer to send to.
+  const forward = (win: Electron.BaseWindow | undefined, action: 'copy' | 'paste'): void => {
+    if (win instanceof BrowserWindow) win.webContents.send('menu-action', action)
+  }
+  return Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    {
+      label: t.edit,
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { label: t.copy, accelerator: 'Cmd+C', click: (_item, win) => forward(win, 'copy') },
+        { label: t.paste, accelerator: 'Cmd+V', click: (_item, win) => forward(win, 'paste') },
+        { role: 'selectAll' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ])
+}
+
 export function createMainWindow(locale: string): BrowserWindow {
-  // The app draws its own title bar; the default menu bar is unused here.
-  Menu.setApplicationMenu(null)
+  // The app draws its own title bar; on Linux the menu bar is unused entirely.
+  Menu.setApplicationMenu(process.platform === 'darwin' ? applicationMenu(locale) : null)
 
   const tile = selfCheckBounds()
   const win = new BrowserWindow({

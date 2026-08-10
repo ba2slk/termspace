@@ -19,6 +19,7 @@ import { createSettingsView } from './settings-view'
 import { createToast } from './toast'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
+import { asTextField, selectedText, withPasted } from './text-field-edit'
 import { themeById, type TerminalTheme } from '../shared/terminal-themes'
 
 // The title bar has to clear the native traffic lights on mac; the platform
@@ -381,6 +382,42 @@ api.onFocusPane((paneId) => {
   void openSession(owner).then(() => {
     runtimes.get(owner)?.focusPane(paneId)
   })
+})
+
+/*
+ * Copy or Paste came from the mac application menu.
+ *
+ * mac only, and not a second route for the same keys: Electron resolves Cmd+C/V
+ * against the menu accelerator before the page sees them, so there the keydown
+ * never reaches the keymap and this is the only delivery path. A chrome text
+ * field is served here, since the browser's own edit commands lose the
+ * accelerator too; anywhere else the focus is a terminal, and the session runs
+ * the same action the shortcut runs on Linux.
+ */
+api.onMenuAction((action) => {
+  const field = asTextField(document.activeElement)
+  if (field !== null) {
+    const start = field.selectionStart ?? 0
+    const end = field.selectionEnd ?? start
+    if (action === 'copy') {
+      const text = selectedText(field.value, start, end)
+      if (text !== '') api.writeClipboard(text)
+      return
+    }
+    void api.readClipboard().then((text) => {
+      if (text === '') return
+      const next = withPasted(field.value, start, end, text)
+      field.value = next.value
+      field.setSelectionRange(next.caret, next.caret)
+      // The views react to input events; a value set from script fires none.
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    return
+  }
+  // A dialog in front owns the keys, as it does in onAppKeyDown.
+  if (settingsView.visible || saveSessionView.visible || confirmView.visible) return
+  if (action === 'copy') current()?.copySelection()
+  else current()?.pasteIntoFocused()
 })
 
 async function refreshSidebar(): Promise<void> {

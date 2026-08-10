@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { PaneAttention, PtyExit, SpawnRequest, TermspaceApi } from '../shared/protocol'
+import type {
+  MenuAction,
+  PaneAttention,
+  PtyExit,
+  SpawnRequest,
+  TermspaceApi,
+} from '../shared/protocol'
 
 /**
  * The only path from renderer to main. No logic here — it would run on the same
@@ -84,6 +90,11 @@ const api: TermspaceApi = {
     const listener = (_e: unknown, paneId: string): void => handler(paneId)
     ipcRenderer.on('app:focus-pane', listener)
     return () => ipcRenderer.off('app:focus-pane', listener)
+  },
+  onMenuAction: (handler) => {
+    const listener = (_e: unknown, action: MenuAction): void => handler(action)
+    ipcRenderer.on('menu-action', listener)
+    return () => ipcRenderer.off('menu-action', listener)
   },
 }
 
