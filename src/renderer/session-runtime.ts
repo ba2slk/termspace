@@ -640,6 +640,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function copySelection(): void {
+    // The open overview owns every key, and the pane behind it is not being
+    // looked at. The keyboard path returns before the switch for the same
+    // reason; the mac menu reaches these directly, so the guard lives here.
+    if (overview.isOpen) return
     // xterm owns the selection; WebGL draws to canvas so the DOM has none.
     const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
     if (selection === '') return
@@ -648,6 +652,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function pasteIntoFocused(): void {
+    // Pasting into a pane hidden behind the overview would dirty its shell line
+    // out of sight; see copySelection.
+    if (overview.isOpen) return
     void api.readClipboard().then((text) => {
       if (text === '') return
       // Through xterm for bracketed paste, so multi-line input isn't executed.

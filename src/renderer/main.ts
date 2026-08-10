@@ -404,6 +404,8 @@ api.onMenuAction((action) => {
       if (text !== '') api.writeClipboard(text)
       return
     }
+    // Copying out of a read-only field is fine; writing into one is not.
+    if (field.readOnly) return
     void api.readClipboard().then((text) => {
       if (text === '') return
       const next = withPasted(field.value, start, end, text)
