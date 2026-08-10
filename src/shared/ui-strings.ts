@@ -266,6 +266,7 @@ const en = {
 
   /** window-manager.ts: the mac application menu. Roles name themselves; these do not. */
   appMenu: {
+    file: 'File',
     edit: 'Edit',
     copy: 'Copy',
     paste: 'Paste',
@@ -527,6 +528,7 @@ const ko: Catalog = {
   },
 
   appMenu: {
+    file: '파일',
     edit: '편집',
     copy: '복사',
     paste: '붙여넣기',
