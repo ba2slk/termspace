@@ -53,11 +53,19 @@ jobs:
 
       - run: npm run dist:mac
 
+      # The screenshots matter most when something failed, so they upload either
+      # way. The installers are hundreds of megabytes and are only ever looked at
+      # right after the run, hence the short retention.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mac-verify-screenshots
+          path: verify-shots/*.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-installers
+          retention-days: 7
           path: |
-            verify-shots/*.png
             release/*.dmg
             release/*.zip
