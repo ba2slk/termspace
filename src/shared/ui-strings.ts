@@ -178,13 +178,15 @@ const en = {
 
     sectionShell: 'Shell integration',
     shellLead:
-      'Add this line to ~/.bashrc and a saved session records the alias you typed instead of what it expanded into.',
+      'Add the line for your shell and a saved session records the alias you typed instead of what it expanded into.',
     shellCopy: 'Copy',
     shellCopied: 'Copied',
     shellActive: 'Loaded — this session is reporting commands',
     shellInactive: 'Not loaded yet',
+    shellBash: 'bash — ~/.bashrc',
+    shellZsh: 'zsh — ~/.zshrc',
     shellNote:
-      'bash only for now; other shells keep reading /proc. Panes already open keep the shell they started with, so reopen the session after adding the line.',
+      'bash and zsh are supported. Panes already open keep the shell they started with, so reopen the session after adding the line.',
 
     resetRow: 'Restore the default for this setting',
 
@@ -441,13 +443,15 @@ const ko: Catalog = {
 
     sectionShell: '셸 연동',
     shellLead:
-      '~/.bashrc에 이 줄을 넣으면, 세션을 저장할 때 alias가 풀린 긴 명령 대신 직접 입력한 이름이 기록됩니다.',
+      '쓰는 셸에 맞는 줄을 넣으면, 세션을 저장할 때 alias가 풀린 긴 명령 대신 직접 입력한 이름이 기록됩니다.',
     shellCopy: '복사',
     shellCopied: '복사함',
     shellActive: '연동됨 — 현재 세션의 명령을 기록합니다',
     shellInactive: '아직 연동되지 않음',
+    shellBash: 'bash — ~/.bashrc',
+    shellZsh: 'zsh — ~/.zshrc',
     shellNote:
-      '현재는 bash만 지원합니다. 다른 셸은 기존처럼 /proc에서 명령을 읽습니다. 이미 열려 있는 pane에는 바로 적용되지 않으니, 줄을 넣은 뒤 세션을 다시 여세요.',
+      'bash와 zsh를 지원합니다. 이미 열려 있는 pane에는 바로 적용되지 않으니, 줄을 넣은 뒤 세션을 다시 여세요.',
 
     resetRow: '이 항목만 기본값으로',
 

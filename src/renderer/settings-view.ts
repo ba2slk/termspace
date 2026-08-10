@@ -297,22 +297,15 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     return row
   }
 
-  /**
-   * The one line the user adds to ~/.bashrc. Shown rather than installed: the
-   * app has no business editing someone's shell config.
-   */
-  function shellBody(status: ShellIntegrationStatus): HTMLElement {
-    const body = document.createElement('div')
-
+  /** One rc file, its line, and a button that copies it. */
+  function shellLine(label: string, rcLine: string): readonly HTMLElement[] {
     const row = document.createElement('div')
     row.className = 'settings__row'
     const text = document.createElement('div')
     text.className = 'settings__text'
-    const state = document.createElement('span')
-    state.textContent = status.active ? t.settings.shellActive : t.settings.shellInactive
-    const lead = document.createElement('small')
-    lead.textContent = t.settings.shellLead
-    text.append(state, lead)
+    const name = document.createElement('span')
+    name.textContent = label
+    text.append(name)
 
     const control = document.createElement('div')
     control.className = 'settings__control'
@@ -321,7 +314,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     copy.className = 'button'
     copy.textContent = t.settings.shellCopy
     copy.addEventListener('click', () => {
-      api.writeClipboard(status.rcLine)
+      api.writeClipboard(rcLine)
       copy.textContent = t.settings.shellCopied
     })
     control.append(copy)
@@ -329,13 +322,39 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
 
     const line = document.createElement('pre')
     line.className = 'settings__snippet'
-    line.textContent = status.rcLine
+    line.textContent = rcLine
+
+    return [row, line]
+  }
+
+  /**
+   * The one line the user adds to their rc file. Shown rather than installed:
+   * the app has no business editing someone's shell config.
+   */
+  function shellBody(status: ShellIntegrationStatus): HTMLElement {
+    const body = document.createElement('div')
+
+    const head = document.createElement('div')
+    head.className = 'settings__row'
+    const headText = document.createElement('div')
+    headText.className = 'settings__text'
+    const state = document.createElement('span')
+    state.textContent = status.active ? t.settings.shellActive : t.settings.shellInactive
+    const lead = document.createElement('small')
+    lead.textContent = t.settings.shellLead
+    headText.append(state, lead)
+    head.append(headText)
 
     const note = document.createElement('small')
     note.className = 'settings__subnote'
     note.textContent = t.settings.shellNote
 
-    body.append(row, line, note)
+    body.append(
+      head,
+      ...shellLine(t.settings.shellBash, status.rcLine),
+      ...shellLine(t.settings.shellZsh, status.rcLineZsh),
+      note,
+    )
     return body
   }
 

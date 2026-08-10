@@ -83,6 +83,10 @@ describe('the working directory', () => {
     ])
   })
 
+  it('accepts a raw space, which some shells send unencoded', () => {
+    expect(scan(`${ESC}]7;file://host/a b/c${BEL}`)).toEqual([{ kind: 'cwd', path: '/a b/c' }])
+  })
+
   it('ignores anything that is not a file URI', () => {
     expect(scan(`${ESC}]7;/home/me${BEL}`)).toEqual([])
     expect(scan(`${ESC}]7;file://host${BEL}`)).toEqual([])
