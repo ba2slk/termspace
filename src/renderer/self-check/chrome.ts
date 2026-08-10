@@ -1,5 +1,6 @@
-import { ACTION_IDS } from '../../shared/keybindings'
+import { ACTION_IDS, defaultBindingsFor, formatChord } from '../../shared/keybindings'
 import { t } from '../i18n'
+import { IS_MAC } from '../platform'
 import {
   capture,
   focusedId,
@@ -530,9 +531,12 @@ export async function checkKeybindings(report: Report): Promise<void> {
       ? 'ok'
       : 'FAIL (clicking a chord did not start recording)'
 
+  // Not a default chord, so it is recorded as pressed on either platform —
+  // only its spelling on the chip follows the platform.
+  const recorded = formatChord('Alt+Space', IS_MAC)
   press('Space', { altKey: true })
-  await waitFor(() => chip() === 'Alt + Space')
-  report['keysRecorded'] = chip() === 'Alt + Space' ? 'ok' : `FAIL (${chip()})`
+  await waitFor(() => chip() === recorded)
+  report['keysRecorded'] = chip() === recorded ? 'ok' : `FAIL (${chip()})`
 
   // The point of the whole tab: the app must obey the new chord straight away.
   press('Escape')
@@ -559,9 +563,10 @@ export async function checkKeybindings(report: Report): Promise<void> {
   await sleep(400)
   document.querySelector<HTMLButtonElement>('.settings__tab[data-tab="keys"]')?.click()
   await sleep(300)
+  const stock = formatChord(defaultBindingsFor(IS_MAC)['overview'][0] as string, IS_MAC)
   document.querySelector<HTMLButtonElement>('.keys__reset-all')?.click()
-  await waitFor(() => chip() === 'Alt + M')
-  report['keysResetAll'] = chip() === 'Alt + M' ? 'ok' : `FAIL (${chip()})`
+  await waitFor(() => chip() === stock)
+  report['keysResetAll'] = chip() === stock ? 'ok' : `FAIL (${chip()})`
 
   // Leave the screen as the next check expects to find it.
   document.querySelector<HTMLButtonElement>('.settings__tab[data-tab="general"]')?.click()
