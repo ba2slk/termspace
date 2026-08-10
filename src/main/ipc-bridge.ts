@@ -13,7 +13,7 @@ import type {
   SpawnRequest,
   SpawnResult,
 } from '../shared/protocol'
-import { RC_LINE } from './shell-integration'
+import { RC_LINE, RC_LINE_ZSH } from './shell-integration'
 import { activateWindow } from './window-manager'
 import { loadSettings, saveSettings, settingsFile } from './app-settings'
 import { loadKeybindings, saveKeybindings } from './keybindings-file'
@@ -211,7 +211,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'shell-integration:status',
-    (): ShellIntegrationStatus => ({ rcLine: RC_LINE, active: host.hasIntegratedPane() }),
+    (): ShellIntegrationStatus => ({
+      rcLine: RC_LINE,
+      rcLineZsh: RC_LINE_ZSH,
+      active: host.hasIntegratedPane(),
+    }),
   )
 
   ipcMain.handle('session:suggest-root', (_e, paneIds: readonly string[]): string => {

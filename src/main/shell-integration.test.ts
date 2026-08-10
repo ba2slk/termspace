@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node-pty'
 import { describe, expect, it } from 'vitest'
-import { HOOK_SCRIPT } from './shell-integration'
+import { HOOK_SCRIPT, HOOK_SCRIPT_ZSH, RC_LINE_ZSH, shellIntegrationFileZsh } from './shell-integration'
+import { NO_SIGNALS, scanTerminalSignals } from './terminal-signals'
 
 /*
  * The hook is bash, so only bash can say whether it works — and the one bug it
@@ -33,6 +34,15 @@ const hasBash = ((): boolean => {
   }
 })()
 
+const hasZsh = ((): boolean => {
+  try {
+    execFileSync('sh', ['-c', 'command -v zsh'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
 const PRIOR = 'PRIOR_COMMAND_FROM_ANOTHER_SHELL'
 const SEQUENCE = /\u001b\]1173;([^\u0007]*)\u0007/g
 
@@ -42,13 +52,18 @@ interface Session {
   readonly output: string
 }
 
-/** Feed lines to an interactive bash on a pty and collect everything it printed. */
-async function runBash(rcfile: string, termProgram: string, lines: readonly string[]): Promise<string> {
-  const term = spawn('bash', ['--rcfile', rcfile, '-i'], {
+/** Feed lines to an interactive shell on a pty and collect everything it printed. */
+async function runShell(
+  file: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  lines: readonly string[],
+): Promise<string> {
+  const term = spawn(file, [...args], {
     name: 'xterm-256color',
     cols: 120,
     rows: 40,
-    env: { ...process.env, TERM_PROGRAM: termProgram, TERM: 'xterm-256color' },
+    env: { ...process.env, TERM: 'xterm-256color', ...env },
   })
 
   let output = ''
@@ -114,7 +129,7 @@ async function runHookedShell(lines: readonly string[]): Promise<Session> {
       ].join('\n'),
     )
 
-    const output = await runBash(join(dir, 'rc'), 'Termspace', lines)
+    const output = await runShell('bash', ['--rcfile', join(dir, 'rc'), '-i'], { TERM_PROGRAM: 'Termspace' }, lines)
 
     let sourced = false
     const commands: string[] = []
@@ -154,8 +169,94 @@ describe.skipIf(!hasBash)('the bash hook', () => {
     const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
     try {
       writeFileSync(join(dir, 'hook.bash'), HOOK_SCRIPT)
-      const output = await runBash(join(dir, 'hook.bash'), 'SomeOtherTerminal', ['echo hello'])
+      const output = await runShell(
+        'bash',
+        ['--rcfile', join(dir, 'hook.bash'), '-i'],
+        { TERM_PROGRAM: 'SomeOtherTerminal' },
+        ['echo hello'],
+      )
       expect([...output.matchAll(SEQUENCE)]).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
+
+describe('the zsh hook, as text', () => {
+  it('puts the zsh hook beside the bash one', () => {
+    expect(shellIntegrationFileZsh({ HOME: '/home/u' })).toBe('/home/u/.config/termspace/shell-integration.zsh')
+  })
+
+  it('zsh hook reports the submitted line and the cwd', () => {
+    expect(HOOK_SCRIPT_ZSH).toContain('add-zsh-hook preexec')
+    expect(HOOK_SCRIPT_ZSH).toContain('1173;C')
+    expect(HOOK_SCRIPT_ZSH).toContain(']7;')
+    expect(HOOK_SCRIPT_ZSH).toContain('TERM_PROGRAM')
+  })
+
+  it('zsh rc line sources the zsh file', () => {
+    expect(RC_LINE_ZSH).toContain('shell-integration.zsh')
+  })
+})
+
+/**
+ * Run one interactive zsh under a pty and read back both what the hook sent and
+ * what the OSC 7 it emitted means to the parser that actually consumes it —
+ * the escaping in the hook is only correct relative to `parseCwd`.
+ */
+async function runHookedZsh(dir: string, lines: readonly string[]): Promise<Session & { cwds: string[] }> {
+  writeFileSync(join(dir, '.zshrc'), [`. ${join(dir, 'hook.zsh')}`, ''].join('\n'))
+  writeFileSync(join(dir, 'hook.zsh'), HOOK_SCRIPT_ZSH)
+
+  const output = await runShell('zsh', ['-i'], { TERM_PROGRAM: 'Termspace', ZDOTDIR: dir }, lines)
+
+  let sourced = false
+  const commands: string[] = []
+  for (const match of output.matchAll(SEQUENCE)) {
+    const body = match[1] ?? ''
+    if (body === 'A') sourced = true
+    else if (body.startsWith('C;')) commands.push(Buffer.from(body.slice(2), 'base64').toString('utf8'))
+  }
+
+  const cwds = scanTerminalSignals(NO_SIGNALS, output)
+    .signals.filter((signal) => signal.kind === 'cwd')
+    .map((signal) => signal.path)
+
+  return { sourced, commands, output, cwds }
+}
+
+describe.skipIf(!hasZsh)('the zsh hook, on a real zsh', () => {
+  it('reports each submitted line once, by the name that was typed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
+    try {
+      const session = await runHookedZsh(dir, ["alias compound='echo one && echo two'", 'compound', 'echo done'])
+      expect(session.sourced).toBe(true)
+      expect(session.commands).toEqual(["alias compound='echo one && echo two'", 'compound', 'echo done', 'exit'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('reports a cwd the parser reads back byte for byte, spaces and percents included', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
+    try {
+      const awkward = join(dir, 'a b%c')
+      mkdirSync(awkward)
+      const session = await runHookedZsh(dir, [`cd '${awkward}'`])
+      expect(session.cwds).toContain(awkward)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('stays silent outside Termspace', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'termspace-hook-'))
+    try {
+      writeFileSync(join(dir, '.zshrc'), [`. ${join(dir, 'hook.zsh')}`, ''].join('\n'))
+      writeFileSync(join(dir, 'hook.zsh'), HOOK_SCRIPT_ZSH)
+      const output = await runShell('zsh', ['-i'], { TERM_PROGRAM: 'SomeOtherTerminal', ZDOTDIR: dir }, ['echo hello'])
+      expect([...output.matchAll(SEQUENCE)]).toEqual([])
+      expect(scanTerminalSignals(NO_SIGNALS, output).signals.filter((s) => s.kind === 'cwd')).toEqual([])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

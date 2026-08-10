@@ -162,11 +162,12 @@ export interface SaveSessionResult {
 
 /**
  * The shell hook reports the line the user submitted, before alias expansion.
- * Installing it means adding `rcLine` to ~/.bashrc by hand — the app never
- * edits that file.
+ * Installing it means adding `rcLine` to ~/.bashrc, or `rcLineZsh` to ~/.zshrc,
+ * by hand — the app never edits either file.
  */
 export interface ShellIntegrationStatus {
   readonly rcLine: string
+  readonly rcLineZsh: string
   /** True once a live pane's shell has announced the hook. */
   readonly active: boolean
 }
