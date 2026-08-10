@@ -119,6 +119,9 @@ export const HOOK_SCRIPT_ZSH = `# Termspace shell integration (zsh).
 command -v base64 >/dev/null 2>&1 || return 0
 
 autoload -Uz add-zsh-hook
+# A broken fpath leaves add-zsh-hook undefined; bail rather than print an error
+# on every shell start.
+(( $+functions[add-zsh-hook] )) || return 0
 
 __termspace_preexec() {
   printf '\\033]1173;C;%s\\007' "$(printf '%s' "$1" | base64 | tr -d '\\n')" \\
