@@ -211,6 +211,14 @@ export interface PaneAttention {
   readonly body: string
 }
 
+/**
+ * An edit command from the mac application menu.
+ *
+ * Cmd+C/V match a menu accelerator, and Electron resolves those before the page
+ * sees the key — so on mac the menu, not the keymap, is where these arrive.
+ */
+export type MenuAction = 'copy' | 'paste'
+
 export interface LoadSessionResult {
   readonly ok: boolean
   readonly spec: SessionSpec | null
@@ -326,6 +334,12 @@ export interface TermspaceApi {
    * session it belongs to. Returns an unsubscribe function.
    */
   onFocusPane(handler: (paneId: string) => void): () => void
+  /**
+   * Copy or Paste was chosen in the mac application menu — including by its
+   * accelerator. Never fires elsewhere: no other platform has the menu.
+   * Returns an unsubscribe function.
+   */
+  onMenuAction(handler: (action: MenuAction) => void): () => void
   /**
    * The one pane the user is actually looking at — focused, in the session on
    * screen. Null when no session is up.

@@ -262,6 +262,13 @@ const en = {
     close: 'Close (Esc)',
   },
 
+  /** window-manager.ts: the mac application menu. Roles name themselves; these do not. */
+  appMenu: {
+    edit: 'Edit',
+    copy: 'Copy',
+    paste: 'Paste',
+  },
+
   /** error-card.ts: config errors and exit banners shown in a pane's place. */
   errorCard: {
     configError: 'Config error',
@@ -513,6 +520,12 @@ const ko: Catalog = {
     previousMatch: '이전 일치 (Shift+Enter)',
     nextMatch: '다음 일치 (Enter)',
     close: '닫기 (Esc)',
+  },
+
+  appMenu: {
+    edit: '편집',
+    copy: '복사',
+    paste: '붙여넣기',
   },
 
   errorCard: {
