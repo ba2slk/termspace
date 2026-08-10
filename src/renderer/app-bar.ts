@@ -8,6 +8,7 @@
 import { api } from './api'
 import { createAppMark, MARK_CHROME } from './app-mark'
 import { t } from './i18n'
+import { IS_MAC } from './platform'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import type { ActionId } from '../shared/keybindings'
 
@@ -236,20 +237,34 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   const right = document.createElement('div')
   right.className = 'app-bar__side app-bar__side--end'
 
-  const minimize = barButton('app-bar__win', t.appBar.minimize, icon(['M3 8h10']))
-  minimize.addEventListener('click', () => api.window.minimize())
+  /*
+   * Window buttons — off mac only. There the native traffic lights float over
+   * the left of this same row, and a drawn set beside them would give the
+   * window two of everything. The side keeps its width either way, so the
+   * title stays where it is.
+   */
+  let maximize: HTMLButtonElement | null = null
+  if (!IS_MAC) {
+    const minimize = barButton('app-bar__win', t.appBar.minimize, icon(['M3 8h10']))
+    minimize.addEventListener('click', () => api.window.minimize())
 
-  const maximize = barButton('app-bar__win', t.appBar.maximize, icon(['M4 4h8v8H4z']))
-  maximize.addEventListener('click', () => void api.window.toggleMaximize())
+    maximize = barButton('app-bar__win', t.appBar.maximize, icon(['M4 4h8v8H4z']))
+    maximize.addEventListener('click', () => void api.window.toggleMaximize())
 
-  const close = barButton('app-bar__win app-bar__win--close', t.appBar.close, icon(['M4 4l8 8M12 4l-8 8']))
-  close.addEventListener('click', () => api.window.close())
+    const close = barButton(
+      'app-bar__win app-bar__win--close',
+      t.appBar.close,
+      icon(['M4 4l8 8M12 4l-8 8']),
+    )
+    close.addEventListener('click', () => api.window.close())
 
-  right.append(minimize, maximize, close)
+    right.append(minimize, maximize, close)
+  }
   bar.append(left, title, right)
   host.append(bar)
 
   const offMaximize = api.window.onMaximizeChange((maximized) => {
+    if (maximize === null) return
     maximize.title = maximized ? t.appBar.restore : t.appBar.maximize
     maximize.setAttribute('aria-label', maximize.title)
   })

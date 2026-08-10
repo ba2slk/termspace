@@ -81,8 +81,12 @@ export function createMainWindow(locale: string): BrowserWindow {
     minWidth: 640,
     minHeight: 400,
     title: APP_NAME,
-    // The app draws its own title bar, reclaiming the menu bar's row for the canvas.
-    frame: false,
+    // The app draws its own title bar, reclaiming the menu bar's row for the
+    // canvas. On mac the native traffic lights float over that row instead of a
+    // drawn set: hiddenInset places them, and the row itself stays ours.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const }
+      : { frame: false as const }),
     // Mirrors --bg-canvas in tokens.css (main cannot read CSS); change both together.
     backgroundColor: '#141414',
     show: false,

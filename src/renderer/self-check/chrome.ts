@@ -22,7 +22,27 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
   }
   report['appBar'] = 'ok'
   report['appBarTitle'] = bar.querySelector('.app-bar__title')?.textContent ?? 'NONE'
-  report['windowButtons'] = String(bar.querySelectorAll('.app-bar__win').length)
+  // mac has the native traffic lights instead of a drawn set of its own.
+  const wins = bar.querySelectorAll('.app-bar__win').length
+  const expectedWins = IS_MAC ? 0 : 3
+  report['windowButtons'] =
+    wins === expectedWins ? String(wins) : `FAIL (${String(wins)}, expected ${String(expectedWins)})`
+
+  /*
+   * The traffic lights float over the left of this row, so the first control
+   * has to start clear of them. Measured in pixels: the inset is a padding on
+   * the bar, and a class alone would not prove the room is actually there.
+   */
+  const firstControl = bar.querySelector<HTMLElement>('.app-bar__btn')
+  if (!IS_MAC) {
+    report['macTrafficLightInset'] = 'skipped: not mac, no traffic lights'
+  } else if (firstControl === null) {
+    report['macTrafficLightInset'] = 'FAIL (no control on the bar)'
+  } else {
+    const left = firstControl.getBoundingClientRect().left
+    report['macTrafficLightInset'] =
+      left >= 78 ? `ok (${left.toFixed(1)}px)` : `FAIL (first control at ${left.toFixed(1)}px)`
+  }
 
   bar.querySelector<HTMLButtonElement>('.app-bar__btn')?.click()
   await sleep(250)
