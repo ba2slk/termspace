@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HOOK_SCRIPT } from './shell-integration'
@@ -26,6 +26,17 @@ const hasScript = ((): boolean => {
     return false
   }
 })()
+
+/*
+ * `script` takes its command differently on each platform: util-linux wants one
+ * string after -c, BSD (macOS) takes the argv after the typescript file and has
+ * no -c at all.
+ */
+function scriptArgs(argv: readonly string[]): string[] {
+  return platform() === 'darwin'
+    ? ['-q', '/dev/null', ...argv]
+    : ['-qec', argv.join(' '), '/dev/null']
+}
 
 const PRIOR = 'PRIOR_COMMAND_FROM_ANOTHER_SHELL'
 const SEQUENCE = /\u001b\]1173;([^\u0007]*)\u0007/g
@@ -60,7 +71,7 @@ function runHookedShell(lines: readonly string[]): Session {
 
     const output = execFileSync(
       'script',
-      ['-qec', `bash --rcfile ${join(dir, 'rc')} -i`, '/dev/null'],
+      scriptArgs(['bash', '--rcfile', join(dir, 'rc'), '-i']),
       {
         input: `${[...lines, 'exit'].join('\n')}\n`,
         env: { ...process.env, TERM_PROGRAM: 'Termspace', TERM: 'xterm-256color' },
@@ -109,7 +120,7 @@ describe.skipIf(!hasScript)('the bash hook', () => {
       writeFileSync(join(dir, 'hook.bash'), HOOK_SCRIPT)
       const output = execFileSync(
         'script',
-        ['-qec', `bash --rcfile ${join(dir, 'hook.bash')} -i`, '/dev/null'],
+        scriptArgs(['bash', '--rcfile', join(dir, 'hook.bash'), '-i']),
         {
           input: 'echo hello\nexit\n',
           env: { ...process.env, TERM_PROGRAM: 'SomeOtherTerminal', TERM: 'xterm-256color' },
