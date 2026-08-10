@@ -35,6 +35,7 @@
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "postinstall": "electron-rebuild -f -w node-pty",
     "dist": "electron-vite build && electron-builder --linux AppImage --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "icons": "node scripts/make-icons.mjs",
     "install:local": "node scripts/install-local.mjs",
     "verify:app": "node scripts/verify-app.mjs"

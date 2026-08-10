@@ -21,3 +21,13 @@ linux:
     A terminal emulator that lays panes out on a horizontal canvas wider than
     the viewport. Panes past the window edge are not lost — they stay where you
     put them, and the arrow keys slide the viewport over to them.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  # No identity configured: electron-builder ad-hoc signs, which is what the
+  # Apple Silicon kernel requires. Notarization is deliberately absent.
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
