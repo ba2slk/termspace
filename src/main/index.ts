@@ -3,7 +3,7 @@ import { loadSettingsSync } from './app-settings'
 import { registerIpcHandlers } from './ipc-bridge'
 import { createPtyHost, type PtyHost } from './pty-host'
 import { writeShellIntegrationFile } from './shell-integration'
-import { createMainWindow } from './window-manager'
+import { activateWindow, createMainWindow } from './window-manager'
 
 // Run natively on Wayland; ignored on X11. Without it we fall back to
 // XWayland, which hurts HiDPI scaling and IME behaviour.
@@ -63,12 +63,7 @@ if (!isSelfCheck && !app.requestSingleInstanceLock()) {
 
     // The launch that lost the lock has quit by now. Surface this window, or
     // the second launch looks like nothing happened at all.
-    app.on('second-instance', () => {
-      if (win.isDestroyed()) return
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-    })
+    app.on('second-instance', () => activateWindow(win))
 
     // Closing the app ends its processes; detach is out of scope.
     app.on('before-quit', () => {

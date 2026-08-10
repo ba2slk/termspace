@@ -355,6 +355,29 @@ api.onAttention((attention) => {
   }
 })
 
+/** Which session holds a pane. Null once its session has ended. */
+function sessionOwningPane(paneId: string): string | null {
+  for (const [id, runtime] of runtimes) {
+    for (const column of runtime.snapshot().columns) {
+      for (const pane of column.panes) if (pane.paneId === paneId) return id
+    }
+  }
+  return null
+}
+
+/*
+ * A desktop notification was clicked. main has already brought the window
+ * forward; the pane still has to be found, since it may be off screen or in a
+ * session that is not the one on display.
+ */
+api.onFocusPane((paneId) => {
+  const owner = sessionOwningPane(paneId)
+  if (owner === null) return
+  void openSession(owner).then(() => {
+    runtimes.get(owner)?.focusPane(paneId)
+  })
+})
+
 async function refreshSidebar(): Promise<void> {
   knownSessions = await api.listSessions()
   renderSidebar()

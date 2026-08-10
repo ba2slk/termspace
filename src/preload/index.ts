@@ -79,6 +79,11 @@ const api: TermspaceApi = {
     ipcRenderer.on('pty:attention', listener)
     return () => ipcRenderer.off('pty:attention', listener)
   },
+  onFocusPane: (handler) => {
+    const listener = (_e: unknown, paneId: string): void => handler(paneId)
+    ipcRenderer.on('app:focus-pane', listener)
+    return () => ipcRenderer.off('app:focus-pane', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('termspace', api)

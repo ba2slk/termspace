@@ -738,3 +738,14 @@ nothing, no focus change happens, and the dot stayed yellow over a pane in plain
 sight. `setActive(true)` now clears the focused pane the same way — arriving is
 a look. `noteAttention` already refuses to mark the focused pane of an active
 session, so the two rules meet rather than overlap.
+
+**Wayland refuses to raise a window that asks.** Clicking a notification has to
+bring the window forward, and every polite way of doing that — `show()`,
+`focus()`, `moveTop()`, `setAlwaysOnTop(true)` then off again — was tried and
+silently ignored under Wayland's focus-stealing prevention. The compositor only
+trusts a *new* surface with focus. So `activateWindow` unmaps the window and
+maps it again: `hide()`, then `show()` + `focus()` after 60ms. The delay exists
+because an immediate remap can reuse the surface the compositor has not yet
+dropped, which lands back in the untrusted case; 60ms was the shortest interval
+that raised the window reliably on this machine. Other platforms take the plain
+`show()`/`focus()` path — the workaround is the exception, not the rule.
