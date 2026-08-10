@@ -93,6 +93,9 @@ function applicationMenu(locale: string): Menu {
   }
   return Menu.buildFromTemplate([
     { role: 'appMenu' },
+    // Cmd+W lives on the `close` role, which mac keeps in the File menu — the
+    // windowMenu role does not carry it, so without this the key does nothing.
+    { label: t.file, submenu: [{ role: 'close' }] },
     {
       label: t.edit,
       submenu: [
