@@ -9,8 +9,11 @@
 /** A field the app types into. The terminal is not one of these. */
 export type TextField = HTMLInputElement | HTMLTextAreaElement
 
-/** Input types that carry a caret. Buttons, ranges and checkboxes do not. */
-const SELECTABLE = new Set(['text', 'search', 'url', 'tel', 'password', 'email'])
+/**
+ * Input types that carry a caret. Buttons, ranges and checkboxes do not, and
+ * neither does `email` — setSelectionRange throws on it.
+ */
+const SELECTABLE = new Set(['text', 'search', 'url', 'tel', 'password'])
 
 export function asTextField(el: Element | null): TextField | null {
   if (el instanceof HTMLTextAreaElement) return el
