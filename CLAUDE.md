@@ -137,6 +137,29 @@ spacing *inside* chrome views (flex gaps, paddings) may be literal px. Where a v
 cannot go through `var()` — main's window background, xterm's theme object — the literal
 carries a comment naming the token it mirrors.
 
+**Platform differences are branched inline, not abstracted.** `process.platform` in main,
+`IS_MAC` from `src/renderer/platform.ts` in the renderer. There is no platform layer and
+there will not be one until Windows actually lands
+(`docs/specs/2026-08-10-macos-support-design.md`). The platform that needs no workaround
+keeps the plain path; the workaround is the exception written around it. A change that
+touches:
+
+- *keybindings* — edit `DEFAULT_BINDINGS` and `DEFAULT_BINDINGS_MAC` together, with the
+  same number of chords per action (a unit test pins the counts; by convention the same
+  index is the same logical shortcut). Every `chordFromEvent`, `formatChord` and
+  `normalizeBindings` call site passes the platform explicitly: `isMac` defaults to
+  `false`, so a forgotten argument compiles and is wrong only at runtime.
+- *window options or native menus* — the darwin branch in `src/main/window-manager.ts`.
+  On mac Cmd+C/V come from the application menu, and must stay bound to the copy and
+  paste actions.
+- *config or data paths* — go through the shared config-dir helper. Never resolve XDG by
+  hand. `~/.config` is deliberate on mac too.
+- *shells* — both the bash and the zsh hook in `src/main/shell-integration.ts`.
+
+Verification is three layers: pure logic in unit tests, anything visible in the mac CI
+job's `verify:app`, and what only hardware can show — IME, trackpad, Gatekeeper — in
+`docs/MANUAL-QA.md` under "macOS (real hardware)".
+
 **Commit messages are English and concise** — a single `type: what` subject line, no body.
 The story behind a change belongs in `docs/engineering-notes.md`, not the commit. See `git log`.
 
