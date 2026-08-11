@@ -52,10 +52,15 @@ const REMAP_DELAY_MS = 60
  * show()/focus()/moveTop()/setAlwaysOnTop() are all refused under Wayland's
  * focus-stealing prevention, which only trusts a *new* surface with focus.
  * Unmapping and remapping produces one, and is the only sequence that was
- * measured to work; see docs/engineering-notes.md.
+ * measured to work; see docs/engineering-notes.md. A window that already has
+ * focus is left alone — there is nothing to raise, and the remap would show as
+ * a flash.
  */
 export function activateWindow(win: BrowserWindow): void {
   if (win.isDestroyed()) return
+  // Nothing to win against focus-stealing prevention when we already have focus,
+  // and the remap below would flash the window for no reason.
+  if (win.isFocused()) return
   if (win.isMinimized()) win.restore()
   if (process.platform !== 'linux') {
     win.show()

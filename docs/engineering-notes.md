@@ -749,3 +749,7 @@ because an immediate remap can reuse the surface the compositor has not yet
 dropped, which lands back in the untrusted case; 60ms was the shortest interval
 that raised the window reliably on this machine. Other platforms take the plain
 `show()`/`focus()` path — the workaround is the exception, not the rule.
+The remap is skipped when the window already has focus: clicking a notification
+for a pane in the focused window otherwise unmapped and remapped it, which reads
+as a flash. With focus already in hand there is no prevention left to beat, so
+only the pane travel runs.
