@@ -42,9 +42,9 @@ while you're looking somewhere else.
 
 | Feature | What it does |
 |---|---|
-| Move focus with `Alt` + arrows | The pane in that direction takes focus and the canvas scrolls to it. No prefix key, and no window numbers to remember. |
+| Move focus with `Alt` / `Cmd` + arrows | The pane in that direction takes focus and the canvas scrolls to it. No prefix key, and no window numbers to remember. |
 | Columns have fixed pixel widths | A column is a number of pixels, not a share of the window. Resizing the window changes how much of the canvas you can see, not how wide anything is. |
-| Overview of the whole session (`Alt` + `M`) | The entire canvas shrunk to one screen, each card showing the pane's title and what it is running. Arrow keys or a click jump to a pane. |
+| Overview of the whole session (`Alt` + `M` / `Cmd+Shift+M`) | The entire canvas shrunk to one screen, each card showing the pane's title and what it is running. Arrow keys or a click jump to a pane. |
 | Save the current layout as a session | Split panes, `cd` each shell, start the commands, then save. Column widths, pane ratios, each shell's working directory, and the running commands are written to a new YAML file. |
 | Sessions are YAML files | One file per session in `~/.config/termspace/sessions/`. The app reads them and never writes back on its own: splitting or resizing at runtime leaves the file alone. |
 | Switching sessions | The wheel over the session list steps through sessions, and `Alt` + `1`–`9` opens one directly. Pressing the current session's number again returns to the previous one. |
@@ -145,39 +145,32 @@ tmux itself.
 
 ## Keys
 
-| Key | Action |
-|---|---|
-| `Alt` + `←→↑↓` | Move focus |
-| `Alt+Shift` + `↑` / `↓` | Split up / down |
-| `Alt+Shift` + `←` / `→` | New column left / right |
-| `Alt+Shift` + `W` | Close pane |
-| `Alt` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
-| `Alt+Shift` + `U` `I` `O` `P` | Move the pane itself |
-| `Alt` + `M` | Overview of the whole session |
-| `Alt` + `S` | Toggle the session sidebar |
-| `Alt` + `G` | Scroll back to the focused pane |
-| `Alt` + `1`–`9` | Jump to a session; the same number again bounces back |
-| `Alt+Shift` + `<` / `>` | Previous / next open session |
-| `Alt+Shift` + `S` | Save the layout over the open session's file |
-| `Ctrl+Shift` + `F` | Search the pane's scrollback |
-| `Ctrl+Shift` + `C` / `V` | Copy / paste |
-| `Ctrl` + `+` / `-` / `0` | Font size |
-| `Ctrl` + `,` | Settings |
-| `Shift` + wheel | Pan the canvas |
+| Linux | macOS | Action |
+|---|---|---|
+| `Alt` + `←→↑↓` | `Cmd` + `←→↑↓` | Move focus |
+| `Alt+Shift` + `↑` / `↓` | `Cmd+Shift` + `↑` / `↓` | Split up / down |
+| `Alt+Shift` + `←` / `→` | `Cmd+Shift` + `←` / `→` | New column left / right |
+| `Alt+Shift` + `W` | `Cmd+Shift` + `W` | Close pane |
+| `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
+| `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
+| `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |
+| `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |
+| `Alt` + `G` | `Cmd` + `G` | Scroll back to the focused pane |
+| `Alt` + `1`–`9` | `Cmd` + `1`–`9` | Jump to a session; the same number again bounces back |
+| `Alt+Shift` + `<` / `>` | `Cmd+Shift` + `[` / `]` | Previous / next open session |
+| `Alt+Shift` + `S` | `Cmd` + `S` | Save the layout over the open session's file |
+| `Ctrl+Shift` + `F` | `Cmd` + `F` | Search the pane's scrollback |
+| `Ctrl+Shift` + `C` / `V` | `Cmd` + `C` / `V` | Copy / paste |
+| `Ctrl` + `+` / `-` / `0` | `Cmd` + `+` / `-` / `0` | Font size |
+| `Ctrl` + `,` | `Cmd` + `,` | Settings |
+| `Shift` + wheel | `Shift` + wheel | Pan the canvas |
 
 Everything else goes straight to the focused pane. Every binding is
-rebindable in `Ctrl` + `,` › Shortcuts.
-
-On macOS the same table sits on `Cmd`, and the mac convention wins where there
-is one: `Cmd` + `C` / `V` / `F` / `S` / `,`, `Cmd` + `B` for the sidebar,
-`Shift+Cmd` + `[` / `]` for previous / next session, and `Shift+Cmd` + `M` for
-the overview, since `Cmd` + `M` minimizes. `Option` is left to the terminal, so
-`Option` + a letter still types the character the shell expects, and
-`Cmd` + `Q` `W` `H` `M` stay the system's.
+rebindable in `Ctrl` + `,`(`⌘Cmd` + `,`) › Shortcuts.
 
 ## Settings
 
-`Ctrl` + `,` holds the terminal font and size, interface scale, the language
+`Ctrl` + `,`(`⌘Cmd` + `,`) holds the terminal font and size, interface scale, the language
 (English / 한국어), mouse and notification behaviour, and **14 built-in
 palettes** — the [Zenbones](https://github.com/zenbones-theme/zenbones.nvim)
 family, Dracula, and the Termspace default. Drop a YAML into
