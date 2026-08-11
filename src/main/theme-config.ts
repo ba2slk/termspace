@@ -9,10 +9,10 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { TerminalTheme } from '../shared/terminal-themes'
+import { configDir } from './config-dir'
 
 export function themesDir(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'themes')
+  return join(configDir(env), 'themes')
 }
 
 const COLOR_KEYS = [

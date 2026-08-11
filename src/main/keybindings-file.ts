@@ -8,14 +8,14 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml, stringify } from 'yaml'
+import { configDir } from './config-dir'
 import { changedBindings, normalizeBindings, type Bindings } from '../shared/keybindings'
 
 /** Which default table the file is read against. Fixed for the process's life. */
 const IS_MAC = process.platform === 'darwin'
 
 export function keybindingsFile(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'keybindings.yaml')
+  return join(configDir(env), 'keybindings.yaml')
 }
 
 const HEADER = `# Termspace keybindings

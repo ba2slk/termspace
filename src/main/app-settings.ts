@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 import { parse as parseYaml, stringify } from 'yaml'
 import type { AppSettings } from '../shared/protocol'
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults'
+import { configDir } from './config-dir'
 
 export { DEFAULT_SETTINGS }
 
@@ -34,8 +35,7 @@ export const SETTING_LIMITS = {
 } as const
 
 export function settingsFile(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'settings.yaml')
+  return join(configDir(env), 'settings.yaml')
 }
 
 type NumericKey = keyof typeof SETTING_LIMITS

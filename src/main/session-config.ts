@@ -6,6 +6,7 @@ import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/pro
 import { basename, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
+import { configDir } from './config-dir'
 import { parseSession, resolveCwd } from './session-schema'
 import {
   isValidSessionId,
@@ -15,8 +16,7 @@ import {
 } from './session-writer'
 
 export function sessionsDir(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'sessions')
+  return join(configDir(env), 'sessions')
 }
 
 /*
