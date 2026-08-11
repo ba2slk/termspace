@@ -282,9 +282,9 @@ describe('meta chords', () => {
   })
 
   it('formats mac-style symbols on mac', () => {
-    expect(formatChord('Shift+Meta+KeyW', true)).toBe('⇧⌘W')
-    expect(formatChord('Meta+ArrowLeft', true)).toBe('⌘←')
-    expect(formatChord('Ctrl+Alt+Shift+Meta+KeyA', true)).toBe('⌃⌥⇧⌘A')
+    expect(formatChord('Shift+Meta+KeyW', true)).toBe('⇧ + ⌘ + W')
+    expect(formatChord('Meta+ArrowLeft', true)).toBe('⌘ + ←')
+    expect(formatChord('Ctrl+Alt+Shift+Meta+KeyA', true)).toBe('⌃ + ⌥ + ⇧ + ⌘ + A')
   })
 
   it('labels Meta as Cmd off mac', () => {
