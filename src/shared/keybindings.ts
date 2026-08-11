@@ -352,16 +352,22 @@ export function formatChord(chord: string, isMac = false): string {
  * Why a chord is a bad idea — the terminal, not the app, normally owns it.
  * Advisory only: the warning is shown and the binding is still saved.
  */
-export type ChordRisk = 'control-char' | 'shell-word' | 'plain-key' | 'system-key' | 'menu-owned'
-
-/** Cmd+C and Cmd+V arrive through the menu, which always means these two. */
-const MENU_ACTION: Readonly<Record<string, ActionId>> = { KeyC: 'copy', KeyV: 'paste' }
+export type ChordRisk = 'control-char' | 'shell-word' | 'plain-key' | 'system-key'
 
 /**
- * `action` is the row the chord sits on, and only mac needs it: Cmd+C is right
- * for copy and useless for anything else.
+ * The two actions the mac Edit menu delivers, and the keys it delivers them
+ * with. Fixed on mac: the menu holds the accelerators, so these rows cannot be
+ * edited and no other action may claim the chords.
  */
-export function chordRisk(chord: string, isMac = false, action?: ActionId): ChordRisk | null {
+export const MENU_OWNED_ACTIONS: readonly ActionId[] = ['copy', 'paste']
+const MENU_OWNED_CHORDS: readonly string[] = ['Meta+KeyC', 'Meta+KeyV']
+
+/** True for the rows the settings screen must draw as fixed rather than editable. */
+export function isMenuOwned(id: ActionId, isMac: boolean): boolean {
+  return isMac && MENU_OWNED_ACTIONS.includes(id)
+}
+
+export function chordRisk(chord: string, isMac = false): ChordRisk | null {
   const parts = chord.split('+')
   const code = parts[parts.length - 1] as string
   const mods = new Set(parts.slice(0, -1))
@@ -373,11 +379,6 @@ export function chordRisk(chord: string, isMac = false, action?: ActionId): Chor
   if (isMac && only('Meta')) {
     // mac hands these to the menu bar before the page ever sees the key.
     if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyH' || code === 'KeyM') return 'system-key'
-    // The Edit menu's accelerators, which forward to copy and paste and
-    // nothing else — so on any other action the key silently does the wrong
-    // thing rather than nothing.
-    const owner = MENU_ACTION[code]
-    if (owner !== undefined && action !== owner) return 'menu-owned'
   }
   // Readline's word motions, which every shell inherits. Not on mac: the mac
   // table leaves Option to the terminal, so an Option chord there is the
@@ -438,6 +439,13 @@ export function normalizeBindings(raw: unknown, isMac = false): Bindings {
   const defaults = defaultBindingsFor(isMac)
   const result: Record<string, readonly string[]> = {}
   for (const id of ACTION_IDS) {
+    // On mac the Edit menu owns Cmd+C/V and delivers them itself, so the file
+    // cannot move, unbind or lend those keys — it would describe a key press
+    // the app never gets to decide.
+    if (isMac && MENU_OWNED_ACTIONS.includes(id)) {
+      result[id] = defaults[id]
+      continue
+    }
     const value = input[id]
     if (value === undefined) {
       result[id] = defaults[id]
@@ -448,7 +456,9 @@ export function normalizeBindings(raw: unknown, isMac = false): Bindings {
     const chords: string[] = []
     for (const entry of list) {
       const chord = parseChord(entry)
-      if (chord !== null && !chords.includes(chord)) chords.push(chord)
+      if (chord === null || chords.includes(chord)) continue
+      if (isMac && MENU_OWNED_CHORDS.includes(chord)) continue
+      chords.push(chord)
       if (chords.length === MAX_CHORDS) break
     }
     // An empty list is a real choice: the action has no key at all.
