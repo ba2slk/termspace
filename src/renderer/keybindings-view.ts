@@ -16,6 +16,7 @@ import {
   findConflicts,
   formatChord,
   isDefault,
+  isMenuOwned,
   MAX_CHORDS,
   withChords,
   type ActionGroup,
@@ -54,7 +55,6 @@ const RISK_TEXT = {
   'shell-word': t.keys.riskShellWord,
   'plain-key': t.keys.riskPlainKey,
   'system-key': t.keys.riskSystemKey,
-  'menu-owned': t.keys.riskMenuOwned,
 } as const
 
 /** Which chord slot is being recorded. `index` past the end means a new one. */
@@ -127,6 +127,14 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     return wrap
   }
 
+  /** A chord the menu owns: shown, but with nothing to press on it. */
+  function fixedChip(chord: string): HTMLElement {
+    const span = document.createElement('span')
+    span.className = 'keys__chord keys__chord--fixed'
+    span.textContent = formatChord(chord, IS_MAC)
+    return span
+  }
+
   function row(id: ActionId, bindings: Bindings, conflicts: ReadonlyMap<string, readonly ActionId[]>): HTMLElement {
     const rowEl = document.createElement('div')
     rowEl.className = 'keys__row'
@@ -139,8 +147,23 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     const chords = document.createElement('div')
     chords.className = 'keys__chords'
 
-    const isRecordingHere = recording !== null && recording.id === id
     const list = bindings[id]
+
+    // Copy and paste on mac: the Edit menu delivers the key, so the row states
+    // what it is and offers nothing to change.
+    if (isMenuOwned(id, IS_MAC)) {
+      chords.append(...list.map(fixedChip))
+      rowEl.append(label, chords)
+      const why = document.createElement('div')
+      why.className = 'keys__warnings'
+      const line = warning(t.keys.fixedByMenu)
+      line.classList.add('keys__warning--calm')
+      why.append(line)
+      rowEl.append(why)
+      return rowEl
+    }
+
+    const isRecordingHere = recording !== null && recording.id === id
 
     list.forEach((chord, index) => {
       if (isRecordingHere && recording?.index === index) chords.append(pending())
@@ -184,7 +207,7 @@ export function createKeybindingsPanel(hooks: KeybindingsHooks): KeybindingsPane
     const warnings = document.createElement('div')
     warnings.className = 'keys__warnings'
     for (const chord of list) {
-      const risk = chordRisk(chord, IS_MAC, id)
+      const risk = chordRisk(chord, IS_MAC)
       if (risk !== null) warnings.append(warning(`${formatChord(chord, IS_MAC)} — ${RISK_TEXT[risk]}`))
       const claimants = conflicts.get(chord)
       if (claimants !== undefined) {

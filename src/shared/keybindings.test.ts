@@ -159,11 +159,11 @@ describe('chordRisk', () => {
     expect(chordRisk('Shift+Meta+KeyM', true)).toBeNull()
   })
 
-  it('flags Cmd+C/V for anything but copy and paste, which the menu delivers', () => {
-    expect(chordRisk('Meta+KeyC', true, 'split-down')).toBe('menu-owned')
-    expect(chordRisk('Meta+KeyV', true, 'split-down')).toBe('menu-owned')
-    expect(chordRisk('Meta+KeyC', true, 'copy')).toBeNull()
-    expect(chordRisk('Meta+KeyV', true, 'paste')).toBeNull()
+  // Cmd+C/V need no advice: normalizeBindings keeps them on copy and paste, so
+  // no other action can ever be holding one.
+  it('says nothing about the two keys the menu delivers', () => {
+    expect(chordRisk('Meta+KeyC', true)).toBeNull()
+    expect(chordRisk('Meta+KeyV', true)).toBeNull()
   })
 
   it('says nothing about Cmd off mac, where the chord cannot fire at all', () => {
@@ -174,7 +174,7 @@ describe('chordRisk', () => {
 
   it('clears every mac default binding', () => {
     for (const id of ACTION_IDS) {
-      for (const chord of DEFAULT_BINDINGS_MAC[id]) expect(chordRisk(chord, true, id)).toBeNull()
+      for (const chord of DEFAULT_BINDINGS_MAC[id]) expect(chordRisk(chord, true)).toBeNull()
     }
   })
 })
@@ -218,6 +218,37 @@ describe('normalizeBindings', () => {
   it('drops duplicates and stops at the cap', () => {
     const many = ['Alt+KeyA', 'alt+KeyA', 'Alt+KeyB', 'Alt+KeyC', 'Alt+KeyD', 'Alt+KeyE']
     expect(normalizeBindings({ overview: many })['overview']).toHaveLength(MAX_CHORDS)
+  })
+})
+
+describe('normalizeBindings — the keys the mac menu owns', () => {
+  it('puts copy and paste back when the file unbinds them', () => {
+    const bindings = normalizeBindings({ copy: [], paste: [] }, true)
+    expect(bindings.copy).toEqual(['Meta+KeyC'])
+    expect(bindings.paste).toEqual(['Meta+KeyV'])
+  })
+
+  it('puts copy and paste back when the file moves them elsewhere', () => {
+    const bindings = normalizeBindings({ copy: ['Shift+Meta+KeyC'], paste: 'Ctrl+KeyY' }, true)
+    expect(bindings.copy).toEqual(['Meta+KeyC'])
+    expect(bindings.paste).toEqual(['Meta+KeyV'])
+  })
+
+  it('takes Cmd+C and Cmd+V off any other action', () => {
+    const bindings = normalizeBindings(
+      { 'split-down': ['Meta+KeyC', 'Alt+KeyJ'], overview: ['Meta+KeyV'] },
+      true,
+    )
+    expect(bindings['split-down']).toEqual(['Alt+KeyJ'])
+    expect(bindings.overview).toEqual([])
+  })
+
+  it('leaves the same file untouched off mac, where the menu does not exist', () => {
+    const raw = { copy: [], paste: ['Ctrl+KeyY'], 'split-down': ['Meta+KeyC', 'Alt+KeyJ'] }
+    const bindings = normalizeBindings(raw, false)
+    expect(bindings.copy).toEqual([])
+    expect(bindings.paste).toEqual(['Ctrl+KeyY'])
+    expect(bindings['split-down']).toEqual(['Meta+KeyC', 'Alt+KeyJ'])
   })
 })
 

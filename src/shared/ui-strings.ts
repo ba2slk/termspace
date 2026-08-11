@@ -214,7 +214,7 @@ const en = {
     riskShellWord: 'The shell uses this to move by word.',
     riskPlainKey: 'A key with no modifier is ordinary typing.',
     riskSystemKey: 'macOS takes this key for itself.',
-    riskMenuOwned: 'The Edit menu holds this key for copy and paste.',
+    fixedByMenu: 'The Edit menu holds this key, so it cannot be changed.',
     conflict: (actions: string) => `Also bound to ${actions}.`,
 
     'focus-left': 'Focus the pane to the left',
@@ -481,7 +481,7 @@ const ko: Catalog = {
     riskShellWord: '셸이 단어 단위 이동에 쓰는 키입니다.',
     riskPlainKey: '조합 없는 키는 그냥 글자 입력입니다.',
     riskSystemKey: 'macOS가 먼저 가져가는 키입니다.',
-    riskMenuOwned: '편집 메뉴가 복사·붙여넣기용으로 쓰는 키입니다.',
+    fixedByMenu: '편집 메뉴가 쓰는 키라 바꿀 수 없습니다.',
     conflict: (actions: string) => `${actions}에도 걸려 있습니다.`,
 
     'focus-left': '왼쪽 pane으로 포커스',

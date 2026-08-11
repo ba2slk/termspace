@@ -1245,8 +1245,16 @@ body {
   cursor: pointer;
 }
 
-.keys__chord:hover {
+button.keys__chord:hover {
   background: var(--bg-canvas);
+}
+
+/* A key the menu owns: the chip is a statement, not a control. */
+.keys__chord--fixed {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  cursor: default;
 }
 
 .keys__chord--recording {
@@ -1296,6 +1304,11 @@ body {
 .keys__warning {
   font-size: var(--fs-ui-sm);
   color: var(--danger);
+}
+
+/* Not a warning: nothing is wrong, the row simply cannot change. */
+.keys__warning--calm {
+  color: var(--fg-faint);
 }
 
 .keys__empty {
