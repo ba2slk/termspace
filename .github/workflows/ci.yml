@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    # feat/macos-support runs per-push while the branch has no PR;
-    # remove with the branch.
-    branches: [main, feat/macos-support]
+    branches: [main]
   pull_request:
+  # Run on any branch on demand: gh workflow run ci.yml --ref <branch>
+  workflow_dispatch:
 
 jobs:
   check:
