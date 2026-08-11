@@ -4,7 +4,7 @@
  * key labels in as it is built.
  *
  * It decides two things: which default bindings apply (Cmd on mac, Alt off it),
- * and how a chord is spelled (⇧⌘W against Ctrl + Shift + W).
+ * and how a chord is spelled (⇧ + ⌘ + W against Ctrl + Shift + W).
  */
 import { api } from './api'
 

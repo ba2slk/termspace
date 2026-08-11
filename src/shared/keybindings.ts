@@ -337,14 +337,14 @@ const MAC_MOD: Readonly<Record<string, string>> = {
  *
  * Spaced around the plus: `Alt+→` runs the modifier into an arrow that is
  * itself a symbol, and the eye has to separate them. `Alt + →` does it for you.
- * macOS spells its own chords in symbols with nothing between them, and a mac
- * user reads `⇧⌘W` faster than any spelled-out form.
+ * macOS uses its own symbols for the modifiers, spaced the same way: run them
+ * together and `⌘G` reads as one glyph rather than a key and its modifier.
  */
 export function formatChord(chord: string, isMac = false): string {
   const parts = chord.split('+')
   const code = parts[parts.length - 1] as string
   const mods = parts.slice(0, -1)
-  if (isMac) return mods.map((mod) => MAC_MOD[mod] ?? mod).join('') + codeLabel(code)
+  if (isMac) return [...mods.map((mod) => MAC_MOD[mod] ?? mod), codeLabel(code)].join(' + ')
   return [...mods.map((mod) => (mod === 'Meta' ? 'Cmd' : mod)), codeLabel(code)].join(' + ')
 }
 
