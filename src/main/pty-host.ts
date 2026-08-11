@@ -3,9 +3,16 @@
  *
  * node-pty is native, so it is required lazily to keep the bundler out of it.
  */
+import { execFile } from 'node:child_process'
 import { readFileSync, readlinkSync } from 'node:fs'
+import { promisify } from 'node:util'
 import type { PaneAttention, PtyExit, SpawnRequest, SpawnResult } from '../shared/protocol'
-import { commandFromCmdline, tpgidFromStat } from './foreground-command'
+import {
+  commandFromCmdline,
+  commandFromPsArgs,
+  tpgidFromPs,
+  tpgidFromStat,
+} from './foreground-command'
 import { scanShellIntegration } from './shell-integration-osc'
 import { NO_SIGNALS, scanTerminalSignals, type SignalState } from './terminal-signals'
 import { APP_NAME } from '../shared/version'
@@ -36,6 +43,32 @@ function ptyEnv(): Record<string, string> {
   return env
 }
 
+const execFileAsync = promisify(execFile)
+
+/** One `ps -o <field>= -p <pid>`, or null when the process is already gone. */
+async function psField(field: string, pid: number): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('ps', ['-o', `${field}=`, '-p', String(pid)])
+    return stdout
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The /proc answer, for a platform without /proc: darwin. Same two facts and
+ * the same meaning — tpgid equal to the shell's own pid means nothing is
+ * running. Works on Linux too, which is what lets a test drive it there.
+ */
+export async function foregroundCommandViaPs(pid: number): Promise<string | null> {
+  const tpgidText = await psField('tpgid', pid)
+  if (tpgidText === null) return null
+  const tpgid = tpgidFromPs(tpgidText)
+  if (tpgid === null || tpgid === pid) return null
+  const args = await psField('args', tpgid)
+  return args === null ? null : commandFromPsArgs(args)
+}
+
 export interface PtyHandlers {
   readonly onData: (paneId: string, data: string) => void
   readonly onExit: (exit: PtyExit) => void
@@ -55,7 +88,7 @@ export interface PtyHost {
   /** Where this pane's shell currently stands, or null. Used when saving a layout. */
   cwdOf(paneId: string): string | null
   /** The command running in this pane's foreground, or null when idle. */
-  foregroundCommandOf(paneId: string): string | null
+  foregroundCommandOf(paneId: string): Promise<string | null>
   /** The window title the program last asked for (OSC 0/2), or null. */
   titleOf(paneId: string): string | null
   /**
@@ -239,11 +272,13 @@ export function createPtyHost(): PtyHost {
       }
     },
 
-    foregroundCommandOf(paneId) {
+    async foregroundCommandOf(paneId) {
       const entry = entries.get(paneId)
       if (entry === undefined) return null
       const pid = entry.process.pid
-      // Linux only, like cwdOf. Races with exiting processes are normal — null then.
+      // ps costs a subprocess, so it stays on the platform that has no /proc.
+      if (process.platform === 'darwin') return foregroundCommandViaPs(pid)
+      // Races with exiting processes are normal — null then.
       try {
         const tpgid = tpgidFromStat(readFileSync(`/proc/${String(pid)}/stat`, 'utf8'))
         if (tpgid === null || tpgid === pid) return null

@@ -252,7 +252,7 @@ export function registerIpcHandlers(
    */
   ipcMain.handle(
     'session:save-as',
-    (
+    async (
       _e,
       id: string,
       displayName: string,
@@ -264,23 +264,27 @@ export function registerIpcHandlers(
       const draft: SessionDraft = {
         name: displayName,
         cwd: resolveCwd(home, rootCwd.trim() === '' ? '~' : rootCwd.trim(), home),
-        columns: layout.columns.map((column) => ({
-          width: column.width,
-          panes: column.panes.map((pane) => {
-            return {
-              title: pane.title,
-              command: resolvePaneCommand({
-                prefill: pane.prefill,
-                declaredCommand: pane.command,
-                submittedCommand: host.submittedCommandOf(pane.paneId),
-                foregroundCommand: host.foregroundCommandOf(pane.paneId),
+        columns: await Promise.all(
+          layout.columns.map(async (column) => ({
+            width: column.width,
+            panes: await Promise.all(
+              column.panes.map(async (pane) => {
+                return {
+                  title: pane.title,
+                  command: resolvePaneCommand({
+                    prefill: pane.prefill,
+                    declaredCommand: pane.command,
+                    submittedCommand: host.submittedCommandOf(pane.paneId),
+                    foregroundCommand: await host.foregroundCommandOf(pane.paneId),
+                  }),
+                  prefill: pane.prefill,
+                  cwd: host.cwdOf(pane.paneId) ?? pane.fallbackCwd,
+                  heightRatio: pane.heightRatio,
+                }
               }),
-              prefill: pane.prefill,
-              cwd: host.cwdOf(pane.paneId) ?? pane.fallbackCwd,
-              heightRatio: pane.heightRatio,
-            }
-          }),
-        })),
+            ),
+          })),
+        ),
       }
       return saveSession(dir, id, draft, overwrite, home)
     },
@@ -304,8 +308,12 @@ export function registerIpcHandlers(
   // A snapshot for the overview: what runs in each pane's foreground right now.
   ipcMain.handle(
     'pty:foreground-commands',
-    (_e, paneIds: readonly string[]): Record<string, string | null> =>
-      Object.fromEntries(paneIds.map((id) => [id, host.foregroundCommandOf(id)])),
+    async (_e, paneIds: readonly string[]): Promise<Record<string, string | null>> =>
+      Object.fromEntries(
+        await Promise.all(
+          paneIds.map(async (id) => [id, await host.foregroundCommandOf(id)] as const),
+        ),
+      ),
   )
 
   // Window titles per pane (OSC 0/2), for the overview.
