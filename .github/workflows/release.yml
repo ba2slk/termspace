@@ -49,11 +49,67 @@ jobs:
         working-directory: release
         run: sha256sum *.AppImage > SHA256SUMS.txt
 
+      # A SemVer prerelease tag (v1.1.0-beta.0) publishes as a GitHub
+      # pre-release. Whichever platform job gets there first creates the
+      # release, so both must agree on the flag.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
+          prerelease=""
+          case "$tag" in *-*) prerelease="--prerelease" ;; esac
           gh release view "$tag" >/dev/null 2>&1 \
-            || gh release create "$tag" --title "$tag" --generate-notes
+            || gh release create "$tag" --title "$tag" --generate-notes $prerelease \
+            || gh release view "$tag" >/dev/null 2>&1
           gh release upload "$tag" release/*.AppImage release/SHA256SUMS.txt --clobber
+
+  mac:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check the tag matches package.json
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "v$version" ]; then
+            echo "tag $tag does not match package.json version $version" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run dist:mac
+
+      # macOS ships shasum, not GNU sha256sum, and a separate file keeps this
+      # job from clobbering the AppImage job's SHA256SUMS.txt.
+      - name: Checksum
+        working-directory: release
+        run: shasum -a 256 *.dmg *.zip > SHA256SUMS-mac.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          prerelease=""
+          case "$tag" in *-*) prerelease="--prerelease" ;; esac
+          gh release view "$tag" >/dev/null 2>&1 \
+            || gh release create "$tag" --title "$tag" --generate-notes $prerelease \
+            || gh release view "$tag" >/dev/null 2>&1
+          gh release upload "$tag" release/*.dmg release/*.zip release/SHA256SUMS-mac.txt --clobber
