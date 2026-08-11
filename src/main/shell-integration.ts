@@ -9,10 +9,10 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { configDir } from './config-dir'
 
 export function shellIntegrationFile(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'shell-integration.bash')
+  return join(configDir(env), 'shell-integration.bash')
 }
 
 /** What the user pastes into ~/.bashrc. Kept on one line so it copies cleanly. */
@@ -87,8 +87,7 @@ printf '\\033]1173;A\\007' > /dev/tty 2>/dev/null
 `
 
 export function shellIntegrationFileZsh(env: NodeJS.ProcessEnv): string {
-  const base = env['XDG_CONFIG_HOME'] ?? join(env['HOME'] ?? '', '.config')
-  return join(base, 'termspace', 'shell-integration.zsh')
+  return join(configDir(env), 'shell-integration.zsh')
 }
 
 /** What the user pastes into ~/.zshrc. Kept on one line so it copies cleanly. */
