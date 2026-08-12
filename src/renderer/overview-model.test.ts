@@ -237,6 +237,23 @@ describe('column snap and the centred column', () => {
     expect(columnSnapOffset(cards, centred(50), 'left', lens)).toBeCloseTo(centred(50))
   })
 
+  /*
+   * At a clamped end the lens centre sits before the first column's centre. A
+   * step measured from the raw centre snaps to the column already framed, so
+   * the press moves the strip a little and the selection never advances.
+   */
+  it('advances even when the lens centre trails the framed column', () => {
+    const stuck = centred(40)
+    expect(columnAtLensCenter(cards, stuck, lens)).toBe('c1')
+    expect(columnSnapOffset(cards, stuck, 'right', lens)).toBeCloseTo(centred(200))
+  })
+
+  it('steps back even when the lens centre leads the framed column', () => {
+    const stuck = centred(360)
+    expect(columnAtLensCenter(cards, stuck, lens)).toBe('c3')
+    expect(columnSnapOffset(cards, stuck, 'left', lens)).toBeCloseTo(centred(200))
+  })
+
   it('steps from between two columns without skipping one', () => {
     expect(columnSnapOffset(cards, centred(120), 'right', lens)).toBeCloseTo(centred(200))
     expect(columnSnapOffset(cards, centred(120), 'left', lens)).toBeCloseTo(centred(50))

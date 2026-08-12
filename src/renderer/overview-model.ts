@@ -181,14 +181,19 @@ export function columnSnapOffset(
 ): number {
   const centres = columnCentres(cards)
   if (centres.length === 0) return offset
-  const target = lensCentreOn(offset, lens)
-  const epsilon = 0.5
-  const next =
-    dir === 'right'
-      ? centres.find((c) => c.centre > target + epsilon)
-      : [...centres].reverse().find((c) => c.centre < target - epsilon)
-  const centre = next?.centre ?? (dir === 'right' ? centres[centres.length - 1]! : centres[0]!).centre
-  return OVERVIEW_MARGIN + centre - lens.x - lens.width / 2
+  /*
+   * Step from the column the lens is framing, not from the lens centre itself.
+   * At a clamped end the centre trails the framed column, and a step measured
+   * from it lands back on that same column: the press moves the strip a little
+   * and the selection never advances.
+   */
+  const framed = columnAtLensCenter(cards, offset, lens)
+  const at = Math.max(
+    0,
+    centres.findIndex((c) => c.id === framed),
+  )
+  const next = dir === 'right' ? Math.min(at + 1, centres.length - 1) : Math.max(at - 1, 0)
+  return OVERVIEW_MARGIN + centres[next]!.centre - lens.x - lens.width / 2
 }
 
 /** The pane in this column whose middle sits closest to a remembered height. */
