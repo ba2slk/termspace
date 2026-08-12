@@ -182,6 +182,20 @@ describe('card title editing', () => {
     expect(onRename).toHaveBeenCalledWith('a1', 'build')
   })
 
+  /*
+   * The caller saves the session file on every onRename, so a commit that
+   * changed nothing must not reach the hook at all.
+   */
+  it('an empty or unchanged title is not committed', () => {
+    for (const value of ['   ', 'editor']) {
+      const { onRename } = editing()
+      const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+      input.value = value
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      expect(onRename).not.toHaveBeenCalled()
+    }
+  })
+
   it('navigation keys are inert while editing', () => {
     const { view } = editing()
     const before = host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')

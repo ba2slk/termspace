@@ -160,6 +160,8 @@ export interface StartSessionOptions {
   readonly onCopied: (chars: number) => void
   /** A pane was added or removed; the session list shows the count. */
   readonly onPanesChanged: () => void
+  /** A pane title was edited; a title alone is not worth losing on a restart. */
+  readonly onPaneRenamed: () => void
   /** A pane started or stopped asking to be looked at; the sidebar shows it. */
   readonly onAttentionChanged: () => void
   /** Focus moved to another pane; main decides notifications by what is watched. */
@@ -249,7 +251,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // Same pane: setLayout would be a no-op, but the view should still settle on it.
       revealFocused()
     },
-    onRename: (paneId, title) => setLayout(renamePane(layout, paneId, title)),
+    onRename: (paneId, title) => {
+      setLayout(renamePane(layout, paneId, title))
+      options.onPaneRenamed()
+    },
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {

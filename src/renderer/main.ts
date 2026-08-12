@@ -781,6 +781,9 @@ async function openSession(id: string): Promise<void> {
       onTitle: setTitle,
       onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
       onPanesChanged: renderSidebar,
+      // The same write as Alt+Shift+S: a title lives in the layout, so the
+      // whole layout is what there is to save.
+      onPaneRenamed: () => void saveCurrentLayout(),
       onAttentionChanged: renderSidebar,
       onWatchedPaneChanged: reportWatchedPane,
       onEnd: () => endSession(id),
