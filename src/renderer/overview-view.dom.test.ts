@@ -418,6 +418,35 @@ describe('createOverviewView — pannable map', () => {
     expect(offset).toBeLessThan(0)
   })
 
+  it('re-lays-out when the viewport changes, keeping the selection', () => {
+    let width = 800
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        viewport: () => ({ width, height: 600, scrollX: 0 }),
+      }),
+    )
+    view.open()
+    for (let i = 0; i < 4; i++) view.handleKey(key('ArrowRight'))
+    const selectedBefore = host.querySelector<HTMLElement>('.overview__card--selected')?.dataset[
+      'paneId'
+    ]
+    // The marker is the viewport drawn to scale, so it is what must move when
+    // the viewport changes — the floored map width can stay put.
+    const markerBefore = host.querySelector<HTMLElement>('.overview__viewport')!.style.width
+
+    // The sidebar collapsed: the map has more room and must be re-laid-out.
+    width = 1200
+    view.refreshIfOpen()
+    expect(host.querySelector<HTMLElement>('.overview__viewport')!.style.width).not.toBe(
+      markerBefore,
+    )
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      selectedBefore,
+    )
+  })
+
   it('a pannable map takes the wheel for itself', () => {
     const view = createOverviewView(host, wideHooks())
     view.open()

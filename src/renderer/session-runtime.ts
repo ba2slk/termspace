@@ -771,6 +771,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     canvas.render(layout)
     settleSizes()
     updateBudget()
+    // The map is scaled to the viewport, so a window resize leaves it drawn for
+    // a width that is gone. Resizing never reaches relayout, only this.
+    overview.refreshIfOpen()
   })
   resizeObserver.observe(host)
 
@@ -879,6 +882,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // A narrower canvas can leave the scroll past its end; clamp without moving.
       canvas.clampScroll(layout)
       updateBudget()
+      // The sidebar collapsing arrives here. The ResizeObserver below sees the
+      // same change, but only this path is synchronous with the toggle.
+      overview.refreshIfOpen()
     },
 
     refresh() {

@@ -831,16 +831,72 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
         (overlay()?.querySelector(
           `.overview__card[data-pane-id="${noisy}"].overview__card--wants`,
         ) ?? null) !== null
+      // Re-baselined: the wheel and the sidebar above both moved the map.
+      const settled = map.getBoundingClientRect().left
       api.write(noisy, `printf '\\a'\n`)
       // The mark is the proof a repaint ran; without it there is nothing to assert.
       const repainted = await waitFor(marked)
       const held = map.getBoundingClientRect().left
       report['overviewPanSurvivesRepaint'] = !repainted
         ? 'skipped: the background pane never rang'
-        : Math.abs(held - after) < 1 && selected() === walked
+        : Math.abs(held - settled) < 1 && selected() === walked
           ? `ok (map held at ${String(Math.round(held))}px)`
-          : `FAIL (map ${String(Math.round(after))} → ${String(Math.round(held))}px, selection ${String(walked)} → ${String(selected())})`
+          : `FAIL (map ${String(Math.round(settled))} → ${String(Math.round(held))}px, selection ${String(walked)} → ${String(selected())})`
     }
+    /*
+     * The wheel must pan the map. The canvas claims wheel events in capture and
+     * stops propagation, so the map's own listener never ran and the map sat
+     * still — invisible to every unit test, since the two listeners only meet
+     * on a real event path.
+     */
+    const beforeWheel = map.getBoundingClientRect().left
+    overlay()!.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: -400, deltaMode: 0, bubbles: true, cancelable: true }),
+    )
+    const afterWheel = map.getBoundingClientRect().left
+    report['overviewWheelPans'] =
+      afterWheel > beforeWheel + 1
+        ? `ok (map ${String(Math.round(beforeWheel))} → ${String(Math.round(afterWheel))}px)`
+        : `FAIL (wheel moved the map ${String(Math.round(afterWheel - beforeWheel))}px)`
+
+    /*
+     * The map is drawn to the viewport, so the sidebar collapsing under it must
+     * re-lay it out. Assert the map's own width: the marker is no proof, since
+     * syncViewport redraws that alone on every canvas scroll.
+     */
+    const mapStyled = (): number =>
+      Number.parseFloat(
+        overlay()?.querySelector<HTMLElement>('.overview__map')?.style.width ?? '0',
+      )
+    const styledBefore = mapStyled()
+    const widthBefore = host.clientWidth
+    press('KeyS', { altKey: true })
+    const widened = await waitFor(() => host.clientWidth !== widthBefore)
+    /*
+     * The map only changes width if the wider room lifts the scale off the
+     * floor. In a small window the floor pins it at both widths, and there is
+     * nothing a re-render could change — unmeasurable, not broken.
+     */
+    const liftsOffTheFloor = (): boolean =>
+      (host.clientWidth - 96) / canvasSpan() > MIN_OVERVIEW_COLUMN_PX / narrowest
+    if (!widened) {
+      report['overviewFollowsSidebar'] = 'skipped: the sidebar did not move'
+    } else if (!liftsOffTheFloor()) {
+      report['overviewFollowsSidebar'] =
+        `skipped: the floor pins the scale at ${String(widthBefore)} and ${String(host.clientWidth)}px alike`
+      press('KeyS', { altKey: true })
+      await waitFor(() => host.clientWidth === widthBefore)
+    } else {
+      const relaidOut = await waitFor(() => mapStyled() !== styledBefore)
+      report['overviewFollowsSidebar'] = relaidOut
+        ? `ok (map ${String(Math.round(styledBefore))} → ${String(Math.round(mapStyled()))}px for host ${String(widthBefore)} → ${String(host.clientWidth)}px)`
+        : `FAIL (map stuck at ${String(Math.round(styledBefore))}px while the host went ${String(widthBefore)} → ${String(host.clientWidth)}px)`
+      press('KeyS', { altKey: true })
+      // Wait for the map too: the host is back a frame before the map redraws,
+      // and the next check would read that half-way state as a stray move.
+      await waitFor(() => host.clientWidth === widthBefore && mapStyled() === styledBefore)
+    }
+
   }
 
   press('Escape')
@@ -949,3 +1005,4 @@ export async function checkTerminalSignals(report: Report): Promise<void> {
     ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
   await waitFor(() => focusedId() === startFocus)
 }
+
