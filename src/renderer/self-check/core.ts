@@ -3,6 +3,7 @@ import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
 import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
 import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
+import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   animationRuns,
   capture,
@@ -426,10 +427,23 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
 export function checkRendererBudget(report: Report): void {
   const frozen = document.querySelectorAll('.pane--frozen').length
   report['frozenOffscreenPanes'] = frozen > 0 ? `ok (${frozen})` : 'FAIL (nothing froze)'
-  report['webglInFrozenPanes'] =
-    document.querySelectorAll('.pane--frozen canvas').length === 0
-      ? 'ok (none)'
-      : 'FAIL (a frozen pane still holds WebGL)'
+
+  /*
+   * The cap is the invariant that matters: past Chromium's own limit it starts
+   * force-releasing contexts, which is the flicker this budget exists to
+   * prevent. Frozen-and-attached is not a fault — freeze follows visibility,
+   * attach is capped, and renderer-budget keeps them deliberately separate, so
+   * a pane that just scrolled off keeps its context until it falls out of the
+   * ranking.
+   */
+  const contexts = document.querySelectorAll('.pane canvas').length
+  report['webglUnderTheCap'] =
+    contexts <= MAX_WEBGL_CONTEXTS
+      ? `ok (${String(contexts)} of ${String(MAX_WEBGL_CONTEXTS)})`
+      : `FAIL (${String(contexts)} contexts, cap ${String(MAX_WEBGL_CONTEXTS)})`
+  report['webglInFrozenPanes'] = String(
+    document.querySelectorAll('.pane--frozen canvas').length,
+  )
   report['webglInAwakePanes'] = String(
     document.querySelectorAll('.pane:not(.pane--frozen) canvas').length,
   )
@@ -547,9 +561,12 @@ export async function checkOverview(report: Report): Promise<void> {
   // The map must actually fit the screen — that is the whole point of it.
   const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')!
   const mapBox = overlay()!.querySelector<HTMLElement>('.overview__map')!.getBoundingClientRect()
+  // A strip wider than the window is the point of pan mode; only a map that
+  // claims to fit has to. Height must fit either way.
+  const pans = overlay()!.classList.contains('overview--pannable')
   report['overviewFits'] =
-    mapBox.width > 0 && mapBox.width <= host.clientWidth && mapBox.height <= host.clientHeight
-      ? `ok (${Math.round(mapBox.width)}x${Math.round(mapBox.height)} in ${host.clientWidth}x${host.clientHeight})`
+    mapBox.width > 0 && (pans || mapBox.width <= host.clientWidth) && mapBox.height <= host.clientHeight
+      ? `ok (${Math.round(mapBox.width)}x${Math.round(mapBox.height)} in ${host.clientWidth}x${host.clientHeight}${pans ? ', panning' : ''})`
       : `OVERFLOW (map ${Math.round(mapBox.width)}x${Math.round(mapBox.height)})`
 
   report['overviewMarksViewport'] = overlay()!.querySelector('.overview__viewport') !== null ? 'ok' : 'FAIL'
@@ -599,8 +616,28 @@ export async function checkOverview(report: Report): Promise<void> {
   })
   report['overviewProportional'] =
     ratioMismatch === undefined ? 'ok' : `MISMATCH ${ratioMismatch.id} (card ${ratioMismatch.styled.w}px, pane ${paneWidths.get(ratioMismatch.id)}px)`
-  report['overviewStartsAtFocus'] =
-    selected() === startFocus ? 'ok' : `FAIL (${selected()} != ${startFocus})`
+  /*
+   * Fit mode opens on the focused pane. Pan mode opens on the canvas region you
+   * were looking at, so the selection is that column's pick — the focused pane
+   * only keeps it when the lens actually frames it.
+   */
+  const framesTheSelection = (): boolean => {
+    const card = overlay()?.querySelector<HTMLElement>(
+      `.overview__card[data-pane-id="${String(selected())}"]`,
+    )
+    const lens = overlay()?.querySelector<HTMLElement>('.overview__viewport')
+    if (card === null || card === undefined || lens === null || lens === undefined) return false
+    const c = card.getBoundingClientRect()
+    const l = lens.getBoundingClientRect()
+    return c.left < l.right && c.right > l.left
+  }
+  report['overviewStartsAtFocus'] = pans
+    ? framesTheSelection()
+      ? `ok (pan mode: the lens frames ${String(selected())})`
+      : `FAIL (the lens does not frame the selection ${String(selected())})`
+    : selected() === startFocus
+      ? 'ok'
+      : `FAIL (${selected()} != ${startFocus})`
 
   // Selection must move; which way depends on where focus sits, so try both.
   const before = selected()
