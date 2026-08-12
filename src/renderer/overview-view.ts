@@ -5,8 +5,6 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
-import { t } from './i18n'
-
 import { canvasWidth } from './layout-geometry'
 import {
   clampStripOffset,
@@ -23,6 +21,7 @@ import {
   stripOffsetFor,
 } from './overview-model'
 import { wheelPixels } from './wheel-physics'
+import { t } from './i18n'
 
 export interface OverviewHooks {
   readonly layout: () => Layout
@@ -42,12 +41,17 @@ export interface OverviewHooks {
   readonly onJump: (paneId: string) => void
   /** The user renamed a card; the caller lands it in the layout. */
   readonly onRename: (paneId: string, title: string) => void
-
   /**
    * Pan mode's pick: the lens framed a region, so the canvas goes exactly
    * there rather than to wherever revealing the pane would land.
    */
   readonly onLand: (scrollX: number, paneId: string) => void
+  /**
+   * The strip moved: take the canvas with it, so the session behind the scrim
+   * shows what the lens is framing. Focuses nothing and closes nothing —
+   * leaving without landing scrubs back to where it started.
+   */
+  readonly onScrub: (scrollX: number) => void
 }
 
 export interface OverviewView {
@@ -142,7 +146,6 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let snapshot: Layout | null = null
   let marker: HTMLElement | null = null
   let editing: HTMLInputElement | null = null
-
   /** Strip offset: map coordinate x is drawn at OVERVIEW_MARGIN + x - offset. */
   let offset = 0
   let mapWidth = 0
@@ -152,12 +155,22 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let pannable = false
   /** The height the selection keeps as it crosses columns — the canvas's rule. */
   let desiredY = 0
+  /** Where the canvas was when the map opened, for a cancel to put it back. */
+  let openedAtScrollX = 0
+  let scrubbed = false
 
   const applyPan = (): void => {
     map.style.transform = `translateX(${String(-offset)}px)`
     // The lens is fixed on screen, so on the strip it sits wherever the strip
     // has slid to. One write keeps it welded to the window.
     if (pannable && marker !== null) marker.style.left = `${String(lensOnStrip(offset, lens))}px`
+  }
+
+  /** Take the canvas along, so the scrim shows what the lens is framing. */
+  const scrub = (): void => {
+    if (!pannable || snapshot === null) return
+    scrubbed = true
+    hooks.onScrub(landingScrollX(offset, scale, canvasWidth(snapshot), hooks.viewport(), lens))
   }
 
   /** The selection follows the lens: whichever column it frames, at desiredY. */
@@ -186,6 +199,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       offset = clampStripOffset(offset + wheelPixels(delta, event.deltaMode), mapWidth, lens)
       applyPan()
       trackSelection()
+      scrub()
     },
     { passive: false },
   )
@@ -262,7 +276,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       hooks.viewport(),
       lens,
     )
-    close()
+    close(false)
     hooks.onLand(scrollX, paneId)
   }
 
@@ -355,14 +369,16 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     })
   }
 
-  function close(): void {
+  function close(restoreCanvas = true): void {
     if (!openState) return
+    // Leaving without landing is a cancel, and cancel means nothing moved.
+    if (restoreCanvas && scrubbed) hooks.onScrub(openedAtScrollX)
+    scrubbed = false
     openState = false
     snapshot = null
     marker = null
     // The editor goes with the map that holds it.
     editing = null
-
     offset = 0
     pannable = false
     element.remove()
@@ -374,6 +390,8 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     setLegend(false)
     // Opening starts at the focused pane, wherever the last visit ended up.
     selectedId = hooks.layout().focusedPaneId
+    openedAtScrollX = hooks.viewport().scrollX
+    scrubbed = false
     offset = 0
     render()
     rememberY()
@@ -429,6 +447,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
           offset = clampStripOffset(columnSnapOffset(lastCards, offset, dir, lens), mapWidth, lens)
           applyPan()
           trackSelection()
+          scrub()
           return true
         }
         // Vertical stays inside the framed column, and sets the height to keep.

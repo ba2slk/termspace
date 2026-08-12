@@ -85,6 +85,11 @@ English copy.
 - **The wheel reaches the map at all** (the canvas claims wheel events in capture and stops
   propagation, so the map's own listener never ran and the strip sat still. The two
   listeners only meet on a real event path, so no unit test can see it)
+- **The canvas behind the scrim follows the lens as the strip is scrubbed, and a cancel
+  puts it back** (the map is a place to look around from, so the session moves with it
+  rather than only at the end. The check baselines at the wheel event itself — the arrow
+  snaps scrub too, so measuring from the opening position would pass on their work alone —
+  and asserts Esc returns the canvas to where it opened)
 - **Enter lands the canvas on the region the lens framed** (revealing the pane instead
   picks its own scroll and throws away the view that was chosen. The check reads the
   scroll off the canvas track's transform and compares it with what the lens was pointing

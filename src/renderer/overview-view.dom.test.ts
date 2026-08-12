@@ -21,6 +21,7 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   onJump: vi.fn(),
   onRename: vi.fn(),
   onLand: vi.fn(),
+  onScrub: vi.fn(),
   ...over,
 })
 
@@ -556,6 +557,95 @@ describe('createOverviewView — pannable map', () => {
     )
     fitting.open()
     expect(host.querySelector('.overview__clip > .overview__map')).not.toBeNull()
+  })
+
+  describe('scrubbing the canvas behind the scrim', () => {
+    const scrubHooks = (
+      scrubs: number[],
+      lands: number[] = [],
+      scrollX = 4000,
+    ): OverviewHooks =>
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p6' }),
+        viewport: () => ({ width: 800, height: 600, scrollX }),
+        onScrub: (x) => scrubs.push(x),
+        onLand: (x) => lands.push(x),
+      })
+
+    it('takes the canvas along on the wheel', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      expect(scrubs).toHaveLength(0) // opening aligned FROM the canvas
+      const overview = host.querySelector<HTMLElement>('.overview')!
+      overview.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, cancelable: true }))
+      expect(scrubs).toHaveLength(1)
+      expect(scrubs[0]).toBeGreaterThan(4000)
+    })
+
+    it('takes the canvas along on an arrow snap', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      expect(scrubs).toHaveLength(1)
+      view.handleKey(key('ArrowLeft'))
+      expect(scrubs).toHaveLength(2)
+      expect(scrubs[1]).toBeLessThan(scrubs[0]!)
+    })
+
+    it('never scrolls past the canvas itself', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      const overview = host.querySelector<HTMLElement>('.overview')!
+      overview.dispatchEvent(new WheelEvent('wheel', { deltaY: 99999, cancelable: true }))
+      // 12 columns of 640 + gaps, in an 800px viewport.
+      expect(scrubs.at(-1)).toBeLessThanOrEqual(7824 - 800)
+      expect(scrubs.at(-1)).toBeGreaterThanOrEqual(0)
+    })
+
+    it('leaves the canvas alone when only the selection moves', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowDown'))
+      view.handleKey(key('ArrowUp'))
+      expect(scrubs).toHaveLength(0)
+    })
+
+    it('puts the canvas back when it closes without landing', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      view.handleKey(key('Escape', { key: 'Escape' }))
+      expect(view.isOpen).toBe(false)
+      // Cancel means nothing moved: the last word is the opening position.
+      expect(scrubs.at(-1)).toBe(4000)
+    })
+
+    it('does not scrub back after landing', () => {
+      const scrubs: number[] = []
+      const lands: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs, lands))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      const afterSnap = scrubs.at(-1)
+      view.handleKey(key('Enter', { key: 'Enter' }))
+      expect(lands).toHaveLength(1)
+      expect(lands[0]).toBe(afterSnap)
+      // No restoring scrub on the way out — the landing is the point.
+      expect(scrubs.at(-1)).toBe(afterSnap)
+    })
+
+    it('leaves the canvas alone when nothing was scrubbed', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('Escape', { key: 'Escape' }))
+      expect(scrubs).toHaveLength(0)
+    })
   })
 
   it('keeps the marker inside the map when the map fits', () => {

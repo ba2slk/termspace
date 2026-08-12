@@ -255,6 +255,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       setLayout(renamePane(layout, paneId, title))
       options.onPaneRenamed()
     },
+    onScrub: (scrollX) => {
+      // Follow the lens with the canvas itself: nothing takes focus, nothing
+      // closes. Leaving the map without landing scrubs back.
+      canvas.scrollByExact(scrollX - canvas.scrollState().offset)
+    },
     onLand: (scrollX, paneId) => {
       // Focus first: it scrolls to reveal the pane, and the lens framed a
       // region rather than a pane, so that scroll has to be the one overruled.

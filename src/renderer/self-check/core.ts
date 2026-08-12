@@ -743,6 +743,13 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
   const selected = (): string | undefined =>
     overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
 
+  /** The canvas scroll, read off the track's own transform — real pixels. */
+  const canvasScroll = (): number => {
+    const track = document.querySelector<HTMLElement>('.session-host:not([hidden]) .canvas-track')
+    const match = /translateX\((-?[\d.]+)px\)/.exec(track?.style.transform ?? '')
+    return match === null ? 0 : -Number(match[1])
+  }
+
   const paneWidth = (p: HTMLElement): number => Number.parseFloat(p.style.width)
   const canvasSpan = (): number =>
     Math.max(...visiblePanes().map((p) => Number.parseFloat(p.style.left) + paneWidth(p))) +
@@ -803,6 +810,7 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
 
   press('KeyM', { altKey: true })
   await waitFor(() => overlay() !== null)
+  const openedScroll = canvasScroll()
   const map = overlay()?.querySelector<HTMLElement>('.overview__map') ?? null
   if (map === null) {
     report['overviewFloor'] = 'FAIL (Alt+M did not open the map)'
@@ -936,6 +944,7 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
      */
     const beforeWheel = map.getBoundingClientRect().left
     const lensBeforeWheel = lensCentre()
+    const canvasBeforeWheel = canvasScroll()
     overlay()!.dispatchEvent(
       new WheelEvent('wheel', { deltaY: -400, deltaMode: 0, bubbles: true, cancelable: true }),
     )
@@ -945,6 +954,28 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
       afterWheel > beforeWheel + 1 && lensDrift < 1
         ? `ok (map ${String(Math.round(beforeWheel))} → ${String(Math.round(afterWheel))}px, lens held)`
         : `FAIL (wheel moved the map ${String(Math.round(afterWheel - beforeWheel))}px, lens drifted ${lensDrift.toFixed(1)}px)`
+
+    /*
+     * The session behind the scrim follows the lens as it is scrubbed, and
+     * leaving without landing puts it back: cancel means nothing moved.
+     */
+    // Baselined at the wheel itself: the arrow snaps above scrub too, and
+    // measuring from the opening position would pass on their work alone.
+    const scrubbedTo = await waitFor(() => canvasScroll() !== canvasBeforeWheel)
+    report['overviewScrubMovesTheCanvas'] = scrubbedTo
+      ? `ok (canvas ${String(Math.round(canvasBeforeWheel))} → ${String(Math.round(canvasScroll()))}px on one wheel)`
+      : `FAIL (canvas stuck at ${String(Math.round(canvasBeforeWheel))}px while the strip moved)`
+
+    press('Escape')
+    await waitFor(() => overlay() === null)
+    const restored = await waitFor(() => Math.abs(canvasScroll() - openedScroll) <= 2)
+    report['overviewCancelRestoresTheCanvas'] = restored
+      ? `ok (back at ${String(Math.round(canvasScroll()))}px)`
+      : `FAIL (canvas left at ${String(Math.round(canvasScroll()))}px, opened at ${String(Math.round(openedScroll))}px)`
+
+    // Reopen for the checks below; the strip aligns from the canvas again.
+    press('KeyM', { altKey: true })
+    await waitFor(() => overlay() !== null)
 
     /*
      * The map is drawn to the viewport, so the sidebar collapsing under it must
@@ -989,13 +1020,6 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
      * framed, not wherever revealing the pane would have gone. Read the scroll
      * off the track's own transform — the number the user actually sees.
      */
-    const canvasScroll = (): number => {
-      const track = document.querySelector<HTMLElement>(
-        '.session-host:not([hidden]) .canvas-track',
-      )
-      const match = /translateX\((-?[\d.]+)px\)/.exec(track?.style.transform ?? '')
-      return match === null ? 0 : -Number(match[1])
-    }
     // The scale, straight off the drawing: one card against its own pane.
     const target = selected() ?? ''
     const cardBox = overlay()?.querySelector<HTMLElement>(
