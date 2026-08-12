@@ -6,6 +6,9 @@ const IDLE = {
   declaredCommand: null,
   submittedCommand: null,
   foregroundCommand: null,
+  declaredCwd: '/home/u/work',
+  liveCwd: '/home/u/work',
+  home: '/home/u',
 }
 
 describe('resolvePaneCommand', () => {
@@ -47,5 +50,58 @@ describe('resolvePaneCommand', () => {
 
   it('leaves a pane that never had a command empty', () => {
     expect(resolvePaneCommand(IDLE)).toBeNull()
+  })
+
+  it('drops the declared command once an idle pane has been cd-ed away', () => {
+    // The job ended and the user moved on: command and cwd would be a pairing
+    // that never ran.
+    expect(
+      resolvePaneCommand({
+        ...IDLE,
+        declaredCommand: './tmux-catchup.sh',
+        declaredCwd: '~',
+        liveCwd: '/home/u/work',
+      }),
+    ).toBeNull()
+  })
+
+  it('reads `~` and the home path as the same place', () => {
+    expect(
+      resolvePaneCommand({
+        ...IDLE,
+        declaredCommand: './tmux-catchup.sh',
+        declaredCwd: '~',
+        liveCwd: '/home/u',
+      }),
+    ).toBe('./tmux-catchup.sh')
+  })
+
+  it('keeps the declared command when the pty is gone and the cwd is unknown', () => {
+    expect(
+      resolvePaneCommand({ ...IDLE, declaredCommand: 'npm run dev', liveCwd: null }),
+    ).toBe('npm run dev')
+  })
+
+  it('keeps a prefill pane whole even after a cd', () => {
+    expect(
+      resolvePaneCommand({
+        ...IDLE,
+        prefill: 'cu down full',
+        declaredCommand: 'npm run dev',
+        liveCwd: '/home/u/elsewhere',
+      }),
+    ).toBe('npm run dev')
+  })
+
+  it('captures what runs now even after a cd', () => {
+    expect(
+      resolvePaneCommand({
+        ...IDLE,
+        declaredCommand: 'old',
+        submittedCommand: 'htop',
+        foregroundCommand: 'htop',
+        liveCwd: '/home/u/elsewhere',
+      }),
+    ).toBe('htop')
   })
 })
