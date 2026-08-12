@@ -26,6 +26,7 @@ const api: TermspaceApi = {
   pickDirectory: (current) => ipcRenderer.invoke('session:pick-directory', current),
   shellIntegrationStatus: () => ipcRenderer.invoke('shell-integration:status'),
   deleteSession: (id) => ipcRenderer.invoke('session:delete', id),
+  renameSession: (id, newName) => ipcRenderer.invoke('session:rename', id, newName),
   editorCommandFor: (id) => ipcRenderer.invoke('session:editor-command', id),
   openSessionFileExternal: (id) => ipcRenderer.send('session:open-external', id),
   listMonoFonts: () => ipcRenderer.invoke('fonts:list'),
