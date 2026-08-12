@@ -416,12 +416,18 @@ These can't be replaced by automated judgment. They're matters of impression, no
 
 ### Renaming (no self-check covers these)
 
-- [ ] Right-click a session row › Rename session, type a new name and press Enter. The
-      row and the title bar show it, `~/.config/termspace/sessions/<id>.yaml` has the new
-      `name:` with its comments intact, `<id>.yaml.bak` holds the old one, and the name
-      survives a restart
-- [ ] In the `Alt+M` overview, press `F2` on the selected card, rename it, then save the
-      layout from the title bar: the session file records the new pane title
+- [ ] Right-click a session row › Rename session, type a new name and press Enter. The row
+      and the title bar show it, and in `~/.config/termspace/sessions/` the file itself has
+      moved to `<new-id>.yaml` — new `name:`, comments intact, the old file gone, and
+      `<new-id>.yaml.bak` holding the file as it stood before the rename. The session keeps
+      running throughout, and the name survives a restart
+- [ ] Rename to a name another session already uses: nothing is written and the reason
+      appears as a toast
+- [ ] Type a Korean name with the IME: the Enter that ends composition only ends
+      composition — a second Enter commits
+- [ ] In the `Alt+M` overview, press `F2` on the selected card and type a title. Letters
+      appear as typed (both English and Korean), Enter commits, and the session file has the
+      new title without pressing save. Escape leaves the card as it was
 
 ### Shell integration (bash and zsh)
 
