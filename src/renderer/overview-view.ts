@@ -265,7 +265,10 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     },
 
     refreshIfOpen() {
-      if (openState) render()
+      // Not mid-rename: a repaint replaces the cards, and taking the input away
+      // fires no blur, so the editor would be gone with the view still owning
+      // the keys. The map is a snapshot anyway; it may miss one repaint.
+      if (openState && editing === null) render()
     },
 
     syncViewport() {

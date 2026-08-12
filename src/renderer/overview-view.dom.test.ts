@@ -196,6 +196,23 @@ describe('card title editing', () => {
     }
   })
 
+  /*
+   * A ringing pane elsewhere repaints the map. That must not pull the input
+   * out from under the typing: removing it fires no blur, so the view would be
+   * left believing an editor it no longer has is still open.
+   */
+  it('survives a repaint while the title is being typed', () => {
+    const { view, onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    view.refreshIfOpen()
+    expect(view.isEditing).toBe(true)
+    expect(host.querySelector('.overview__rename')).toBe(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
+    expect(view.isEditing).toBe(false)
+  })
+
   it('navigation keys are inert while editing', () => {
     const { view } = editing()
     const before = host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')
