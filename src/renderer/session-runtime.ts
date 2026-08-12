@@ -88,6 +88,8 @@ function freeContexts(count: number, mine: ContextHolder): void {
 
 export interface SessionRuntime {
   readonly spec: SessionSpec
+  /** Adopt a new display name, so a later save writes it. */
+  rename(name: string): void
   /** Whether this session takes keyboard input; hidden ones must not. */
   setActive(active: boolean): void
   /** Reapply settings to every live terminal. */
@@ -170,7 +172,8 @@ interface PaneRecord {
 }
 
 export function startSession(options: StartSessionOptions): SessionRuntime {
-  const { spec, host } = options
+  let spec = options.spec
+  const { host } = options
   // Toggled by main.ts when switching sessions.
   let active = false
 
@@ -774,7 +777,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   records.get(layout.focusedPaneId)?.terminal.focus()
 
   return {
-    spec,
+    get spec() {
+      return spec
+    },
+    rename(name) {
+      spec = { ...spec, name }
+    },
     applySettings(next) {
       const appearance = {
         fontSize: next.fontSize,

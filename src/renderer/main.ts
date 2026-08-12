@@ -209,7 +209,7 @@ const sidebar = createSessionSidebar(workspace, {
     appBar.closeMenus()
     sidebarMenu.open(at, sidebarMenuItems(sessionId))
   },
-  onRename: (id, newName) => void api.renameSession(id, newName).then(() => refreshSidebar()),
+  onRename: (id, newName) => void renameSession(id, newName),
 })
 
 /**
@@ -247,10 +247,23 @@ function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
       run: () => void saveCurrentLayout(),
     },
     { label: t.firstRun.editSessionFile, run: () => void editSessionFile(sessionId) },
+    { label: t.firstRun.renameSession, run: () => sidebar.startRename(sessionId) },
     { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
     { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
     { label: t.firstRun.deleteSession, separatorBefore: true, danger: true, run: () => confirmDelete(sessionId) },
   ]
+}
+
+/** Rename the file's display name; the id and the runtime keep working as-is. */
+async function renameSession(id: string, newName: string): Promise<void> {
+  const result = await api.renameSession(id, newName)
+  if (!result.ok) {
+    toast.show(result.error ?? t.firstRun.renameFailedToast)
+    return
+  }
+  runtimes.get(id)?.rename(newName)
+  if (id === currentName) setTitle(newName)
+  await refreshSidebar()
 }
 
 /**

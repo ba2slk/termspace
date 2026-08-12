@@ -37,6 +37,8 @@ const en = {
     open: 'Open',
     endSession: 'End session',
     deleteSession: 'Delete session',
+    renameSession: 'Rename session',
+    renameFailedToast: 'Could not rename',
 
     // Delete confirmation
     deleteTitle: 'Delete this session?',
@@ -313,6 +315,8 @@ const ko: Catalog = {
     open: '열기',
     endSession: '세션 끝내기',
     deleteSession: '세션 지우기',
+    renameSession: '세션 이름 바꾸기',
+    renameFailedToast: '이름을 바꾸지 못했습니다',
 
     deleteTitle: '세션을 지울까요?',
     deleteLead: (id: string) => `${id}.yaml을 휴지통으로 보냅니다. 열려 있는 세션이면 함께 닫힙니다.`,
