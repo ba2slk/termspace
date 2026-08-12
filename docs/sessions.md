@@ -83,6 +83,10 @@ Commands running at save time are captured too, with two rules:
   overwriting it with whatever is running would reverse that decision.
 - An idle shell keeps its original `command`. Dropping to the shell for a
   moment doesn't erase what that pane is for.
+- Unless it has been `cd`-ed away: an idle pane sitting somewhere other than
+  where it started is saved with no `command`. Its old command belongs to the
+  old directory, and pairing it with the new one would describe something that
+  never ran.
 
 ## Shell integration
 

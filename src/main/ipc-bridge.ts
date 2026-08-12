@@ -269,6 +269,7 @@ export function registerIpcHandlers(
             width: column.width,
             panes: await Promise.all(
               column.panes.map(async (pane) => {
+                const liveCwd = host.cwdOf(pane.paneId)
                 return {
                   title: pane.title,
                   command: resolvePaneCommand({
@@ -276,9 +277,12 @@ export function registerIpcHandlers(
                     declaredCommand: pane.command,
                     submittedCommand: host.submittedCommandOf(pane.paneId),
                     foregroundCommand: await host.foregroundCommandOf(pane.paneId),
+                    declaredCwd: pane.fallbackCwd,
+                    liveCwd,
+                    home,
                   }),
                   prefill: pane.prefill,
-                  cwd: host.cwdOf(pane.paneId) ?? pane.fallbackCwd,
+                  cwd: liveCwd ?? pane.fallbackCwd,
                   heightRatio: pane.heightRatio,
                 }
               }),
