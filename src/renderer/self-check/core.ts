@@ -789,16 +789,7 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
     report['overviewFloorPans'] =
       `skipped: map still fits (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
   } else {
-    // Walk to the left end first: selection starts on the column just added.
-    const walk = (code: string): void => {
-      let previous = selected()
-      for (let i = 0; i < 40; i++) {
-        press(code)
-        if (selected() === previous) break
-        previous = selected()
-      }
-    }
-    // Flex must not shrink the map back to the window, or the pan would carry
+    // Flex must not shrink the map back to the window, or the strip would carry
     // the cards outside the box they are positioned in.
     const styledWidth = Number.parseFloat(map.style.width)
     report['overviewMapKeepsItsWidth'] =
@@ -806,16 +797,34 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
         ? `ok (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
         : `FAIL (drawn ${String(Math.round(mapWidth))}px, styled ${String(Math.round(styledWidth))}px)`
 
-    walk('ArrowLeft')
-    const before = map.getBoundingClientRect().left
-    walk('ArrowRight')
-    const after = map.getBoundingClientRect().left
-    report['overviewFloorPans'] =
-      after < before - 1
-        ? `ok (map ${String(Math.round(before))} → ${String(Math.round(after))}px)`
-        : (await animationRuns())
-          ? `FAIL (map did not pan: ${String(Math.round(before))} → ${String(Math.round(after))}px)`
-          : SKIPPED
+    /*
+     * The lens is the fixed frame the strip slides under. Every arrow press has
+     * to move the world and leave the frame exactly where it was — the whole
+     * point of the design, and only a screen rect can tell you it happened.
+     */
+    const lensEl = (): HTMLElement | null =>
+      overlay()?.querySelector<HTMLElement>('.overview__viewport') ?? null
+    const lensCentre = (): number => {
+      const box = lensEl()?.getBoundingClientRect()
+      return box === undefined ? Number.NaN : box.left + box.width / 2
+    }
+    const restingLens = lensCentre()
+    let moves = 0
+    let drift = 0
+    for (let i = 0; i < 4; i++) {
+      const before = map.getBoundingClientRect().left
+      press('ArrowRight')
+      if (Math.abs(map.getBoundingClientRect().left - before) > 1) moves += 1
+      drift = Math.max(drift, Math.abs(lensCentre() - restingLens))
+    }
+    report['overviewArrowsSlideTheStrip'] =
+      moves === 4
+        ? `ok (4 presses, 4 moves, lens drift ${drift.toFixed(1)}px)`
+        : `FAIL (${String(moves)} of 4 presses moved the strip)`
+    report['overviewLensHoldsStill'] =
+      drift < 1
+        ? `ok (centre ${String(Math.round(restingLens))}px, drift ${drift.toFixed(1)}px)`
+        : `FAIL (lens moved ${drift.toFixed(1)}px)`
 
     /*
      * A background pane ringing repaints the open map, and a repaint must not
@@ -850,14 +859,16 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
      * on a real event path.
      */
     const beforeWheel = map.getBoundingClientRect().left
+    const lensBeforeWheel = lensCentre()
     overlay()!.dispatchEvent(
       new WheelEvent('wheel', { deltaY: -400, deltaMode: 0, bubbles: true, cancelable: true }),
     )
     const afterWheel = map.getBoundingClientRect().left
+    const lensDrift = Math.abs(lensCentre() - lensBeforeWheel)
     report['overviewWheelPans'] =
-      afterWheel > beforeWheel + 1
-        ? `ok (map ${String(Math.round(beforeWheel))} → ${String(Math.round(afterWheel))}px)`
-        : `FAIL (wheel moved the map ${String(Math.round(afterWheel - beforeWheel))}px)`
+      afterWheel > beforeWheel + 1 && lensDrift < 1
+        ? `ok (map ${String(Math.round(beforeWheel))} → ${String(Math.round(afterWheel))}px, lens held)`
+        : `FAIL (wheel moved the map ${String(Math.round(afterWheel - beforeWheel))}px, lens drifted ${lensDrift.toFixed(1)}px)`
 
     /*
      * The map is drawn to the viewport, so the sidebar collapsing under it must
@@ -897,10 +908,51 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
       await waitFor(() => host.clientWidth === widthBefore && mapStyled() === styledBefore)
     }
 
+    /*
+     * Enter lands: the canvas must end up showing exactly the region the lens
+     * framed, not wherever revealing the pane would have gone. Read the scroll
+     * off the track's own transform — the number the user actually sees.
+     */
+    const canvasScroll = (): number => {
+      const track = document.querySelector<HTMLElement>(
+        '.session-host:not([hidden]) .canvas-track',
+      )
+      const match = /translateX\((-?[\d.]+)px\)/.exec(track?.style.transform ?? '')
+      return match === null ? 0 : -Number(match[1])
+    }
+    // The scale, straight off the drawing: one card against its own pane.
+    const target = selected() ?? ''
+    const cardBox = overlay()?.querySelector<HTMLElement>(
+      `.overview__card[data-pane-id="${target}"]`,
+    )
+    const paneEl = visiblePanes().find((p) => p.dataset['paneId'] === target)
+    const drawnScale =
+      cardBox === null || cardBox === undefined || paneEl === undefined
+        ? 0
+        : Number.parseFloat(cardBox.style.width) / Number.parseFloat(paneEl.style.width)
+    const lensOnStripPx = Number.parseFloat(lensEl()?.style.left ?? 'NaN')
+    if (drawnScale <= 0 || Number.isNaN(lensOnStripPx)) {
+      report['overviewEnterLands'] = 'skipped: could not measure the strip'
+      press('Escape')
+      await waitFor(() => overlay() === null)
+    } else {
+      const wanted = Math.min(
+        Math.max(0, lensOnStripPx / drawnScale),
+        Math.max(0, canvasSpan() - host.clientWidth),
+      )
+      press('Enter')
+      await waitFor(() => overlay() === null)
+      const landed = await waitFor(() => Math.abs(canvasScroll() - wanted) <= 2)
+      report['overviewEnterLands'] = landed
+        ? `ok (canvas at ${String(Math.round(canvasScroll()))}px, lens framed ${String(Math.round(wanted))}px)`
+        : `FAIL (canvas at ${String(Math.round(canvasScroll()))}px, lens framed ${String(Math.round(wanted))}px)`
+    }
   }
 
-  press('Escape')
-  await waitFor(() => overlay() === null)
+  if (overlay() !== null) {
+    press('Escape')
+    await waitFor(() => overlay() === null)
+  }
   await undo()
 }
 

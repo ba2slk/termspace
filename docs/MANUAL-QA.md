@@ -72,13 +72,27 @@ English copy.
   and lying)
 - Selection starts at the focused pane and moves with the arrow keys
 - `Esc` closes without moving; `Enter` jumps to the selected pane
-- **On a session too wide to fit, cards stop shrinking at `MIN_OVERVIEW_COLUMN_PX` and the
-  map pans instead** (a session of many columns scaled every card down to an unreadable
-  sliver. The check adds columns until the fit scale would break the floor, then measures
-  the narrowest card with `getBoundingClientRect` and walks the selection to the far end:
-  the map must slide left, and keep its own drawn width — flex shrank it back to the
-  window, which carried the panned cards outside their own box. Neither the floor nor the
-  pan is visible from a unit test, which sees the numbers rather than the pixels)
+- **On a session too wide to fit, cards stop shrinking at `MIN_OVERVIEW_COLUMN_PX`** (a
+  session of many columns scaled every card down to an unreadable sliver. The check adds
+  columns until the fit scale would break the floor, then measures the narrowest card with
+  `getBoundingClientRect`, and that the map keeps its own drawn width — flex shrank it back
+  to the window, which carried the cards outside their own box)
+- **The lens holds still and the strip slides under it** (the first design moved the
+  selection across a still map, which read as "nothing happens" until the selection
+  crossed a screen edge. Now every `→` press moves the world: the check asserts four
+  presses give four moves of the map's rect while the lens's screen centre does not drift
+  a pixel. Same for the wheel)
+- **The wheel reaches the map at all** (the canvas claims wheel events in capture and stops
+  propagation, so the map's own listener never ran and the strip sat still. The two
+  listeners only meet on a real event path, so no unit test can see it)
+- **Enter lands the canvas on the region the lens framed** (revealing the pane instead
+  picks its own scroll and throws away the view that was chosen. The check reads the
+  scroll off the canvas track's transform and compares it with what the lens was pointing
+  at, both in real pixels)
+- **The map re-lays-out when the viewport changes** (nothing re-rendered on a sidebar
+  toggle or a window resize, so the map stayed drawn for a width that was gone. Skipped
+  rather than failed when the scale floor pins the width at both sizes, which is the case
+  in a small window)
 
 **Layout editing**
 - Split down / new column to the right / close pane
