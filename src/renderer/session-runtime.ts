@@ -674,6 +674,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     const action = resolveAction(event, options.bindings(), IS_MAC)
     // The open overview owns every key; nothing may fall through to a pty.
     if (overview.isOpen) {
+      // Except while a title is being typed: this listener captures, so
+      // preventDefault here would cancel the letter before the input sees it.
+      if (overview.isEditing) return
       if (overview.handleKey(event, action?.t === 'overview')) {
         event.preventDefault()
         event.stopPropagation()

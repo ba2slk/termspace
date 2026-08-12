@@ -29,6 +29,8 @@ export interface OverviewHooks {
 
 export interface OverviewView {
   readonly isOpen: boolean
+  /** A card title is being typed: the input owns the keyboard, not the map. */
+  readonly isEditing: boolean
   open(): void
   close(): void
   toggle(): void
@@ -130,6 +132,8 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     input.addEventListener('keydown', (event) => {
       // Typing happens here; the session's keymap must not see any of it.
       event.stopPropagation()
+      // The Enter that ends Korean composition is not the Enter that commits.
+      if (event.isComposing) return
       if (event.key === 'Enter') finish(true)
       if (event.key === 'Escape') finish(false)
     })
@@ -222,6 +226,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   return {
     get isOpen() {
       return openState
+    },
+    get isEditing() {
+      return editing !== null
     },
     open,
     close,

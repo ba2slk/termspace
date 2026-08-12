@@ -339,6 +339,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     input.addEventListener('keydown', (event) => {
       // While a name is being typed, no chord may reach the keymap.
       event.stopPropagation()
+      // The Enter that ends Korean composition is not the Enter that commits.
+      if (event.isComposing) return
       if (event.key === 'Enter') finish(true)
       if (event.key === 'Escape') finish(false)
     })

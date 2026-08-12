@@ -83,6 +83,18 @@ describe('inline rename', () => {
     expect(host.querySelector('.sidebar__name')?.textContent).toBe('alpha')
   })
 
+  it('the Enter that ends a composition does not commit', () => {
+    const { onRename } = open()
+    const input = host.querySelector<HTMLInputElement>('.sidebar__rename')!
+    input.value = 'beta'
+    const composing = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    Object.defineProperty(composing, 'isComposing', { value: true })
+    input.dispatchEvent(composing)
+    expect(onRename).not.toHaveBeenCalled()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a', 'beta')
+  })
+
   it('an empty or unchanged name is not committed', () => {
     const { onRename } = open()
     const input = host.querySelector<HTMLInputElement>('.sidebar__rename')!

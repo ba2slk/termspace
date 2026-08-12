@@ -22,6 +22,13 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   ...over,
 })
 
+/** The Enter that ends Korean composition. happy-dom ignores the init flag. */
+const composingEnter = (): KeyboardEvent => {
+  const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+  Object.defineProperty(event, 'isComposing', { value: true })
+  return event
+}
+
 const key = (code: string, mods: Partial<KeyboardEventInit> = {}): KeyboardEvent =>
   new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true, ...mods })
 
@@ -143,6 +150,36 @@ describe('card title editing', () => {
     input.value = 'nope'
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('reports isEditing across the edit lifecycle', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    expect(view.isEditing).toBe(false)
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    expect(view.isEditing).toBe(true)
+    host
+      .querySelector<HTMLInputElement>('.overview__rename')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(view.isEditing).toBe(false)
+  })
+
+  it('leaves plain typing to the input', () => {
+    editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    const typed = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true })
+    input.dispatchEvent(typed)
+    expect(typed.defaultPrevented).toBe(false)
+  })
+
+  it('the Enter that ends a composition does not commit', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    input.dispatchEvent(composingEnter())
+    expect(onRename).not.toHaveBeenCalled()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
   })
 
   it('navigation keys are inert while editing', () => {
