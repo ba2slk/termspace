@@ -96,6 +96,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let scrollX = 0
   let mapWidth = 0
   let lastCards: readonly OverviewCard[] = []
+  let pannable = false
 
   const applyPan = (): void => {
     map.style.transform = `translateX(${String(-scrollX)}px)`
@@ -106,6 +107,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   element.addEventListener(
     'wheel',
     (event) => {
+      // A map that fits has nothing to pan: the wheel belongs to the canvas
+      // underneath, which syncViewport then follows.
+      if (!pannable) return
       event.preventDefault()
       const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX
       scrollX = clampOverviewScroll(
@@ -186,7 +190,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
 
     mapWidth = overview.width
     lastCards = overview.cards
-    const pannable = overview.width > hooks.viewport().width - 96 // 96 = 2 × OVERVIEW_MARGIN
+    pannable = overview.width > hooks.viewport().width - 96 // 96 = 2 × OVERVIEW_MARGIN
     element.classList.toggle('overview--pannable', pannable)
     // Keep the pan across repaints; land on the focused card when opening.
     const selected = overview.cards.find((c) => c.paneId === layout.focusedPaneId)
@@ -260,6 +264,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     // The editor goes with the map that holds it.
     editing = null
     scrollX = 0
+    pannable = false
     element.remove()
   }
 

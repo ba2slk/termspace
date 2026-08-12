@@ -326,6 +326,29 @@ describe('createOverviewView — pannable map', () => {
     const map = host.querySelector<HTMLElement>('.overview__map')!
     expect(map.style.transform).toBe('translateX(0px)')
   })
+
+  it('a map that fits lets the wheel through to the canvas underneath', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    const event = new WheelEvent('wheel', { deltaY: 400, cancelable: true })
+    overview.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toBe('translateX(0px)')
+  })
+
+  it('a pannable map takes the wheel for itself', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    const event = new WheelEvent('wheel', { deltaY: 400, cancelable: true })
+    overview.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+  })
 })
 
 describe('createOverviewView — lifecycle', () => {
