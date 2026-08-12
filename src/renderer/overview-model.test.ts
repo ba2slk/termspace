@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { CANVAS_BOTTOM, CANVAS_EDGE, canvasWidth, paneRects } from './layout-geometry'
 import { createLayout, focusDir } from './layout-model'
 import {
-  clampOverviewScroll,
+  clampStripOffset,
+  columnAtLensCenter,
+  columnSnapOffset,
+  landingScrollX,
+  lensOnStrip,
+  lensRect,
   MAX_OVERVIEW_SCALE,
   MIN_OVERVIEW_COLUMN_PX,
   moveSelection,
   overviewLayout,
-  revealOffset,
+  paneNearestY,
+  stripOffsetFor,
 } from './overview-model'
 
 /** Two columns, three panes; wider than the 800px viewport below. */
@@ -131,26 +137,126 @@ describe('scale floor', () => {
   })
 })
 
-describe('clampOverviewScroll', () => {
-  it('clamps into [0, mapWidth - usable]', () => {
-    expect(clampOverviewScroll(-50, 2000, 1000)).toBe(0)
-    expect(clampOverviewScroll(5000, 2000, 1000)).toBe(2000 - (1000 - 96))
+/*
+ * The lens is fixed and the strip slides under it. One rule ties the two:
+ * a map coordinate x is drawn at screen OVERVIEW_MARGIN + x - offset.
+ */
+describe('the lens and the strip', () => {
+  const viewport = { width: 1000, height: 600, scrollX: 0 }
+  const scale = 0.2
+  const lens = { x: 400, width: 200 }
+  const screenXOf = (x: number, offset: number): number => 48 + x - offset
+
+  it('centres the lens in the room the map gets', () => {
+    // usable = 1000 - 96 = 904; width = viewport × scale = 200.
+    expect(lensRect(viewport, scale, 4000)).toEqual({ x: 400, width: 200 })
   })
-  it('is 0 when the map fits', () => {
-    expect(clampOverviewScroll(120, 500, 1000)).toBe(0)
+
+  it('never lets the lens outgrow the room', () => {
+    const wide = lensRect({ width: 400, height: 600, scrollX: 0 }, 0.9, 4000)
+    expect(wide.width).toBe(400 - 96)
+    expect(wide.x).toBe(48)
+  })
+
+  it('aligns the canvas region into the lens', () => {
+    const offset = stripOffsetFor(500, scale, lens)
+    // The canvas at 500 is map-x 100, and it must be drawn at the lens edge.
+    expect(screenXOf(100, offset)).toBe(lens.x)
+  })
+
+  it('puts the lens on the strip where the screen shows it', () => {
+    const offset = stripOffsetFor(500, scale, lens)
+    expect(screenXOf(lensOnStrip(offset, lens), offset)).toBe(lens.x)
+  })
+
+  it('landingScrollX is the inverse of stripOffsetFor', () => {
+    const offset = stripOffsetFor(500, scale, lens)
+    expect(landingScrollX(offset, scale, 10000, viewport, lens)).toBeCloseTo(500)
+  })
+
+  it('landing clamps to the canvas it can actually reach', () => {
+    const past = stripOffsetFor(99999, scale, lens)
+    expect(landingScrollX(past, scale, 4000, viewport, lens)).toBe(3000)
+    const before = stripOffsetFor(-500, scale, lens)
+    expect(landingScrollX(before, scale, 4000, viewport, lens)).toBe(0)
   })
 })
 
-describe('revealOffset', () => {
-  const card = { x: 1500, y: 0, width: 100, height: 50 }
-  it('scrolls right just enough for a card past the right edge', () => {
-    expect(revealOffset(card, 0, 1000, 2000)).toBe(1600 - (1000 - 96))
+describe('clampStripOffset', () => {
+  const lens = { x: 400, width: 200 }
+  const screenXOf = (x: number, offset: number): number => 48 + x - offset
+
+  it('lets the first column reach the lens, and no further', () => {
+    const min = clampStripOffset(-99999, 2000, lens)
+    expect(screenXOf(0, min)).toBe(lens.x)
   })
-  it('scrolls left to a card before the left edge', () => {
-    expect(revealOffset({ ...card, x: 100 }, 800, 1000, 2000)).toBe(100)
+
+  it('lets the last column reach the lens, and no further', () => {
+    const max = clampStripOffset(99999, 2000, lens)
+    expect(screenXOf(2000, max)).toBe(lens.x + lens.width)
   })
-  it('does nothing when the card is visible', () => {
-    expect(revealOffset({ ...card, x: 700 }, 600, 1000, 2000)).toBe(600)
+
+  it('leaves an offset inside the bounds alone', () => {
+    expect(clampStripOffset(120, 2000, lens)).toBe(120)
+  })
+
+  it('survives a map narrower than the lens', () => {
+    const offset = clampStripOffset(0, 50, lens)
+    expect(Number.isFinite(offset)).toBe(true)
+  })
+})
+
+describe('column snap and the centred column', () => {
+  // Three columns, 100 wide, at map x 0 / 150 / 300: centres 50, 200, 350.
+  const cards = [
+    { paneId: 'a', columnId: 'c1', x: 0, y: 0, width: 100, height: 40 },
+    { paneId: 'b', columnId: 'c1', x: 0, y: 50, width: 100, height: 40 },
+    { paneId: 'c', columnId: 'c2', x: 150, y: 0, width: 100, height: 90 },
+    { paneId: 'd', columnId: 'c3', x: 300, y: 0, width: 100, height: 90 },
+  ]
+  const lens = { x: 400, width: 200 }
+  // Centring column centre c means offset = 48 + c - 500.
+  const centred = (c: number): number => 48 + c - 500
+
+  it('names the column sitting under the lens centre', () => {
+    expect(columnAtLensCenter(cards, centred(200), lens)).toBe('c2')
+    expect(columnAtLensCenter(cards, centred(50), lens)).toBe('c1')
+  })
+
+  it('picks the nearest column when the strip is between two', () => {
+    expect(columnAtLensCenter(cards, centred(190), lens)).toBe('c2')
+  })
+
+  it('steps one column right, and stops at the last', () => {
+    expect(columnSnapOffset(cards, centred(50), 'right', lens)).toBeCloseTo(centred(200))
+    expect(columnSnapOffset(cards, centred(350), 'right', lens)).toBeCloseTo(centred(350))
+  })
+
+  it('steps one column left, and stops at the first', () => {
+    expect(columnSnapOffset(cards, centred(200), 'left', lens)).toBeCloseTo(centred(50))
+    expect(columnSnapOffset(cards, centred(50), 'left', lens)).toBeCloseTo(centred(50))
+  })
+
+  it('steps from between two columns without skipping one', () => {
+    expect(columnSnapOffset(cards, centred(120), 'right', lens)).toBeCloseTo(centred(200))
+    expect(columnSnapOffset(cards, centred(120), 'left', lens)).toBeCloseTo(centred(50))
+  })
+})
+
+describe('paneNearestY', () => {
+  const cards = [
+    { paneId: 'top', columnId: 'c1', x: 0, y: 0, width: 100, height: 40 },
+    { paneId: 'bottom', columnId: 'c1', x: 0, y: 50, width: 100, height: 40 },
+    { paneId: 'only', columnId: 'c2', x: 150, y: 0, width: 100, height: 90 },
+  ]
+
+  it('keeps the vertical place when the column changes', () => {
+    expect(paneNearestY(cards, 'c1', 70)).toBe('bottom')
+    expect(paneNearestY(cards, 'c1', 5)).toBe('top')
+  })
+
+  it('is null for a column that is not there', () => {
+    expect(paneNearestY(cards, 'gone', 0)).toBeNull()
   })
 })
 
