@@ -38,8 +38,14 @@
   /* Behind the overview map: dark enough to read the map, light enough to
      say the session is still there. */
   --overview-scrim: rgba(10, 10, 10, 0.55);
-  /* The viewport marker: must stand apart from the card borders around it. */
-  --overview-viewport-border: rgba(255, 255, 255, 0.8);
+  /* The viewport marker: must stand apart from the card borders around it,
+     without outshouting the selected card it often frames. */
+  --overview-viewport-border: rgba(255, 255, 255, 0.45);
+  /* The selection has to survive sitting inside that frame, so it is carried by
+     the card's surface rather than by another edge competing with the marker.
+     The card's ground is opaque, so this is the ramp's --fill-active mixed into
+     it rather than laid over it. */
+  --overview-selected-fill: color-mix(in srgb, #fff 10%, var(--bg-pane));
 
   /*
    * White fills over the dark ground. One ramp, so every hover and selection

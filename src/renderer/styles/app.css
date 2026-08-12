@@ -821,8 +821,10 @@ body {
   cursor: pointer;
 }
 
-/* Same two-part grammar as the canvas: brighter border plus a hard ring. */
+/* Same two-part grammar as the canvas: brighter border plus a hard ring — with
+   a lit surface under them, which the viewport marker cannot drown out. */
 .overview__card--selected {
+  background: var(--overview-selected-fill);
   border-color: var(--border-active);
   box-shadow: 0 0 0 1px var(--ring-active);
 }
