@@ -793,12 +793,25 @@ body {
   position: relative;
 }
 
-/* Wider than the window: anchor left and pan, exactly like the canvas track.
-   48px mirrors OVERVIEW_MARGIN in overview-model.ts. Clipped, so the cards
-   panned off either end do not paint over the sidebar. */
-.overview--pannable {
+/* Holds the map, and in pan mode cuts it --edge short of the host so the strip
+   breathes like everything else. Absolute, so the overlay's own children — the
+   scrim it paints, and anything that must stay unclipped — are unaffected. */
+.overview__clip {
+  position: absolute;
+  inset: 0 var(--edge);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Wider than the window: anchor left and pan, exactly like the canvas track,
+   and clip so the cards sliding off either end do not paint over the sidebar.
+   The padding puts map x = 0 at 48px from the host edge — 48 mirrors
+   OVERVIEW_MARGIN in overview-model.ts — with --edge already taken by the
+   band, so the geometry is unchanged and only the cut moves inwards. */
+.overview--pannable .overview__clip {
   justify-content: flex-start;
-  padding: 0 48px;
+  padding: 0 calc(48px - var(--edge));
   overflow: hidden;
 }
 

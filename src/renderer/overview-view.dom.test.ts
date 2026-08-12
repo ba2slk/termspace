@@ -265,6 +265,18 @@ describe('createOverviewView — mouse', () => {
     expect(view.isOpen).toBe(false)
   })
 
+  it('clicking the band around the strip closes without jumping', () => {
+    // The clip band covers most of the empty space, so it must read as outside.
+    const onJump = vi.fn()
+    const view = createOverviewView(host, hooks({ onJump }))
+    view.open()
+    host
+      .querySelector<HTMLElement>('.overview__clip')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(view.isOpen).toBe(false)
+    expect(onJump).not.toHaveBeenCalled()
+  })
+
   it('clicking outside the map closes without jumping', () => {
     const onJump = vi.fn()
     const view = createOverviewView(host, hooks({ onJump }))
@@ -529,6 +541,21 @@ describe('createOverviewView — pannable map', () => {
     // Never past the canvas's own scroll range.
     expect(landed[0]!.scrollX).toBeGreaterThanOrEqual(0)
     expect(view.isOpen).toBe(false)
+  })
+
+  it('holds the map in the clip band in both modes', () => {
+    // Same DOM either way; only the CSS that clips is scoped to pan mode.
+    const panning = createOverviewView(host, wideHooks('p0'))
+    panning.open()
+    expect(host.querySelector('.overview__clip > .overview__map')).not.toBeNull()
+    panning.close()
+
+    const fitting = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    fitting.open()
+    expect(host.querySelector('.overview__clip > .overview__map')).not.toBeNull()
   })
 
   it('keeps the marker inside the map when the map fits', () => {

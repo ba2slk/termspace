@@ -835,6 +835,21 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
         : `FAIL (drawn ${String(Math.round(mapWidth))}px, styled ${String(Math.round(styledWidth))}px)`
 
     /*
+     * The strip is cut --edge short of the host, so it breathes like the rest
+     * of the app. Two measurements: the band's own inset, and that nothing of
+     * a card actually paints inside it.
+     */
+    const clipBox = overlay()!.querySelector<HTMLElement>('.overview__clip')!.getBoundingClientRect()
+    const hostBox = host.getBoundingClientRect()
+    const insets = [clipBox.left - hostBox.left, hostBox.right - clipBox.right]
+    const edge = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--edge'),
+    )
+    report['overviewStripBreathes'] = insets.every((i) => Math.abs(i - edge) < 1)
+      ? `ok (${insets.map((i) => i.toFixed(1)).join(' / ')}px, --edge ${String(edge)}px)`
+      : `FAIL (insets ${insets.map((i) => i.toFixed(1)).join(' / ')}px, --edge ${String(edge)}px)`
+
+    /*
      * The lens is the fixed frame the strip slides under. Every arrow press has
      * to move the world and leave the frame exactly where it was — the whole
      * point of the design, and only a screen rect can tell you it happened.
@@ -858,6 +873,30 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
       moves === 4
         ? `ok (4 presses, 4 moves, lens drift ${drift.toFixed(1)}px)`
         : `FAIL (${String(moves)} of 4 presses moved the strip)`
+    /*
+     * With the strip slid over, a card crosses the host's left edge. Nothing of
+     * it may paint inside the band: probe the middle of those 6px and see what
+     * is actually on top there.
+     */
+    const boxes = [...overlay()!.querySelectorAll<HTMLElement>('.overview__card')].map((el) =>
+      el.getBoundingClientRect(),
+    )
+    // Whichever edge the strip actually runs past — either proves the cut.
+    const cut = [
+      { at: hostBox.left + edge / 2, side: 'left', b: boxes.find((b) => b.left < hostBox.left + edge && b.right > hostBox.left + edge) },
+      { at: hostBox.right - edge / 2, side: 'right', b: boxes.find((b) => b.right > hostBox.right - edge && b.left < hostBox.right - edge) },
+    ].find((c) => c.b !== undefined)
+    if (cut?.b === undefined) {
+      report['overviewStripIsClipped'] = 'skipped: the strip reaches neither edge'
+    } else {
+      const hit = document.elementFromPoint(cut.at, cut.b.top + cut.b.height / 2)
+      const painted = hit?.closest('.overview__card') ?? null
+      report['overviewStripIsClipped'] =
+        painted === null
+          ? `ok (${cut.side} band holds ${hit?.className ?? 'nothing'}, no card)`
+          : `FAIL (a card paints into the ${cut.side} band)`
+    }
+
     report['overviewLensHoldsStill'] =
       drift < 1
         ? `ok (centre ${String(Math.round(restingLens))}px, drift ${drift.toFixed(1)}px)`

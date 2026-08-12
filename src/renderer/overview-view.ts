@@ -92,13 +92,24 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   // Focusable, so opening it takes the keyboard away from the terminal.
   element.tabIndex = -1
 
+  /*
+   * A band inside the overlay that cuts the strip short of the host edges. The
+   * scrim is the overlay's own background, so it still paints edge to edge —
+   * only what slides under the cut is clipped. Anything that must not be
+   * clipped stays a direct child of the overlay.
+   */
+  const clip = document.createElement('div')
+  clip.className = 'overview__clip'
+
   const map = document.createElement('div')
   map.className = 'overview__map'
+  clip.append(map)
 
-  // A status bar's worth of hints: F2 is invisible otherwise.
+  // A status bar's worth of hints: F2 is invisible otherwise. It stays a
+  // direct child of the overlay, outside the clip band.
   const legend = document.createElement('div')
   legend.className = 'overview__legend'
-  element.append(map, legend)
+  element.append(clip, legend)
 
   function setLegend(editing: boolean): void {
     const hints = editing ? t.overview.editKeys : t.overview.mapKeys
@@ -121,8 +132,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       land(card.dataset['paneId'])
       return
     }
-    // Outside the cards: leave the way a menu closes, without acting.
-    if (event.target === element) close()
+    // Outside the cards: leave the way a menu closes, without acting. The clip
+    // band covers most of that empty space, so it counts as outside too.
+    if (event.target === element || event.target === clip) close()
   })
 
   let openState = false
