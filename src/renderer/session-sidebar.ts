@@ -27,6 +27,8 @@ export interface SidebarHooks {
    * Reports what was right-clicked; the shell decides which commands to offer.
    */
   readonly onContextMenu: (at: { x: number; y: number }, sessionId: string | null) => void
+  /** The user typed a new display name for a session. */
+  readonly onRename: (id: string, newName: string) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -45,6 +47,8 @@ export interface SessionSidebar {
     /** Sessions holding a pane that rang while you were elsewhere. */
     wanting?: ReadonlySet<string>,
   ): void
+  /** Turn the row's name into an input, in place. */
+  startRename(sessionId: string): void
   setVisible(visible: boolean): void
   setWidth(width: number): void
   readonly visible: boolean
@@ -314,10 +318,44 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     return item
   }
 
+  function startRename(sessionId: string): void {
+    const index = shown.findIndex((s) => s.id === sessionId)
+    const rowEl = shownRows[index]
+    const session = shown[index]
+    const name = rowEl?.querySelector<HTMLElement>('.sidebar__name')
+    if (session === undefined || name === undefined || name === null) return
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'sidebar__rename'
+    input.value = session.name
+    let done = false
+    const finish = (commit: boolean): void => {
+      if (done) return
+      done = true
+      const next = input.value.trim()
+      input.replaceWith(name)
+      if (commit && next !== '' && next !== session.name) hooks.onRename(session.id, next)
+    }
+    input.addEventListener('keydown', (event) => {
+      // While a name is being typed, no chord may reach the keymap.
+      event.stopPropagation()
+      if (event.key === 'Enter') finish(true)
+      if (event.key === 'Escape') finish(false)
+    })
+    input.addEventListener('blur', () => finish(false))
+    // A click inside the input must not open the session.
+    input.addEventListener('click', (event) => event.stopPropagation())
+    name.replaceWith(input)
+    input.focus()
+    input.select()
+  }
+
   applyWidth(width)
 
   return {
     element: aside,
+
+    startRename,
 
     render(sessions, live, current, wanting) {
       wantingIds = wanting ?? new Set()

@@ -209,6 +209,7 @@ const sidebar = createSessionSidebar(workspace, {
     appBar.closeMenus()
     sidebarMenu.open(at, sidebarMenuItems(sessionId))
   },
+  onRename: (id, newName) => void api.renameSession(id, newName).then(() => refreshSidebar()),
 })
 
 /**

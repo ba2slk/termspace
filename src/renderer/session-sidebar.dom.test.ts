@@ -15,6 +15,7 @@ const hooks = (): SidebarHooks => ({
   gotoHint: (index: number) => `Alt+${String(index + 1)}`,
   onCreateBlank: vi.fn(),
   onContextMenu: vi.fn(),
+  onRename: vi.fn(),
 })
 
 let host: HTMLElement
@@ -53,5 +54,40 @@ describe('session sidebar pane count', () => {
     const sidebar = createSessionSidebar(host, hooks())
     sidebar.render([summary({ error: 'YAML 문법 오류' })], new Map(), null)
     expect(metaText()).toBe('!')
+  })
+})
+
+describe('inline rename', () => {
+  function open(): { sidebar: ReturnType<typeof createSessionSidebar>; onRename: SidebarHooks['onRename'] } {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.render([summary({ id: 'a', name: 'alpha' })], new Map(), null)
+    sidebar.startRename('a')
+    return { sidebar, onRename: h.onRename }
+  }
+
+  it('Enter commits a changed name', () => {
+    const { onRename } = open()
+    const input = host.querySelector<HTMLInputElement>('.sidebar__rename')!
+    input.value = 'beta'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a', 'beta')
+  })
+
+  it('Escape cancels and restores the name', () => {
+    const { onRename } = open()
+    const input = host.querySelector<HTMLInputElement>('.sidebar__rename')!
+    input.value = 'beta'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(onRename).not.toHaveBeenCalled()
+    expect(host.querySelector('.sidebar__name')?.textContent).toBe('alpha')
+  })
+
+  it('an empty or unchanged name is not committed', () => {
+    const { onRename } = open()
+    const input = host.querySelector<HTMLInputElement>('.sidebar__rename')!
+    input.value = '   '
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).not.toHaveBeenCalled()
   })
 })
