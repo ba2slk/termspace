@@ -414,6 +414,15 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
 
+### Renaming (no self-check covers these)
+
+- [ ] Right-click a session row › Rename session, type a new name and press Enter. The
+      row and the title bar show it, `~/.config/termspace/sessions/<id>.yaml` has the new
+      `name:` with its comments intact, `<id>.yaml.bak` holds the old one, and the name
+      survives a restart
+- [ ] In the `Alt+M` overview, press `F2` on the selected card, rename it, then save the
+      layout from the title bar: the session file records the new pane title
+
 ### Shell integration (bash and zsh)
 
 The OSC round trip itself is automated — the check emits the hook's sequences with
