@@ -165,11 +165,50 @@ describe('renameSessionName', () => {
     )
     const result = await renameSessionName(dir, 'proj', 'new name')
     expect(result.ok).toBe(true)
-    const text = await readFile(file, 'utf8')
+    const moved = join(dir, 'new-name.yaml')
+    const text = await readFile(moved, 'utf8')
     expect(text).toContain('name: new name')
     expect(text).toContain('# my notes')
     expect(text).toContain('title: shell')
-    expect(await readFile(`${file}.bak`, 'utf8')).toContain('name: old')
+    expect(await readFile(`${moved}.bak`, 'utf8')).toContain('name: old')
+    expect(file).toBe(join(dir, 'proj.yaml'))
+  })
+
+  it('moves the file to the name the user typed', async () => {
+    await writeFile(join(dir, 'proj.yaml'), '# my notes\nname: old\ncwd: "~"\n', 'utf8')
+    const result = await renameSessionName(dir, 'proj', 'catch up')
+    expect(result.ok).toBe(true)
+    expect(result.file).toBe(join(dir, 'catch-up.yaml'))
+    expect(await readFile(join(dir, 'catch-up.yaml'), 'utf8')).toContain('name: catch up')
+    await expect(readFile(join(dir, 'proj.yaml'), 'utf8')).rejects.toThrow()
+    // The new file's one undo is what stood before the rename.
+    expect(await readFile(join(dir, 'catch-up.yaml.bak'), 'utf8')).toContain('name: old')
+  })
+
+  it('refuses a name whose file already exists, and writes nothing', async () => {
+    await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
+    await writeFile(join(dir, 'taken.yaml'), 'name: taken\n', 'utf8')
+    const result = await renameSessionName(dir, 'proj', 'taken')
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('already exists')
+    expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: old')
+    expect(await readFile(join(dir, 'taken.yaml'), 'utf8')).toContain('name: taken')
+  })
+
+  it('stays in place when the name still derives the same id', async () => {
+    await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
+    const result = await renameSessionName(dir, 'proj', 'proj')
+    expect(result.ok).toBe(true)
+    expect(result.file).toBe(join(dir, 'proj.yaml'))
+    expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: proj')
+  })
+
+  it('stays in place when the name derives no id at all', async () => {
+    await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
+    const result = await renameSessionName(dir, 'proj', '///')
+    expect(result.ok).toBe(true)
+    expect(result.file).toBe(join(dir, 'proj.yaml'))
+    expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: ///')
   })
 
   it('rejects an empty name', async () => {

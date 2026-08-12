@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { deepestCommonAncestor, isValidSessionId, toSessionYaml, type SessionDraft } from './session-writer'
+import {
+  deepestCommonAncestor,
+  deriveSessionId,
+  isValidSessionId,
+  toSessionYaml,
+  type SessionDraft,
+} from './session-writer'
 
 const HOME = '/home/user'
 
@@ -42,6 +48,34 @@ describe('isValidSessionId', () => {
     expect(isValidSessionId('')).toBe(false)
     expect(isValidSessionId('a'.repeat(65))).toBe(false)
     expect(isValidSessionId('a'.repeat(64))).toBe(true)
+  })
+})
+
+describe('deriveSessionId', () => {
+  it('turns a display name into a file name', () => {
+    expect(deriveSessionId('catch up')).toBe('catch-up')
+    expect(deriveSessionId('  dev  ')).toBe('dev')
+    expect(deriveSessionId('v1.2')).toBe('v1.2')
+  })
+
+  it('keeps Hangul, which is a valid id', () => {
+    expect(deriveSessionId('작업 2')).toBe('작업-2')
+    expect(isValidSessionId(deriveSessionId('작업 2'))).toBe(true)
+  })
+
+  it('drops what a file name may not carry', () => {
+    expect(deriveSessionId('a/b')).toBe('ab')
+    expect(deriveSessionId('../etc')).toBe('etc')
+    expect(deriveSessionId('-rf')).toBe('rf')
+  })
+
+  it('is empty when nothing usable is left', () => {
+    expect(deriveSessionId('///')).toBe('')
+    expect(deriveSessionId('   ')).toBe('')
+  })
+
+  it('cuts at 64 characters, the id limit', () => {
+    expect(deriveSessionId('a'.repeat(80))).toHaveLength(64)
   })
 })
 
