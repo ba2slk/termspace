@@ -61,6 +61,9 @@ export interface OverviewView {
   destroy(): void
 }
 
+/** Between the map's bottom edge and the key legend under it. */
+const LEGEND_GAP = 16
+
 const ARROW_DIRECTION: Readonly<Record<string, Direction>> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
@@ -208,6 +211,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     map.replaceChildren()
     map.style.width = `${overview.width}px`
     map.style.height = `${overview.height}px`
+    // The legend belongs to the map, not to the window: the map is centred, so
+    // its bottom edge is half its height below the middle.
+    legend.style.top = `calc(50% + ${String(overview.height / 2 + LEGEND_GAP)}px)`
 
     mapWidth = overview.width
     lastCards = overview.cards

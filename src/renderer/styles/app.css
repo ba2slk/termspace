@@ -814,7 +814,7 @@ body {
  */
 .overview__legend {
   position: absolute;
-  bottom: 14px;
+  /* top comes from the view: it tracks the map's bottom edge, not the window's. */
   left: 0;
   right: 0;
   color: var(--fg-faint);

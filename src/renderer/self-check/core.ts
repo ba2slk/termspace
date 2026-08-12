@@ -648,6 +648,18 @@ export async function checkOverview(report: Report): Promise<void> {
           : SKIPPED
   }
 
+  // The legend reads as the map's own footer, so it must follow the map's
+  // bottom edge — pinned to the window it drifts away on a short map.
+  const legendEl = overlay()!.querySelector<HTMLElement>('.overview__legend')
+  if (legendEl === null) {
+    report['overviewLegendUnderMap'] = 'FAIL (no legend)'
+  } else {
+    const gap = legendEl.getBoundingClientRect().top - mapBox.bottom
+    report['overviewLegendUnderMap'] =
+      gap > 8 && gap < 28 ? `ok (${Math.round(gap)}px under the map)` : `FAIL (${Math.round(gap)}px)`
+    report['overviewLegendKeys'] = legendEl.textContent ?? ''
+  }
+
   // Shot while open — the map's look can only be judged by eyes. No focus
   // claim here: only the motion group may pull focus (see GROUPS).
   await capture(report, 'overview')
