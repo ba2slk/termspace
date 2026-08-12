@@ -5,7 +5,14 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
-import { moveSelection, overviewLayout } from './overview-model'
+import {
+  clampOverviewScroll,
+  moveSelection,
+  type OverviewCard,
+  overviewLayout,
+  revealOffset,
+} from './overview-model'
+import { wheelPixels } from './wheel-physics'
 
 export interface OverviewHooks {
   readonly layout: () => Layout
@@ -86,6 +93,30 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let snapshot: Layout | null = null
   let marker: HTMLElement | null = null
   let editing: HTMLInputElement | null = null
+  let scrollX = 0
+  let mapWidth = 0
+  let lastCards: readonly OverviewCard[] = []
+
+  const applyPan = (): void => {
+    map.style.transform = `translateX(${String(-scrollX)}px)`
+  }
+
+  // Vertical wheel pans horizontally, exactly like the canvas; both axes
+  // accepted so a trackpad's sideways gesture works too.
+  element.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault()
+      const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX
+      scrollX = clampOverviewScroll(
+        scrollX + wheelPixels(delta, event.deltaMode),
+        mapWidth,
+        hooks.viewport().width,
+      )
+      applyPan()
+    },
+    { passive: false },
+  )
 
   const px = (r: { x: number; y: number; width: number; height: number }, el: HTMLElement): void => {
     el.style.left = `${r.x}px`
@@ -153,6 +184,22 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     map.style.width = `${overview.width}px`
     map.style.height = `${overview.height}px`
 
+    mapWidth = overview.width
+    lastCards = overview.cards
+    const pannable = overview.width > hooks.viewport().width - 96 // 96 = 2 × OVERVIEW_MARGIN
+    element.classList.toggle('overview--pannable', pannable)
+    // Keep the pan across repaints; land on the focused card when opening.
+    const selected = overview.cards.find((c) => c.paneId === layout.focusedPaneId)
+    scrollX = pannable
+      ? revealOffset(
+          selected ?? { x: 0, y: 0, width: 0, height: 0 },
+          clampOverviewScroll(scrollX, mapWidth, hooks.viewport().width),
+          hooks.viewport().width,
+          mapWidth,
+        )
+      : 0
+    applyPan()
+
     const titles = new Map(
       layout.columns.flatMap((c) => c.panes.map((p) => [p.id, p.title] as const)),
     )
@@ -212,6 +259,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     marker = null
     // The editor goes with the map that holds it.
     editing = null
+    scrollX = 0
     element.remove()
   }
 
@@ -250,6 +298,11 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
         // Selection steps use the canvas's focus rules, so the map moves like home.
         snapshot = moveSelection(snapshot, selectedId, dir)
         selectCard(snapshot.focusedPaneId)
+        const card = lastCards.find((c) => c.paneId === snapshot?.focusedPaneId)
+        if (card !== undefined) {
+          scrollX = revealOffset(card, scrollX, hooks.viewport().width, mapWidth)
+          applyPan()
+        }
         return true
       }
       if (event.key === 'Enter') {

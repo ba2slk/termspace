@@ -277,6 +277,57 @@ describe('createOverviewView — viewport tracking', () => {
   })
 })
 
+describe('createOverviewView — pannable map', () => {
+  // Twelve wide columns: the scale floor makes the map wider than this viewport.
+  const wide = createLayout(
+    Array.from({ length: 12 }, (_, i) => ({
+      id: `c${String(i)}`,
+      width: 640,
+      panes: [{ id: `p${String(i)}`, title: `pane ${String(i)}` }],
+    })),
+  )
+  const wideHooks = (focused = 'p6'): OverviewHooks =>
+    hooks({ layout: () => ({ ...wide, focusedPaneId: focused }) })
+
+  it('marks the map pannable and starts revealing the focused card', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    expect(host.querySelector('.overview--pannable')).not.toBeNull()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toMatch(/translateX\(-?\d/)
+  })
+
+  it('wheel pans and clamps at the ends', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    overview.dispatchEvent(new WheelEvent('wheel', { deltaY: -9999, cancelable: true }))
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toBe('translateX(0px)')
+  })
+
+  it('arrow selection keeps the selected card in view', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    // Walk right to the far column; the transform must have moved left (negative).
+    for (let i = 0; i < 20; i++) view.handleKey(key('ArrowRight'))
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const offset = Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1])
+    expect(offset).toBeLessThan(0)
+  })
+
+  it('a small session is centred and untransformed, as today', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    expect(host.querySelector('.overview--pannable')).toBeNull()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toBe('translateX(0px)')
+  })
+})
+
 describe('createOverviewView — lifecycle', () => {
   it('toggle opens and closes', () => {
     const view = createOverviewView(host, hooks())

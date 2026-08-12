@@ -793,6 +793,13 @@ body {
   position: relative;
 }
 
+/* Wider than the window: anchor left and pan, exactly like the canvas track.
+   48px mirrors OVERVIEW_MARGIN in overview-model.ts. */
+.overview--pannable {
+  justify-content: flex-start;
+  padding: 0 48px;
+}
+
 .overview__card {
   position: absolute;
   display: flex;
