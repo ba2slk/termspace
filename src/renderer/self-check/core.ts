@@ -753,6 +753,17 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
         : `FAIL (${String(addedIds.length)} columns added, focus ${String(focusedId())})`
   }
 
+  /*
+   * Focus the leftmost pane before opening. Adding columns left focus at the
+   * right end, where the walk below also ends — and a map that re-reveals the
+   * focused card on every repaint would then look correct by coincidence.
+   */
+  const leftmost = visiblePanes().sort(
+    (a, b) => Number.parseFloat(a.style.left) - Number.parseFloat(b.style.left),
+  )[0]
+  leftmost?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  await waitFor(() => focusedId() === leftmost?.dataset['paneId'])
+
   press('KeyM', { altKey: true })
   await waitFor(() => overlay() !== null)
   const map = overlay()?.querySelector<HTMLElement>('.overview__map') ?? null
@@ -805,6 +816,31 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
         : (await animationRuns())
           ? `FAIL (map did not pan: ${String(Math.round(before))} → ${String(Math.round(after))}px)`
           : SKIPPED
+
+    /*
+     * A background pane ringing repaints the open map, and a repaint must not
+     * drag it back to the focused card. Only a live pty can ring, and the check
+     * window is otherwise silent — which is why this reached a user first.
+     */
+    const walked = selected()
+    const noisy = addedIds.find((id) => id !== focusedId() && id !== walked)
+    if (noisy === undefined) {
+      report['overviewPanSurvivesRepaint'] = 'skipped: no spare background pane to ring'
+    } else {
+      const marked = (): boolean =>
+        (overlay()?.querySelector(
+          `.overview__card[data-pane-id="${noisy}"].overview__card--wants`,
+        ) ?? null) !== null
+      api.write(noisy, `printf '\\a'\n`)
+      // The mark is the proof a repaint ran; without it there is nothing to assert.
+      const repainted = await waitFor(marked)
+      const held = map.getBoundingClientRect().left
+      report['overviewPanSurvivesRepaint'] = !repainted
+        ? 'skipped: the background pane never rang'
+        : Math.abs(held - after) < 1 && selected() === walked
+          ? `ok (map held at ${String(Math.round(held))}px)`
+          : `FAIL (map ${String(Math.round(after))} → ${String(Math.round(held))}px, selection ${String(walked)} → ${String(selected())})`
+    }
   }
 
   press('Escape')

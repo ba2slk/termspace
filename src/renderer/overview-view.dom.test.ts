@@ -368,6 +368,56 @@ describe('createOverviewView — pannable map', () => {
     expect(map.style.transform).toBe('translateX(0px)')
   })
 
+  it('a repaint leaves the selection and the pan where the user put them', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    for (let i = 0; i < 20; i++) view.handleKey(key('ArrowRight'))
+    const selectedBefore = host.querySelector<HTMLElement>('.overview__card--selected')?.dataset[
+      'paneId'
+    ]
+    const transformBefore = map.style.transform
+    expect(transformBefore).not.toBe('translateX(0px)')
+
+    // A background pane ringing repaints the map; that is not a navigation event.
+    view.refreshIfOpen()
+    const after = host.querySelector<HTMLElement>('.overview__map')!
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      selectedBefore,
+    )
+    expect(after.style.transform).toBe(transformBefore)
+  })
+
+  it('a repaint falls back to the focused pane when the selection is gone', () => {
+    let current = { ...wide, focusedPaneId: 'p0' }
+    const view = createOverviewView(host, hooks({ layout: () => current }))
+    view.open()
+    for (let i = 0; i < 3; i++) view.handleKey(key('ArrowRight'))
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      'p3',
+    )
+
+    current = {
+      ...wide,
+      columns: wide.columns.filter((c) => c.panes.every((p) => p.id !== 'p3')),
+      focusedPaneId: 'p0',
+    }
+    expect(() => {
+      view.refreshIfOpen()
+    }).not.toThrow()
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      'p0',
+    )
+  })
+
+  it('opening still reveals the focused card', () => {
+    const view = createOverviewView(host, wideHooks('p11'))
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const offset = Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1])
+    expect(offset).toBeLessThan(0)
+  })
+
   it('a pannable map takes the wheel for itself', () => {
     const view = createOverviewView(host, wideHooks())
     view.open()

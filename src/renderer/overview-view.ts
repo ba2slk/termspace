@@ -124,6 +124,14 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     map.style.transform = `translateX(${String(-scrollX)}px)`
   }
 
+  /** Pan the least it takes to show the selected card, if it is off the map. */
+  const revealSelected = (): void => {
+    const card = lastCards.find((c) => c.paneId === selectedId)
+    if (card === undefined) return
+    scrollX = revealOffset(card, scrollX, hooks.viewport().width, mapWidth)
+    applyPan()
+  }
+
   // Vertical wheel pans horizontally, exactly like the canvas; both axes
   // accepted so a trackpad's sideways gesture works too.
   element.addEventListener(
@@ -219,16 +227,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     lastCards = overview.cards
     pannable = overview.width > hooks.viewport().width - 96 // 96 = 2 × OVERVIEW_MARGIN
     element.classList.toggle('overview--pannable', pannable)
-    // Keep the pan across repaints; land on the focused card when opening.
-    const selected = overview.cards.find((c) => c.paneId === layout.focusedPaneId)
-    scrollX = pannable
-      ? revealOffset(
-          selected ?? { x: 0, y: 0, width: 0, height: 0 },
-          clampOverviewScroll(scrollX, mapWidth, hooks.viewport().width),
-          hooks.viewport().width,
-          mapWidth,
-        )
-      : 0
+    // A repaint is not a navigation event — a background pane ringing must not
+    // move the map under the hand that just panned it. Only opening reveals.
+    scrollX = pannable ? clampOverviewScroll(scrollX, mapWidth, hooks.viewport().width) : 0
     applyPan()
 
     const titles = new Map(
@@ -258,7 +259,11 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     px(overview.viewportRect, marker)
     map.append(marker)
 
-    selectCard(layout.focusedPaneId)
+    // Same reason: a repaint keeps the user's selection, and only falls back to
+    // focus when the pane it pointed at is gone.
+    selectCard(
+      overview.cards.some((c) => c.paneId === selectedId) ? selectedId : layout.focusedPaneId,
+    )
 
     // The commands arrive late and fill in; the map itself never waits for IPC.
     const paneIds = overview.cards.map((c) => c.paneId)
@@ -299,7 +304,11 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     if (openState) return
     openState = true
     setLegend(false)
+    // Opening starts at the focused pane, wherever the last visit ended up.
+    selectedId = hooks.layout().focusedPaneId
+    scrollX = 0
     render()
+    revealSelected()
     host.append(element)
     element.focus()
   }
@@ -331,11 +340,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
         // Selection steps use the canvas's focus rules, so the map moves like home.
         snapshot = moveSelection(snapshot, selectedId, dir)
         selectCard(snapshot.focusedPaneId)
-        const card = lastCards.find((c) => c.paneId === snapshot?.focusedPaneId)
-        if (card !== undefined) {
-          scrollX = revealOffset(card, scrollX, hooks.viewport().width, mapWidth)
-          applyPan()
-        }
+        revealSelected()
         return true
       }
       if (event.key === 'Enter') {
