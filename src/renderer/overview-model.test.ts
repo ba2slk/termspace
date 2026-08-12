@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { CANVAS_BOTTOM, CANVAS_EDGE, canvasWidth, paneRects } from './layout-geometry'
 import { createLayout, focusDir } from './layout-model'
-import { MAX_OVERVIEW_SCALE, moveSelection, overviewLayout } from './overview-model'
+import {
+  clampOverviewScroll,
+  MAX_OVERVIEW_SCALE,
+  MIN_OVERVIEW_COLUMN_PX,
+  moveSelection,
+  overviewLayout,
+  revealOffset,
+} from './overview-model'
 
 /** Two columns, three panes; wider than the 800px viewport below. */
 const layout = createLayout([
@@ -94,6 +101,56 @@ describe('moveSelection', () => {
     const right = moveSelection(down, 'a2', 'right')
     const back = moveSelection(right, right.focusedPaneId, 'left')
     expect(back.focusedPaneId).toBe('a2')
+  })
+})
+
+/** n one-pane columns of the same width. */
+const manyColumns = (n: number, width: number) =>
+  createLayout(
+    Array.from({ length: n }, (_, i) => ({
+      id: `c${String(i)}`,
+      width,
+      panes: [{ id: `p${String(i)}`, title: `pane ${String(i)}` }],
+    })),
+  )
+
+describe('scale floor', () => {
+  it('never lets the narrowest column drop below MIN_OVERVIEW_COLUMN_PX', () => {
+    // 12 columns × 640px in a 1280×800 viewport: fit-scale would be tiny.
+    const wide = manyColumns(12, 640)
+    const { scale } = overviewLayout(wide, { width: 1280, height: 800, scrollX: 0 })
+    expect(640 * scale).toBeGreaterThanOrEqual(MIN_OVERVIEW_COLUMN_PX)
+  })
+
+  it('leaves a small session exactly as before', () => {
+    const small = manyColumns(2, 640)
+    const big = { width: 1280, height: 800, scrollX: 0 }
+    const { scale } = overviewLayout(small, big)
+    // Fit already beats the floor here: today's formula must be unchanged.
+    expect(scale).toBeCloseTo(Math.min(0.5, (1280 - 96) / canvasWidth(small), (800 - 96) / 800))
+  })
+})
+
+describe('clampOverviewScroll', () => {
+  it('clamps into [0, mapWidth - usable]', () => {
+    expect(clampOverviewScroll(-50, 2000, 1000)).toBe(0)
+    expect(clampOverviewScroll(5000, 2000, 1000)).toBe(2000 - (1000 - 96))
+  })
+  it('is 0 when the map fits', () => {
+    expect(clampOverviewScroll(120, 500, 1000)).toBe(0)
+  })
+})
+
+describe('revealOffset', () => {
+  const card = { x: 1500, y: 0, width: 100, height: 50 }
+  it('scrolls right just enough for a card past the right edge', () => {
+    expect(revealOffset(card, 0, 1000, 2000)).toBe(1600 - (1000 - 96))
+  })
+  it('scrolls left to a card before the left edge', () => {
+    expect(revealOffset({ ...card, x: 100 }, 800, 1000, 2000)).toBe(100)
+  })
+  it('does nothing when the card is visible', () => {
+    expect(revealOffset({ ...card, x: 700 }, 600, 1000, 2000)).toBe(600)
   })
 })
 
