@@ -307,6 +307,11 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     (event) => {
       if (currentLayout === null) return
 
+      // An open map wider than the window pans itself, and this handler claims
+      // the wheel in capture — so it has to stand back or the map never moves.
+      // A map that fits keeps letting the canvas scroll underneath.
+      if ((event.target as HTMLElement).closest('.overview--pannable') !== null) return
+
       /*
        * Vertical wheel belongs to the terminal's scrollback. The canvas takes it
        * only when the horizontal component wins, the pointer is off a panel, or
