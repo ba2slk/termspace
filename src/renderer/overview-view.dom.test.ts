@@ -20,6 +20,7 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   wants: () => false,
   onJump: vi.fn(),
   onRename: vi.fn(),
+  onLand: vi.fn(),
   ...over,
 })
 
@@ -324,13 +325,14 @@ describe('createOverviewView — pannable map', () => {
     expect(map.style.transform).toMatch(/translateX\(-?\d/)
   })
 
-  it('wheel pans and clamps at the ends', () => {
+  it('wheel slides the strip, and the first column can reach the lens', () => {
     const view = createOverviewView(host, wideHooks())
     view.open()
     const overview = host.querySelector<HTMLElement>('.overview')!
     overview.dispatchEvent(new WheelEvent('wheel', { deltaY: -9999, cancelable: true }))
-    const map = host.querySelector<HTMLElement>('.overview__map')!
-    expect(map.style.transform).toBe('translateX(0px)')
+    // Overscrolled to the start: the lens frames map x = 0, the very first column.
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    expect(Number.parseFloat(lens.style.left)).toBeCloseTo(0, 3)
   })
 
   it('arrow selection keeps the selected card in view', () => {
@@ -410,12 +412,19 @@ describe('createOverviewView — pannable map', () => {
     )
   })
 
-  it('opening still reveals the focused card', () => {
-    const view = createOverviewView(host, wideHooks('p11'))
+  it('opening aligns the canvas region into the lens', () => {
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        viewport: () => ({ width: 800, height: 600, scrollX: 4000 }),
+      }),
+    )
     view.open()
-    const map = host.querySelector<HTMLElement>('.overview__map')!
-    const offset = Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1])
-    expect(offset).toBeLessThan(0)
+    // The lens sits on the strip exactly where the canvas scroll is, to scale.
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    const scale = 110 / 640 // the floor, for these 12 columns in an 800px window
+    expect(Number.parseFloat(lens.style.left)).toBeCloseTo(4000 * scale, 3)
   })
 
   it('re-lays-out when the viewport changes, keeping the selection', () => {
@@ -445,6 +454,92 @@ describe('createOverviewView — pannable map', () => {
     expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
       selectedBefore,
     )
+  })
+
+  /*
+   * Pan mode inverts the interaction: the lens is fixed and the strip slides.
+   * Screen position of a map coordinate is 48 + x - offset, so a lens that
+   * holds still is one whose style.left tracks the offset exactly.
+   */
+  const offsetOf = (map: HTMLElement): number =>
+    -Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1] ?? 0)
+  const lensScreenX = (): number => {
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    return 48 + Number.parseFloat(lens.style.left) - offsetOf(map)
+  }
+
+  it('holds the lens still while every arrow press moves the strip', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const restingLens = lensScreenX()
+
+    for (let i = 0; i < 4; i++) {
+      const before = offsetOf(map)
+      view.handleKey(key('ArrowRight'))
+      expect(offsetOf(map)).toBeGreaterThan(before)
+      expect(lensScreenX()).toBeCloseTo(restingLens, 3)
+    }
+  })
+
+  it('moves the strip back one column per left press', () => {
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p6' }),
+        viewport: () => ({ width: 800, height: 600, scrollX: 4000 }),
+      }),
+    )
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const before = offsetOf(map)
+    view.handleKey(key('ArrowLeft'))
+    expect(offsetOf(map)).toBeLessThan(before)
+  })
+
+  it('tracks the selection to the column under the lens', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const selected = (): string | undefined =>
+      host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+    expect(selected()).toBe('p0')
+    view.handleKey(key('ArrowRight'))
+    expect(selected()).toBe('p1')
+    view.handleKey(key('ArrowRight'))
+    expect(selected()).toBe('p2')
+  })
+
+  it('Enter lands the canvas where the lens was pointing', () => {
+    const landed: { scrollX: number; paneId: string }[] = []
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        onLand: (scrollX, paneId) => landed.push({ scrollX, paneId }),
+      }),
+    )
+    view.open()
+    view.handleKey(key('ArrowRight'))
+    view.handleKey(key('ArrowRight'))
+    view.handleKey(key('Enter', { key: 'Enter' }))
+
+    expect(landed).toHaveLength(1)
+    expect(landed[0]!.paneId).toBe('p2')
+    // Never past the canvas's own scroll range.
+    expect(landed[0]!.scrollX).toBeGreaterThanOrEqual(0)
+    expect(view.isOpen).toBe(false)
+  })
+
+  it('keeps the marker inside the map when the map fits', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.querySelector('.overview__viewport')).not.toBeNull()
+    expect(host.querySelector('.overview--pannable')).toBeNull()
   })
 
   it('a pannable map takes the wheel for itself', () => {

@@ -255,6 +255,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       setLayout(renamePane(layout, paneId, title))
       options.onPaneRenamed()
     },
+    onLand: (scrollX, paneId) => {
+      // Focus first: it scrolls to reveal the pane, and the lens framed a
+      // region rather than a pane, so that scroll has to be the one overruled.
+      if (paneId !== layout.focusedPaneId) setLayout({ ...layout, focusedPaneId: paneId }, 'settle')
+      canvas.scrollByExact(scrollX - canvas.scrollState().offset)
+    },
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {
