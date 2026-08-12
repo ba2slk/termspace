@@ -4,7 +4,7 @@
  */
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, parseDocument } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { configDir } from './config-dir'
 import { parseSession, resolveCwd } from './session-schema'
@@ -232,6 +232,35 @@ export async function sessionFilePath(dir: string, id: string): Promise<string |
     }
   }
   return null
+}
+
+/**
+ * Rewrite only the `name:` field, in place. A targeted document edit rather
+ * than a parse-and-reserialize: hand-written comments and any panes the schema
+ * would reject must survive a rename untouched.
+ */
+export async function renameSessionName(
+  dir: string,
+  id: string,
+  newName: string,
+): Promise<SaveSessionResult> {
+  const name = newName.trim()
+  if (name === '') return { ok: false, file: '', error: 'Name must not be empty' }
+  const path = await sessionFilePath(dir, id)
+  if (path === null) return { ok: false, file: '', error: `Session file not found: ${id}` }
+  try {
+    const doc = parseDocument(await readFile(path, 'utf8'))
+    if (doc.errors.length > 0) {
+      return { ok: false, file: path, error: 'YAML syntax error — fix the file first' }
+    }
+    doc.set('name', name)
+    // Same one-generation undo as every other write to a session file.
+    await copyFile(path, `${path}.bak`)
+    await writeFile(path, doc.toString(), 'utf8')
+    return { ok: true, file: path, error: null }
+  } catch (err) {
+    return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function createExampleSession(dir: string): Promise<string> {

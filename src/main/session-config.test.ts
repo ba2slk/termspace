@@ -6,6 +6,7 @@ import {
   createExampleSession,
   listSessions,
   loadSession,
+  renameSessionName,
   saveSession,
   sessionsDir,
 } from './session-config'
@@ -151,5 +152,40 @@ describe('saveSession', () => {
     await saveSession(dir, 'demo', draft('first'), false, '/home/u')
     await saveSession(dir, 'demo', draft('second'), true, '/home/u')
     expect((await listSessions(dir)).map((s) => s.id)).toEqual(['demo'])
+  })
+})
+
+describe('renameSessionName', () => {
+  it('replaces the name, keeping comments and layout untouched', async () => {
+    const file = join(dir, 'proj.yaml')
+    await writeFile(
+      file,
+      '# my notes\nname: old\ncwd: "~"\ncolumns:\n  - width: 640\n    panes:\n      - title: shell\n',
+      'utf8',
+    )
+    const result = await renameSessionName(dir, 'proj', 'new name')
+    expect(result.ok).toBe(true)
+    const text = await readFile(file, 'utf8')
+    expect(text).toContain('name: new name')
+    expect(text).toContain('# my notes')
+    expect(text).toContain('title: shell')
+    expect(await readFile(`${file}.bak`, 'utf8')).toContain('name: old')
+  })
+
+  it('rejects an empty name', async () => {
+    const result = await renameSessionName(dir, 'proj', '   ')
+    expect(result.ok).toBe(false)
+  })
+
+  it('reports a missing session', async () => {
+    const result = await renameSessionName(dir, 'nope', 'x')
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('refuses to rewrite a file with YAML syntax errors', async () => {
+    await writeFile(join(dir, 'bad.yaml'), 'name: [unclosed\n', 'utf8')
+    const result = await renameSessionName(dir, 'bad', 'x')
+    expect(result.ok).toBe(false)
   })
 })
