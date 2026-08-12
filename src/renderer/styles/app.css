@@ -826,6 +826,18 @@ body {
   white-space: nowrap;
 }
 
+/* The card's title while it is being renamed. */
+.overview__rename {
+  min-width: 0;
+  padding: 0;
+  color: var(--fg);
+  font-size: var(--fs-ui-sm);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-active);
+  outline: none;
+}
+
 .overview__card--running .overview__title::after {
   content: ' ●';
   color: var(--live);

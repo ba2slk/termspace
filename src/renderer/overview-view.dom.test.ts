@@ -18,6 +18,7 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   titles: vi.fn(() => Promise.resolve({})),
   wants: () => false,
   onJump: vi.fn(),
+  onRename: vi.fn(),
   ...over,
 })
 
@@ -113,6 +114,46 @@ describe('createOverviewView — keys', () => {
     const view = createOverviewView(host, hooks())
     view.open()
     expect(view.handleKey(key('KeyX'))).toBe(true)
+  })
+})
+
+describe('card title editing', () => {
+  function editing(): { view: ReturnType<typeof createOverviewView>; onRename: OverviewHooks['onRename'] } {
+    const onRename = vi.fn()
+    const view = createOverviewView(host, hooks({ onRename }))
+    view.open()
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    return { view, onRename }
+  }
+
+  it('F2 opens an editor on the selected card; Enter commits', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
+    expect(host.querySelector('.overview__card--selected .overview__title')?.textContent).toBe(
+      'build',
+    )
+  })
+
+  it('Escape cancels without renaming', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'nope'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('navigation keys are inert while editing', () => {
+    const { view } = editing()
+    const before = host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')
+    expect(view.handleKey(new KeyboardEvent('keydown', { code: 'ArrowRight', key: 'ArrowRight' }))).toBe(
+      true,
+    )
+    expect(host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')).toBe(
+      before,
+    )
   })
 })
 

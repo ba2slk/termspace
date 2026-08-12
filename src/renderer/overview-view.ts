@@ -23,6 +23,8 @@ export interface OverviewHooks {
   readonly wants: (paneId: string) => boolean
   /** The user picked a pane; the caller focuses and scrolls to it. */
   readonly onJump: (paneId: string) => void
+  /** The user renamed a card; the caller lands it in the layout. */
+  readonly onRename: (paneId: string, title: string) => void
 }
 
 export interface OverviewView {
@@ -67,6 +69,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   element.append(map)
 
   element.addEventListener('mousedown', (event) => {
+    if ((event.target as HTMLElement).closest('.overview__rename') !== null) return
     const card = (event.target as HTMLElement).closest<HTMLElement>('.overview__card')
     if (card?.dataset['paneId'] !== undefined) {
       jump(card.dataset['paneId'])
@@ -80,6 +83,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let selectedId = ''
   let snapshot: Layout | null = null
   let marker: HTMLElement | null = null
+  let editing: HTMLInputElement | null = null
 
   const px = (r: { x: number; y: number; width: number; height: number }, el: HTMLElement): void => {
     el.style.left = `${r.x}px`
@@ -98,6 +102,42 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   function jump(paneId: string): void {
     close()
     hooks.onJump(paneId)
+  }
+
+  function startEdit(paneId: string): void {
+    if (editing !== null) return
+    const card = [...map.querySelectorAll<HTMLElement>('.overview__card')].find(
+      (el) => el.dataset['paneId'] === paneId,
+    )
+    const title = card?.querySelector<HTMLElement>('.overview__title')
+    if (title === undefined || title === null) return
+    const previous = title.textContent ?? ''
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'overview__rename'
+    input.value = previous
+    const finish = (commit: boolean): void => {
+      if (editing === null) return
+      editing = null
+      const next = input.value.trim()
+      input.replaceWith(title)
+      element.focus()
+      if (commit && next !== '' && next !== previous) {
+        title.textContent = next
+        hooks.onRename(paneId, next)
+      }
+    }
+    input.addEventListener('keydown', (event) => {
+      // Typing happens here; the session's keymap must not see any of it.
+      event.stopPropagation()
+      if (event.key === 'Enter') finish(true)
+      if (event.key === 'Escape') finish(false)
+    })
+    input.addEventListener('blur', () => finish(false))
+    editing = input
+    title.replaceWith(input)
+    input.focus()
+    input.select()
   }
 
   function render(): void {
@@ -166,6 +206,8 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     openState = false
     snapshot = null
     marker = null
+    // The editor goes with the map that holds it.
+    editing = null
     element.remove()
   }
 
@@ -190,6 +232,12 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
 
     handleKey(event, toggleRequested = false) {
       if (!openState || snapshot === null) return false
+      // The editor owns the keys; even bubbled ones must not move the map.
+      if (editing !== null) return true
+      if (event.key === 'F2') {
+        startEdit(selectedId)
+        return true
+      }
       const dir = ARROW_DIRECTION[event.code]
       if (dir !== undefined) {
         // Selection steps use the canvas's focus rules, so the map moves like home.

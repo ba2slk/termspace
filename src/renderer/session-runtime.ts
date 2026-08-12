@@ -26,6 +26,7 @@ import {
   findPane,
   focusDir,
   movePane,
+  renamePane,
   resizeColumn,
   resizePane,
   splitPane,
@@ -248,6 +249,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // Same pane: setLayout would be a no-op, but the view should still settle on it.
       revealFocused()
     },
+    onRename: (paneId, title) => setLayout(renamePane(layout, paneId, title)),
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {
