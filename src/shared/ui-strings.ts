@@ -98,6 +98,23 @@ const en = {
     spawnFailed: 'Could not start the shell',
   },
 
+  /**
+   * overview-view.ts: the key legend along the bottom of the map. Keys and
+   * labels are separate so the view can draw the key brighter than its word.
+   */
+  overview: {
+    mapKeys: [
+      { key: 'Arrows', label: 'move' },
+      { key: 'Enter', label: 'opens' },
+      { key: 'F2', label: 'renames' },
+      { key: 'Esc', label: 'closes' },
+    ],
+    editKeys: [
+      { key: 'Enter', label: 'saves' },
+      { key: 'Esc', label: 'cancels' },
+    ],
+  },
+
   /** save-session-view.ts: the save/new-session dialog. */
   saveSession: {
     title: 'Save as session',
@@ -287,7 +304,16 @@ const en = {
 } as const
 
 /** Same keys and shapes as `en`, but any string will do — ko carries its own copy. */
-type Widen<T> = T extends string ? string : T
+type Widen<T> = T extends string
+  ? string
+  : T extends (...args: never[]) => unknown
+    ? T
+    : // Lists of hints reach here; their literals must widen like any other copy.
+      T extends readonly (infer E)[]
+      ? readonly Widen<E>[]
+      : T extends object
+        ? { readonly [K in keyof T]: Widen<T[K]> }
+        : T
 type Catalog = {
   readonly [S in keyof typeof en]: { readonly [K in keyof (typeof en)[S]]: Widen<(typeof en)[S][K]> }
 }
@@ -368,6 +394,19 @@ const ko: Catalog = {
   runtime: {
     configError: '설정 오류',
     spawnFailed: '셸을 시작하지 못했습니다',
+  },
+
+  overview: {
+    mapKeys: [
+      { key: '방향키', label: '이동' },
+      { key: 'Enter', label: '열기' },
+      { key: 'F2', label: '이름 바꾸기' },
+      { key: 'Esc', label: '닫기' },
+    ],
+    editKeys: [
+      { key: 'Enter', label: '저장' },
+      { key: 'Esc', label: '취소' },
+    ],
   },
 
   saveSession: {

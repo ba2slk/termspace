@@ -808,6 +808,25 @@ body {
   flex: none;
 }
 
+/*
+ * Which keys the map answers to, along the bottom edge. Never in the way: it
+ * takes no clicks and sits outside the map's own box.
+ */
+.overview__legend {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+  text-align: center;
+  pointer-events: none;
+}
+
+.overview__legend-key {
+  color: var(--fg-dim);
+}
+
 .overview__card {
   position: absolute;
   display: flex;

@@ -5,6 +5,7 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
+import { t } from './i18n'
 import {
   clampOverviewScroll,
   moveSelection,
@@ -75,7 +76,25 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
 
   const map = document.createElement('div')
   map.className = 'overview__map'
-  element.append(map)
+
+  // A status bar's worth of hints: F2 is invisible otherwise.
+  const legend = document.createElement('div')
+  legend.className = 'overview__legend'
+  element.append(map, legend)
+
+  function setLegend(editing: boolean): void {
+    const hints = editing ? t.overview.editKeys : t.overview.mapKeys
+    legend.replaceChildren(
+      ...hints.flatMap((hint, index) => {
+        const key = document.createElement('span')
+        key.className = 'overview__legend-key'
+        key.textContent = hint.key
+        const label = document.createElement('span')
+        label.textContent = ` ${hint.label}`
+        return index === 0 ? [key, label] : [document.createTextNode(' · '), key, label]
+      }),
+    )
+  }
 
   element.addEventListener('mousedown', (event) => {
     if ((event.target as HTMLElement).closest('.overview__rename') !== null) return
@@ -156,6 +175,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     const finish = (commit: boolean): void => {
       if (editing === null) return
       editing = null
+      setLegend(false)
       const next = input.value.trim()
       input.replaceWith(title)
       element.focus()
@@ -174,6 +194,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     })
     input.addEventListener('blur', () => finish(false))
     editing = input
+    setLegend(true)
     title.replaceWith(input)
     input.focus()
     input.select()
@@ -271,6 +292,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   function open(): void {
     if (openState) return
     openState = true
+    setLegend(false)
     render()
     host.append(element)
     element.focus()

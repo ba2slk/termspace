@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLayout } from './layout-model'
 import { overviewLayout } from './overview-model'
 import { createOverviewView, type OverviewHooks } from './overview-view'
+import { t } from './i18n'
 
 const layout = createLayout([
   { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'editor' }, { id: 'a2', title: 'shell' }] },
@@ -222,6 +223,32 @@ describe('card title editing', () => {
     expect(host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')).toBe(
       before,
     )
+  })
+})
+
+describe('createOverviewView — key legend', () => {
+  const legend = (): string => host.querySelector('.overview__legend')?.textContent ?? ''
+
+  const joined = (hints: readonly { key: string; label: string }[]): string =>
+    hints.map((h) => `${h.key} ${h.label}`).join(' · ')
+
+  it('names the keys the map answers to, F2 among them', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    expect(t.overview.mapKeys[2]!.key).toBe('F2')
+    expect(legend()).toBe(joined(t.overview.mapKeys))
+  })
+
+  it('swaps to the editor keys while a title is being typed, and back', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    expect(legend()).toBe(joined(t.overview.editKeys))
+
+    host
+      .querySelector<HTMLInputElement>('.overview__rename')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(legend()).toContain(t.overview.mapKeys[0]!.label)
   })
 })
 
