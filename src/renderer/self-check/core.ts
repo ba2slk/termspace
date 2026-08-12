@@ -1,7 +1,8 @@
 import { api } from '../api'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
-import { maxColumnWidth } from '../layout-geometry'
-import { MIN_COLUMN_WIDTH } from '../layout-model'
+import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
+import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
+import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
 import {
   animationRuns,
   capture,
@@ -675,6 +676,128 @@ export async function checkOverview(report: Report): Promise<void> {
   start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
   await waitFor(() => focusedId() === startFocus)
   report['overviewUndone'] = focusedId() === startFocus ? 'ok' : 'FAIL (focus not restored)'
+}
+
+/**
+ * A session too wide to fit readably: the map stops scaling down at the floor
+ * and pans instead. Neither the floor nor the pan is visible without real
+ * pixels — a unit test sees the numbers, not whether a card ends up 40px wide.
+ */
+export async function checkOverviewScaleFloor(report: Report): Promise<void> {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  if (host === null) {
+    report['overviewFloor'] = 'skipped: no session on screen'
+    return
+  }
+  const overlay = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
+  const selected = (): string | undefined =>
+    overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+
+  const paneWidth = (p: HTMLElement): number => Number.parseFloat(p.style.width)
+  const canvasSpan = (): number =>
+    Math.max(...visiblePanes().map((p) => Number.parseFloat(p.style.left) + paneWidth(p))) +
+    CANVAS_EDGE
+  // Added columns come in at the default width, so they may be the narrowest.
+  const narrowest = Math.min(...visiblePanes().map(paneWidth), DEFAULT_COLUMN_WIDTH)
+
+  // 96 = 2 × OVERVIEW_MARGIN in overview-model.ts. Below the floor the map is
+  // canvas × floor, so this is the canvas width that first overflows the room.
+  const room = host.clientWidth - 96
+  const floor = MIN_OVERVIEW_COLUMN_PX / narrowest
+  const missing = room / floor - canvasSpan()
+  const adds = Math.max(1, Math.ceil(missing / (DEFAULT_COLUMN_WIDTH + PANE_GAP)) + 1)
+  if (adds > 4) {
+    report['overviewFloor'] = `skipped: window too wide (${String(adds)} extra columns needed)`
+    return
+  }
+
+  const startFocus = focusedId()
+  const addedIds: string[] = []
+  for (let i = 0; i < adds; i++) {
+    const before = document.querySelectorAll('.resize-handle--column').length
+    press('ArrowRight', { altKey: true, shiftKey: true })
+    await waitFor(() => document.querySelectorAll('.resize-handle--column').length === before + 1)
+    const id = focusedId()
+    if (id !== undefined && id !== startFocus) addedIds.push(id)
+  }
+
+  const undo = async (): Promise<void> => {
+    for (const id of addedIds) {
+      const pane = document.querySelector(`[data-pane-id="${id}"]`)
+      if (pane === null) continue
+      pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await waitFor(() => focusedId() === id)
+      press('KeyW', { altKey: true, shiftKey: true })
+      await waitFor(() => document.querySelector(`[data-pane-id="${id}"]`) === null)
+    }
+    const start =
+      startFocus === undefined ? null : document.querySelector(`[data-pane-id="${startFocus}"]`)
+    start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await waitFor(() => focusedId() === startFocus)
+    report['overviewFloorUndone'] =
+      visiblePanes().length > 0 && focusedId() === startFocus
+        ? 'ok'
+        : `FAIL (${String(addedIds.length)} columns added, focus ${String(focusedId())})`
+  }
+
+  press('KeyM', { altKey: true })
+  await waitFor(() => overlay() !== null)
+  const map = overlay()?.querySelector<HTMLElement>('.overview__map') ?? null
+  if (map === null) {
+    report['overviewFloor'] = 'FAIL (Alt+M did not open the map)'
+    await undo()
+    return
+  }
+
+  // A card is a whole column scaled, so the floor lands on the card itself;
+  // 1px covers device-pixel rounding of the border.
+  const cardWidths = [...overlay()!.querySelectorAll<HTMLElement>('.overview__card')].map(
+    (el) => el.getBoundingClientRect().width,
+  )
+  const narrowestCard = Math.min(...cardWidths)
+  report['overviewCardsStayReadable'] =
+    narrowestCard >= MIN_OVERVIEW_COLUMN_PX - 1
+      ? `ok (narrowest card ${String(Math.round(narrowestCard))}px over ${String(cardWidths.length)} cards)`
+      : `FAIL (narrowest card ${String(Math.round(narrowestCard))}px, floor ${String(MIN_OVERVIEW_COLUMN_PX)}px)`
+
+  const mapWidth = map.getBoundingClientRect().width
+  if (!overlay()!.classList.contains('overview--pannable')) {
+    report['overviewFloorPans'] =
+      `skipped: map still fits (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
+  } else {
+    // Walk to the left end first: selection starts on the column just added.
+    const walk = (code: string): void => {
+      let previous = selected()
+      for (let i = 0; i < 40; i++) {
+        press(code)
+        if (selected() === previous) break
+        previous = selected()
+      }
+    }
+    // Flex must not shrink the map back to the window, or the pan would carry
+    // the cards outside the box they are positioned in.
+    const styledWidth = Number.parseFloat(map.style.width)
+    report['overviewMapKeepsItsWidth'] =
+      Math.abs(mapWidth - styledWidth) < 1
+        ? `ok (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
+        : `FAIL (drawn ${String(Math.round(mapWidth))}px, styled ${String(Math.round(styledWidth))}px)`
+
+    walk('ArrowLeft')
+    const before = map.getBoundingClientRect().left
+    walk('ArrowRight')
+    const after = map.getBoundingClientRect().left
+    report['overviewFloorPans'] =
+      after < before - 1
+        ? `ok (map ${String(Math.round(before))} → ${String(Math.round(after))}px)`
+        : (await animationRuns())
+          ? `FAIL (map did not pan: ${String(Math.round(before))} → ${String(Math.round(after))}px)`
+          : SKIPPED
+  }
+
+  press('Escape')
+  await waitFor(() => overlay() === null)
+  await undo()
 }
 
 /**

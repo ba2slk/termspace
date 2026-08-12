@@ -794,10 +794,18 @@ body {
 }
 
 /* Wider than the window: anchor left and pan, exactly like the canvas track.
-   48px mirrors OVERVIEW_MARGIN in overview-model.ts. */
+   48px mirrors OVERVIEW_MARGIN in overview-model.ts. Clipped, so the cards
+   panned off either end do not paint over the sidebar. */
 .overview--pannable {
   justify-content: flex-start;
   padding: 0 48px;
+  overflow: hidden;
+}
+
+/* Flex would otherwise shrink the map back to the window and the pan would
+   carry the cards outside their own box. */
+.overview--pannable .overview__map {
+  flex: none;
 }
 
 .overview__card {

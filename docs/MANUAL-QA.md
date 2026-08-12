@@ -72,6 +72,13 @@ English copy.
   and lying)
 - Selection starts at the focused pane and moves with the arrow keys
 - `Esc` closes without moving; `Enter` jumps to the selected pane
+- **On a session too wide to fit, cards stop shrinking at `MIN_OVERVIEW_COLUMN_PX` and the
+  map pans instead** (a session of many columns scaled every card down to an unreadable
+  sliver. The check adds columns until the fit scale would break the floor, then measures
+  the narrowest card with `getBoundingClientRect` and walks the selection to the far end:
+  the map must slide left, and keep its own drawn width — flex shrank it back to the
+  window, which carried the panned cards outside their own box. Neither the floor nor the
+  pan is visible from a unit test, which sees the numbers rather than the pixels)
 
 **Layout editing**
 - Split down / new column to the right / close pane
