@@ -198,6 +198,30 @@ describe('reordering by drag', () => {
     expect(h.onOpen).not.toHaveBeenCalled()
   })
 
+  it('the Escape that cancels a drag is not visible to the rest of the app', () => {
+    const { hooks: h, rows } = renderThreeSessions()
+    stubBoxes(rows)
+    // A stand-in for the menus and views that listen on window in capture too.
+    const other = vi.fn()
+    window.addEventListener('keydown', other, true)
+    const escape = (): void => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    }
+    try {
+      // No drag under it: this Escape belongs to whoever else wants it.
+      escape()
+      expect(other).toHaveBeenCalledTimes(1)
+
+      press(rows[0]!, 110, 'pointerdown')
+      press(rows[0]!, 210, 'pointermove')
+      escape()
+      expect(other).toHaveBeenCalledTimes(1)
+      expect(h.onReorder).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('keydown', other, true)
+    }
+  })
+
   it('a press on the power button never becomes a drag, and still ends the session', () => {
     const { hooks: h, rows } = renderThreeSessions({ live: new Map([['a', 1]]) })
     stubBoxes(rows)

@@ -328,13 +328,15 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   const onDragKey = (event: KeyboardEvent): void => {
     if (drag === null || event.key !== 'Escape') return
-    // This Escape belongs to the drag: the terminal and any open menu must not
-    // also act on it. An Escape with no drag under it passes through untouched.
+    // This Escape belongs to the drag: no menu may close and no terminal may see
+    // it. Immediate, because the menus listen on window too and stopPropagation
+    // does not stop siblings on the same node. An Escape with no drag under it
+    // passes through untouched.
     event.preventDefault()
-    event.stopPropagation()
+    event.stopImmediatePropagation()
     cancelDrag()
   }
-  // Capture, and before every other keydown listener in the app registers.
+  // Capture: a bubble listener would run after the views that act on Escape.
   window.addEventListener('keydown', onDragKey, true)
 
   // ── Width drag ───────────────────────────────────────
