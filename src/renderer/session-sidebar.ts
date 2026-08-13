@@ -9,6 +9,7 @@
  */
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
+import { IS_MAC } from './platform'
 import { dropIndexAt, REORDER_THRESHOLD, type RowBox } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
@@ -258,6 +259,9 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     cancelDrag()
     swallowClick = false
     if (event.button !== 0) return
+    // On mac Ctrl+click is the right click, and it arrives as button 0 — without
+    // this it would arm a drag under the context menu it just opened.
+    if (IS_MAC && event.ctrlKey) return
     const target = event.target as HTMLElement | null
     if (target === null) return
     // The power button and the rename input keep their own pointer.

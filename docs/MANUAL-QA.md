@@ -495,6 +495,10 @@ below needs a real Mac and a person in front of it. Each line says what "pass" m
 - [ ] **Trackpad scrolling.** Two-finger scroll and the inertia after lifting feel
       continuous, over the canvas and inside a terminal's scrollback. Pass = no steps,
       stalls or runaway drift in either place
+- [ ] **Trackpad session drag.** A row in the session list can be dragged to a new place
+      with a trackpad press-and-slide, and Ctrl + click on a row opens the context menu
+      without dragging it. Pass = the order changes on release, and the Ctrl + click
+      leaves the row where it was
 - [ ] **Korean IME.** Composition in a terminal pane draws the in-progress syllable in
       place and commits once. Pass = what appears matches what was typed, with no
       duplicated or stranded jamo

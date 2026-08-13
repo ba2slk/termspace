@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSessionSidebar, type SidebarHooks } from './session-sidebar'
 import type { SessionSummary } from '../shared/protocol'
+import type { SidebarHooks } from './session-sidebar'
+
+/*
+ * The sidebar reads the platform from the bridge as the module loads — Ctrl is
+ * a plain modifier here and the right click on mac — so the stub has to be on
+ * window before the import. The mac half lives in its own file.
+ */
+vi.stubGlobal('termspace', { platform: 'linux' })
+
+const { createSessionSidebar } = await import('./session-sidebar')
 
 function summary(over: Partial<SessionSummary> = {}): SessionSummary {
   return {
