@@ -213,6 +213,8 @@ English copy.
   column, so a fresh empty session had no handles at all)
 - **A row's pane count follows splits and closes** — the sidebar is the only place that
   claims to know a session's shape without showing it
+- **Dragging a session row changes the list order**, a plain click still opens a session,
+  and the order survives pressing refresh and restarting the app
 
 **Copy notification**
 - Selecting by drag shows the "Copied · N chars" toast, which disappears shortly after

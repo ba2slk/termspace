@@ -1100,3 +1100,93 @@ export async function checkHeldSessionJump(report: Report): Promise<void> {
   report['heldJumpSpareEnded'] =
     document.querySelectorAll('.session-host').length === 1 ? 'ok' : 'FAIL (spare still running)'
 }
+
+/**
+ * Dragging a row past its neighbour reorders the list.
+ *
+ * `onReorder` is a dom test in isolation, but only the running app proves the
+ * round trip through main's order file and back into a redrawn list agree on
+ * where the row landed.
+ */
+export async function checkSidebarReorder(report: Report): Promise<void> {
+  const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.sidebar__row')]
+  const idsOf = (list: readonly HTMLElement[]): string[] =>
+    list.map((r) => r.dataset['sessionId'] ?? '?')
+
+  const start = rows()
+  if (start.length < 2) {
+    report['sidebarReorder'] = 'skipped (needs two sessions)'
+    return
+  }
+  const originalOrder = idsOf(start)
+
+  // Swaps the first two rows by dragging row 0 past row 1's middle — the same
+  // pointer sequence the dom test uses, dispatched on `.sidebar__row` so it
+  // bubbles to the list's listeners.
+  const dragFirstPastSecond = (): void => {
+    const current = rows()
+    const first = current[0]
+    const second = current[1]
+    if (first === undefined || second === undefined) return
+    const firstBox = first.getBoundingClientRect()
+    const secondBox = second.getBoundingClientRect()
+    const startY = firstBox.top + firstBox.height / 2
+    const targetY = secondBox.top + secondBox.height / 2 + 1
+    const at = (y: number): PointerEventInit => ({
+      clientX: firstBox.left + 10,
+      clientY: y,
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+    })
+    first.dispatchEvent(new PointerEvent('pointerdown', at(startY)))
+    first.dispatchEvent(new PointerEvent('pointermove', at(targetY)))
+    first.dispatchEvent(new PointerEvent('pointerup', at(targetY)))
+  }
+
+  dragFirstPastSecond()
+  const swapped = await waitFor(() => {
+    const now = idsOf(rows())
+    return now[0] === originalOrder[1] && now[1] === originalOrder[0]
+  })
+  report['sidebarReorderSwaps'] = swapped
+    ? 'ok'
+    : `FAIL (${originalOrder.slice(0, 2).join(',')} -> ${idsOf(rows()).slice(0, 2).join(',')})`
+
+  // Leave the list as it was found: the same drag again swaps the pair back.
+  dragFirstPastSecond()
+  const restored = await waitFor(() => {
+    const now = idsOf(rows())
+    return now[0] === originalOrder[0] && now[1] === originalOrder[1]
+  })
+  report['sidebarReorderRestores'] = restored
+    ? 'ok'
+    : `FAIL (left as ${idsOf(rows()).slice(0, 2).join(',')}, expected ${originalOrder.slice(0, 2).join(',')})`
+}
+
+/**
+ * A session whose file failed to parse still shows a row, its open button
+ * disabled so a click can't spawn a pty for it — but the row underneath must
+ * still take a drag. That relies on `.sidebar__open:disabled { pointer-events:
+ * none }` in `app.css`, a rule happy-dom never applies (it loads no
+ * stylesheet), so the dom test can't see whether the press actually falls
+ * through to the row. Only the real browser can.
+ */
+export async function checkErrorRowStaysDraggable(report: Report): Promise<void> {
+  const errorRow = document.querySelector<HTMLElement>('.sidebar__row--error')
+  if (errorRow === null) {
+    report['sidebarErrorRowDraggable'] = 'skipped (no broken session present to check)'
+    return
+  }
+  const open = errorRow.querySelector<HTMLButtonElement>('.sidebar__open')
+  if (open === null) {
+    report['sidebarErrorRowDraggable'] = 'FAIL (error row has no open button)'
+    return
+  }
+  report['sidebarErrorRowDisabled'] = open.disabled ? 'ok' : 'FAIL (not disabled)'
+  const style = getComputedStyle(open)
+  report['sidebarErrorRowDraggable'] =
+    style.pointerEvents === 'none'
+      ? 'ok'
+      : `FAIL (pointer-events: ${style.pointerEvents} — the press would hit the button, not the row)`
+}
