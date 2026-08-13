@@ -255,6 +255,17 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       setLayout(renamePane(layout, paneId, title))
       options.onPaneRenamed()
     },
+    onScrub: (scrollX) => {
+      // Follow the lens with the canvas itself: nothing takes focus, nothing
+      // closes. Leaving the map without landing scrubs back.
+      canvas.scrollByExact(scrollX - canvas.scrollState().offset)
+    },
+    onLand: (scrollX, paneId) => {
+      // Focus first: it scrolls to reveal the pane, and the lens framed a
+      // region rather than a pane, so that scroll has to be the one overruled.
+      if (paneId !== layout.focusedPaneId) setLayout({ ...layout, focusedPaneId: paneId }, 'settle')
+      canvas.scrollByExact(scrollX - canvas.scrollState().offset)
+    },
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {
@@ -771,6 +782,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     canvas.render(layout)
     settleSizes()
     updateBudget()
+    // The map is scaled to the viewport, so a window resize leaves it drawn for
+    // a width that is gone. Resizing never reaches relayout, only this.
+    overview.refreshIfOpen()
   })
   resizeObserver.observe(host)
 
@@ -879,6 +893,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // A narrower canvas can leave the scroll past its end; clamp without moving.
       canvas.clampScroll(layout)
       updateBudget()
+      // The sidebar collapsing arrives here. The ResizeObserver below sees the
+      // same change, but only this path is synchronous with the toggle.
+      overview.refreshIfOpen()
     },
 
     refresh() {

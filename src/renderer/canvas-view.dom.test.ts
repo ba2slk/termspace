@@ -133,6 +133,36 @@ describe('createCanvasView', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
+  /*
+   * The canvas claims the wheel in capture and stops propagation, so an open map
+   * wide enough to pan never saw its own wheel events and would not move.
+   */
+  it('leaves the wheel to an open map that pans', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const overlay = document.createElement('div')
+    overlay.className = 'overview overview--pannable'
+    host.append(overlay)
+
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    overlay.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('still takes the wheel under a map that fits', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const overlay = document.createElement('div')
+    overlay.className = 'overview'
+    host.append(overlay)
+
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    overlay.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+  })
+
   it('one handle per column, one fewer than the panes', () => {
     const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
     view.render(layout)

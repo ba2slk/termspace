@@ -21,6 +21,7 @@ import {
   checkLayoutEditing,
   checkNavigation,
   checkOverview,
+  checkOverviewScaleFloor,
   checkTerminalSignals,
   checkRendererBudget,
   checkSessionAndPty,
@@ -79,6 +80,7 @@ const GROUPS: Readonly<
     await checkNavigation(report)
     checkFocusVisibility(report)
     await checkOverview(report)
+    await checkOverviewScaleFloor(report)
     await checkTerminalSignals(report)
     await checkLayoutEditing(report)
     checkRendererBudget(report)

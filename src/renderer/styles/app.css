@@ -793,6 +793,53 @@ body {
   position: relative;
 }
 
+/* Holds the map, and in pan mode cuts it --edge short of the host so the strip
+   breathes like everything else. Absolute, so the overlay's own children — the
+   scrim it paints, and anything that must stay unclipped — are unaffected. */
+.overview__clip {
+  position: absolute;
+  inset: 0 var(--edge);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Wider than the window: anchor left and pan, exactly like the canvas track,
+   and clip so the cards sliding off either end do not paint over the sidebar.
+   The padding puts map x = 0 at 48px from the host edge — 48 mirrors
+   OVERVIEW_MARGIN in overview-model.ts — with --edge already taken by the
+   band, so the geometry is unchanged and only the cut moves inwards. */
+.overview--pannable .overview__clip {
+  justify-content: flex-start;
+  padding: 0 calc(48px - var(--edge));
+  overflow: hidden;
+}
+
+/* Flex would otherwise shrink the map back to the window and the pan would
+   carry the cards outside their own box. */
+.overview--pannable .overview__map {
+  flex: none;
+}
+
+/*
+ * Which keys the map answers to, along the bottom edge. Never in the way: it
+ * takes no clicks and sits outside the map's own box.
+ */
+.overview__legend {
+  position: absolute;
+  /* top comes from the view: it tracks the map's bottom edge, not the window's. */
+  left: 0;
+  right: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+  text-align: center;
+  pointer-events: none;
+}
+
+.overview__legend-key {
+  color: var(--fg-dim);
+}
+
 .overview__card {
   position: absolute;
   display: flex;
@@ -806,8 +853,10 @@ body {
   cursor: pointer;
 }
 
-/* Same two-part grammar as the canvas: brighter border plus a hard ring. */
+/* Same two-part grammar as the canvas: brighter border plus a hard ring — with
+   a lit surface under them, which the viewport marker cannot drown out. */
 .overview__card--selected {
+  background: var(--overview-selected-fill);
   border-color: var(--border-active);
   box-shadow: 0 0 0 1px var(--ring-active);
 }

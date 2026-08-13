@@ -5,7 +5,23 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
-import { moveSelection, overviewLayout } from './overview-model'
+import { canvasWidth } from './layout-geometry'
+import {
+  clampStripOffset,
+  columnAtLensCenter,
+  columnSnapOffset,
+  landingScrollX,
+  type Lens,
+  lensOnStrip,
+  lensRect,
+  moveSelection,
+  type OverviewCard,
+  overviewLayout,
+  paneNearestY,
+  stripOffsetFor,
+} from './overview-model'
+import { wheelPixels } from './wheel-physics'
+import { t } from './i18n'
 
 export interface OverviewHooks {
   readonly layout: () => Layout
@@ -25,6 +41,17 @@ export interface OverviewHooks {
   readonly onJump: (paneId: string) => void
   /** The user renamed a card; the caller lands it in the layout. */
   readonly onRename: (paneId: string, title: string) => void
+  /**
+   * Pan mode's pick: the lens framed a region, so the canvas goes exactly
+   * there rather than to wherever revealing the pane would land.
+   */
+  readonly onLand: (scrollX: number, paneId: string) => void
+  /**
+   * The strip moved: take the canvas with it, so the session behind the scrim
+   * shows what the lens is framing. Focuses nothing and closes nothing —
+   * leaving without landing scrubs back to where it started.
+   */
+  readonly onScrub: (scrollX: number) => void
 }
 
 export interface OverviewView {
@@ -53,6 +80,9 @@ export interface OverviewView {
   destroy(): void
 }
 
+/** Between the map's bottom edge and the key legend under it. */
+const LEGEND_GAP = 16
+
 const ARROW_DIRECTION: Readonly<Record<string, Direction>> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
@@ -66,19 +96,49 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   // Focusable, so opening it takes the keyboard away from the terminal.
   element.tabIndex = -1
 
+  /*
+   * A band inside the overlay that cuts the strip short of the host edges. The
+   * scrim is the overlay's own background, so it still paints edge to edge —
+   * only what slides under the cut is clipped. Anything that must not be
+   * clipped stays a direct child of the overlay.
+   */
+  const clip = document.createElement('div')
+  clip.className = 'overview__clip'
+
   const map = document.createElement('div')
   map.className = 'overview__map'
-  element.append(map)
+  clip.append(map)
+
+  // A status bar's worth of hints: F2 is invisible otherwise. It stays a
+  // direct child of the overlay, outside the clip band.
+  const legend = document.createElement('div')
+  legend.className = 'overview__legend'
+  element.append(clip, legend)
+
+  function setLegend(editing: boolean): void {
+    const hints = editing ? t.overview.editKeys : t.overview.mapKeys
+    legend.replaceChildren(
+      ...hints.flatMap((hint, index) => {
+        const key = document.createElement('span')
+        key.className = 'overview__legend-key'
+        key.textContent = hint.key
+        const label = document.createElement('span')
+        label.textContent = ` ${hint.label}`
+        return index === 0 ? [key, label] : [document.createTextNode(' · '), key, label]
+      }),
+    )
+  }
 
   element.addEventListener('mousedown', (event) => {
     if ((event.target as HTMLElement).closest('.overview__rename') !== null) return
     const card = (event.target as HTMLElement).closest<HTMLElement>('.overview__card')
     if (card?.dataset['paneId'] !== undefined) {
-      jump(card.dataset['paneId'])
+      land(card.dataset['paneId'])
       return
     }
-    // Outside the cards: leave the way a menu closes, without acting.
-    if (event.target === element) close()
+    // Outside the cards: leave the way a menu closes, without acting. The clip
+    // band covers most of that empty space, so it counts as outside too.
+    if (event.target === element || event.target === clip) close()
   })
 
   let openState = false
@@ -86,6 +146,63 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let snapshot: Layout | null = null
   let marker: HTMLElement | null = null
   let editing: HTMLInputElement | null = null
+  /** Strip offset: map coordinate x is drawn at OVERVIEW_MARGIN + x - offset. */
+  let offset = 0
+  let mapWidth = 0
+  let scale = 1
+  let lens: Lens = { x: 0, width: 0 }
+  let lastCards: readonly OverviewCard[] = []
+  let pannable = false
+  /** The height the selection keeps as it crosses columns — the canvas's rule. */
+  let desiredY = 0
+  /** Where the canvas was when the map opened, for a cancel to put it back. */
+  let openedAtScrollX = 0
+  let scrubbed = false
+
+  const applyPan = (): void => {
+    map.style.transform = `translateX(${String(-offset)}px)`
+    // The lens is fixed on screen, so on the strip it sits wherever the strip
+    // has slid to. One write keeps it welded to the window.
+    if (pannable && marker !== null) marker.style.left = `${String(lensOnStrip(offset, lens))}px`
+  }
+
+  /** Take the canvas along, so the scrim shows what the lens is framing. */
+  const scrub = (): void => {
+    if (!pannable || snapshot === null) return
+    scrubbed = true
+    hooks.onScrub(landingScrollX(offset, scale, canvasWidth(snapshot), hooks.viewport(), lens))
+  }
+
+  /** The selection follows the lens: whichever column it frames, at desiredY. */
+  const trackSelection = (): void => {
+    const columnId = columnAtLensCenter(lastCards, offset, lens)
+    if (columnId === null) return
+    const paneId = paneNearestY(lastCards, columnId, desiredY)
+    if (paneId !== null) selectCard(paneId)
+  }
+
+  const rememberY = (): void => {
+    const card = lastCards.find((c) => c.paneId === selectedId)
+    if (card !== undefined) desiredY = card.y + card.height / 2
+  }
+
+  // Vertical wheel pans horizontally, exactly like the canvas; both axes
+  // accepted so a trackpad's sideways gesture works too.
+  element.addEventListener(
+    'wheel',
+    (event) => {
+      // A map that fits has nothing to pan: the wheel belongs to the canvas
+      // underneath, which syncViewport then follows.
+      if (!pannable) return
+      event.preventDefault()
+      const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX
+      offset = clampStripOffset(offset + wheelPixels(delta, event.deltaMode), mapWidth, lens)
+      applyPan()
+      trackSelection()
+      scrub()
+    },
+    { passive: false },
+  )
 
   const px = (r: { x: number; y: number; width: number; height: number }, el: HTMLElement): void => {
     el.style.left = `${r.x}px`
@@ -121,6 +238,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     const finish = (commit: boolean): void => {
       if (editing === null) return
       editing = null
+      setLegend(false)
       const next = input.value.trim()
       input.replaceWith(title)
       element.focus()
@@ -139,9 +257,27 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     })
     input.addEventListener('blur', () => finish(false))
     editing = input
+    setLegend(true)
     title.replaceWith(input)
     input.focus()
     input.select()
+  }
+
+  /** Pan mode's pick: the canvas goes to the region the lens framed. */
+  function land(paneId: string = selectedId): void {
+    if (!pannable || snapshot === null) {
+      jump(paneId)
+      return
+    }
+    const scrollX = landingScrollX(
+      offset,
+      scale,
+      canvasWidth(snapshot),
+      hooks.viewport(),
+      lens,
+    )
+    close(false)
+    hooks.onLand(scrollX, paneId)
   }
 
   function render(): void {
@@ -152,6 +288,19 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     map.replaceChildren()
     map.style.width = `${overview.width}px`
     map.style.height = `${overview.height}px`
+    // The legend belongs to the map, not to the window: the map is centred, so
+    // its bottom edge is half its height below the middle.
+    legend.style.top = `calc(50% + ${String(overview.height / 2 + LEGEND_GAP)}px)`
+
+    mapWidth = overview.width
+    lastCards = overview.cards
+    scale = overview.scale
+    pannable = overview.width > hooks.viewport().width - 96 // 96 = 2 × OVERVIEW_MARGIN
+    lens = lensRect(hooks.viewport(), overview.scale, overview.width)
+    element.classList.toggle('overview--pannable', pannable)
+    // A repaint is not a navigation event — a background pane ringing must not
+    // slide the strip under the hand that just moved it. Only opening aligns.
+    offset = pannable ? clampStripOffset(offset, mapWidth, lens) : 0
 
     const titles = new Map(
       layout.columns.flatMap((c) => c.panes.map((p) => [p.id, p.title] as const)),
@@ -175,12 +324,27 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       map.append(el)
     }
 
+    /*
+     * Pan mode: the lens is the fixed frame the strip slides under, so it is
+     * placed from the offset, not from the canvas scroll. Fit mode keeps the
+     * marker that moves with the canvas.
+     */
     marker = document.createElement('div')
     marker.className = 'overview__viewport'
-    px(overview.viewportRect, marker)
+    px(
+      pannable
+        ? { x: lensOnStrip(offset, lens), y: 0, width: lens.width, height: overview.height }
+        : overview.viewportRect,
+      marker,
+    )
     map.append(marker)
+    applyPan()
 
-    selectCard(layout.focusedPaneId)
+    // Same reason: a repaint keeps the user's selection, and only falls back to
+    // focus when the pane it pointed at is gone.
+    selectCard(
+      overview.cards.some((c) => c.paneId === selectedId) ? selectedId : layout.focusedPaneId,
+    )
 
     // The commands arrive late and fill in; the map itself never waits for IPC.
     const paneIds = overview.cards.map((c) => c.paneId)
@@ -205,20 +369,45 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     })
   }
 
-  function close(): void {
+  function close(restoreCanvas = true): void {
     if (!openState) return
+    // Leaving without landing is a cancel, and cancel means nothing moved.
+    if (restoreCanvas && scrubbed) hooks.onScrub(openedAtScrollX)
+    scrubbed = false
     openState = false
     snapshot = null
     marker = null
     // The editor goes with the map that holds it.
     editing = null
+    offset = 0
+    pannable = false
     element.remove()
   }
 
   function open(): void {
     if (openState) return
     openState = true
+    setLegend(false)
+    // Opening starts at the focused pane, wherever the last visit ended up.
+    selectedId = hooks.layout().focusedPaneId
+    openedAtScrollX = hooks.viewport().scrollX
+    scrubbed = false
+    offset = 0
     render()
+    rememberY()
+    if (pannable) {
+      // Align the strip so the canvas region you are looking at sits in the lens.
+      offset = clampStripOffset(
+        stripOffsetFor(hooks.viewport().scrollX, scale, lens),
+        mapWidth,
+        lens,
+      )
+      applyPan()
+      // The focused pane keeps the selection only if the lens actually frames it.
+      const framed = columnAtLensCenter(lastCards, offset, lens)
+      const focusedCard = lastCards.find((c) => c.paneId === selectedId)
+      if (focusedCard === undefined || focusedCard.columnId !== framed) trackSelection()
+    }
     host.append(element)
     element.focus()
   }
@@ -247,13 +436,31 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       }
       const dir = ARROW_DIRECTION[event.code]
       if (dir !== undefined) {
-        // Selection steps use the canvas's focus rules, so the map moves like home.
-        snapshot = moveSelection(snapshot, selectedId, dir)
-        selectCard(snapshot.focusedPaneId)
+        if (!pannable) {
+          // Fit mode: nothing slides, so a step is the canvas's own focus move.
+          snapshot = moveSelection(snapshot, selectedId, dir)
+          selectCard(snapshot.focusedPaneId)
+          return true
+        }
+        if (dir === 'left' || dir === 'right') {
+          // Every press moves the screen: the next column comes to the lens.
+          offset = clampStripOffset(columnSnapOffset(lastCards, offset, dir, lens), mapWidth, lens)
+          applyPan()
+          trackSelection()
+          scrub()
+          return true
+        }
+        // Vertical stays inside the framed column, and sets the height to keep.
+        const stepped = moveSelection(snapshot, selectedId, dir)
+        snapshot = stepped
+        const framed = columnAtLensCenter(lastCards, offset, lens)
+        const moved = lastCards.find((c) => c.paneId === stepped.focusedPaneId)
+        if (moved !== undefined && moved.columnId === framed) selectCard(stepped.focusedPaneId)
+        rememberY()
         return true
       }
       if (event.key === 'Enter') {
-        jump(selectedId)
+        land()
         return true
       }
       // The key that opened the map closes it, whatever it has been bound to.
@@ -272,7 +479,9 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     },
 
     syncViewport() {
-      if (!openState || snapshot === null || marker === null) return
+      // Pan mode owns the wheel and the lens never moves, so there is nothing
+      // to follow: only a map that fits lets the canvas scroll underneath.
+      if (!openState || snapshot === null || marker === null || pannable) return
       px(overviewLayout(snapshot, hooks.viewport()).viewportRect, marker)
     },
 

@@ -1,7 +1,9 @@
 import { api } from '../api'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
-import { maxColumnWidth } from '../layout-geometry'
-import { MIN_COLUMN_WIDTH } from '../layout-model'
+import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
+import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
+import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
+import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   animationRuns,
   capture,
@@ -425,10 +427,23 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
 export function checkRendererBudget(report: Report): void {
   const frozen = document.querySelectorAll('.pane--frozen').length
   report['frozenOffscreenPanes'] = frozen > 0 ? `ok (${frozen})` : 'FAIL (nothing froze)'
-  report['webglInFrozenPanes'] =
-    document.querySelectorAll('.pane--frozen canvas').length === 0
-      ? 'ok (none)'
-      : 'FAIL (a frozen pane still holds WebGL)'
+
+  /*
+   * The cap is the invariant that matters: past Chromium's own limit it starts
+   * force-releasing contexts, which is the flicker this budget exists to
+   * prevent. Frozen-and-attached is not a fault — freeze follows visibility,
+   * attach is capped, and renderer-budget keeps them deliberately separate, so
+   * a pane that just scrolled off keeps its context until it falls out of the
+   * ranking.
+   */
+  const contexts = document.querySelectorAll('.pane canvas').length
+  report['webglUnderTheCap'] =
+    contexts <= MAX_WEBGL_CONTEXTS
+      ? `ok (${String(contexts)} of ${String(MAX_WEBGL_CONTEXTS)})`
+      : `FAIL (${String(contexts)} contexts, cap ${String(MAX_WEBGL_CONTEXTS)})`
+  report['webglInFrozenPanes'] = String(
+    document.querySelectorAll('.pane--frozen canvas').length,
+  )
   report['webglInAwakePanes'] = String(
     document.querySelectorAll('.pane:not(.pane--frozen) canvas').length,
   )
@@ -546,9 +561,12 @@ export async function checkOverview(report: Report): Promise<void> {
   // The map must actually fit the screen — that is the whole point of it.
   const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')!
   const mapBox = overlay()!.querySelector<HTMLElement>('.overview__map')!.getBoundingClientRect()
+  // A strip wider than the window is the point of pan mode; only a map that
+  // claims to fit has to. Height must fit either way.
+  const pans = overlay()!.classList.contains('overview--pannable')
   report['overviewFits'] =
-    mapBox.width > 0 && mapBox.width <= host.clientWidth && mapBox.height <= host.clientHeight
-      ? `ok (${Math.round(mapBox.width)}x${Math.round(mapBox.height)} in ${host.clientWidth}x${host.clientHeight})`
+    mapBox.width > 0 && (pans || mapBox.width <= host.clientWidth) && mapBox.height <= host.clientHeight
+      ? `ok (${Math.round(mapBox.width)}x${Math.round(mapBox.height)} in ${host.clientWidth}x${host.clientHeight}${pans ? ', panning' : ''})`
       : `OVERFLOW (map ${Math.round(mapBox.width)}x${Math.round(mapBox.height)})`
 
   report['overviewMarksViewport'] = overlay()!.querySelector('.overview__viewport') !== null ? 'ok' : 'FAIL'
@@ -598,8 +616,28 @@ export async function checkOverview(report: Report): Promise<void> {
   })
   report['overviewProportional'] =
     ratioMismatch === undefined ? 'ok' : `MISMATCH ${ratioMismatch.id} (card ${ratioMismatch.styled.w}px, pane ${paneWidths.get(ratioMismatch.id)}px)`
-  report['overviewStartsAtFocus'] =
-    selected() === startFocus ? 'ok' : `FAIL (${selected()} != ${startFocus})`
+  /*
+   * Fit mode opens on the focused pane. Pan mode opens on the canvas region you
+   * were looking at, so the selection is that column's pick — the focused pane
+   * only keeps it when the lens actually frames it.
+   */
+  const framesTheSelection = (): boolean => {
+    const card = overlay()?.querySelector<HTMLElement>(
+      `.overview__card[data-pane-id="${String(selected())}"]`,
+    )
+    const lens = overlay()?.querySelector<HTMLElement>('.overview__viewport')
+    if (card === null || card === undefined || lens === null || lens === undefined) return false
+    const c = card.getBoundingClientRect()
+    const l = lens.getBoundingClientRect()
+    return c.left < l.right && c.right > l.left
+  }
+  report['overviewStartsAtFocus'] = pans
+    ? framesTheSelection()
+      ? `ok (pan mode: the lens frames ${String(selected())})`
+      : `FAIL (the lens does not frame the selection ${String(selected())})`
+    : selected() === startFocus
+      ? 'ok'
+      : `FAIL (${selected()} != ${startFocus})`
 
   // Selection must move; which way depends on where focus sits, so try both.
   const before = selected()
@@ -647,6 +685,18 @@ export async function checkOverview(report: Report): Promise<void> {
           : SKIPPED
   }
 
+  // The legend reads as the map's own footer, so it must follow the map's
+  // bottom edge — pinned to the window it drifts away on a short map.
+  const legendEl = overlay()!.querySelector<HTMLElement>('.overview__legend')
+  if (legendEl === null) {
+    report['overviewLegendUnderMap'] = 'FAIL (no legend)'
+  } else {
+    const gap = legendEl.getBoundingClientRect().top - mapBox.bottom
+    report['overviewLegendUnderMap'] =
+      gap > 8 && gap < 28 ? `ok (${Math.round(gap)}px under the map)` : `FAIL (${Math.round(gap)}px)`
+    report['overviewLegendKeys'] = legendEl.textContent ?? ''
+  }
+
   // Shot while open — the map's look can only be judged by eyes. No focus
   // claim here: only the motion group may pull focus (see GROUPS).
   await capture(report, 'overview')
@@ -675,6 +725,335 @@ export async function checkOverview(report: Report): Promise<void> {
   start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
   await waitFor(() => focusedId() === startFocus)
   report['overviewUndone'] = focusedId() === startFocus ? 'ok' : 'FAIL (focus not restored)'
+}
+
+/**
+ * A session too wide to fit readably: the map stops scaling down at the floor
+ * and pans instead. Neither the floor nor the pan is visible without real
+ * pixels — a unit test sees the numbers, not whether a card ends up 40px wide.
+ */
+export async function checkOverviewScaleFloor(report: Report): Promise<void> {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  if (host === null) {
+    report['overviewFloor'] = 'skipped: no session on screen'
+    return
+  }
+  const overlay = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
+  const selected = (): string | undefined =>
+    overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+
+  /** The canvas scroll, read off the track's own transform — real pixels. */
+  const canvasScroll = (): number => {
+    const track = document.querySelector<HTMLElement>('.session-host:not([hidden]) .canvas-track')
+    const match = /translateX\((-?[\d.]+)px\)/.exec(track?.style.transform ?? '')
+    return match === null ? 0 : -Number(match[1])
+  }
+
+  const paneWidth = (p: HTMLElement): number => Number.parseFloat(p.style.width)
+  const canvasSpan = (): number =>
+    Math.max(...visiblePanes().map((p) => Number.parseFloat(p.style.left) + paneWidth(p))) +
+    CANVAS_EDGE
+  // Added columns come in at the default width, so they may be the narrowest.
+  const narrowest = Math.min(...visiblePanes().map(paneWidth), DEFAULT_COLUMN_WIDTH)
+
+  // 96 = 2 × OVERVIEW_MARGIN in overview-model.ts. Below the floor the map is
+  // canvas × floor, so this is the canvas width that first overflows the room.
+  const room = host.clientWidth - 96
+  const floor = MIN_OVERVIEW_COLUMN_PX / narrowest
+  const missing = room / floor - canvasSpan()
+  const adds = Math.max(1, Math.ceil(missing / (DEFAULT_COLUMN_WIDTH + PANE_GAP)) + 1)
+  if (adds > 4) {
+    report['overviewFloor'] = `skipped: window too wide (${String(adds)} extra columns needed)`
+    return
+  }
+
+  const startFocus = focusedId()
+  const addedIds: string[] = []
+  for (let i = 0; i < adds; i++) {
+    const before = document.querySelectorAll('.resize-handle--column').length
+    press('ArrowRight', { altKey: true, shiftKey: true })
+    await waitFor(() => document.querySelectorAll('.resize-handle--column').length === before + 1)
+    const id = focusedId()
+    if (id !== undefined && id !== startFocus) addedIds.push(id)
+  }
+
+  const undo = async (): Promise<void> => {
+    for (const id of addedIds) {
+      const pane = document.querySelector(`[data-pane-id="${id}"]`)
+      if (pane === null) continue
+      pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await waitFor(() => focusedId() === id)
+      press('KeyW', { altKey: true, shiftKey: true })
+      await waitFor(() => document.querySelector(`[data-pane-id="${id}"]`) === null)
+    }
+    const start =
+      startFocus === undefined ? null : document.querySelector(`[data-pane-id="${startFocus}"]`)
+    start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await waitFor(() => focusedId() === startFocus)
+    report['overviewFloorUndone'] =
+      visiblePanes().length > 0 && focusedId() === startFocus
+        ? 'ok'
+        : `FAIL (${String(addedIds.length)} columns added, focus ${String(focusedId())})`
+  }
+
+  /*
+   * Focus the leftmost pane before opening. Adding columns left focus at the
+   * right end, where the walk below also ends — and a map that re-reveals the
+   * focused card on every repaint would then look correct by coincidence.
+   */
+  const leftmost = visiblePanes().sort(
+    (a, b) => Number.parseFloat(a.style.left) - Number.parseFloat(b.style.left),
+  )[0]
+  leftmost?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  await waitFor(() => focusedId() === leftmost?.dataset['paneId'])
+
+  press('KeyM', { altKey: true })
+  await waitFor(() => overlay() !== null)
+  const openedScroll = canvasScroll()
+  const map = overlay()?.querySelector<HTMLElement>('.overview__map') ?? null
+  if (map === null) {
+    report['overviewFloor'] = 'FAIL (Alt+M did not open the map)'
+    await undo()
+    return
+  }
+
+  // A card is a whole column scaled, so the floor lands on the card itself;
+  // 1px covers device-pixel rounding of the border.
+  const cardWidths = [...overlay()!.querySelectorAll<HTMLElement>('.overview__card')].map(
+    (el) => el.getBoundingClientRect().width,
+  )
+  const narrowestCard = Math.min(...cardWidths)
+  report['overviewCardsStayReadable'] =
+    narrowestCard >= MIN_OVERVIEW_COLUMN_PX - 1
+      ? `ok (narrowest card ${String(Math.round(narrowestCard))}px over ${String(cardWidths.length)} cards)`
+      : `FAIL (narrowest card ${String(Math.round(narrowestCard))}px, floor ${String(MIN_OVERVIEW_COLUMN_PX)}px)`
+
+  const mapWidth = map.getBoundingClientRect().width
+  if (!overlay()!.classList.contains('overview--pannable')) {
+    report['overviewFloorPans'] =
+      `skipped: map still fits (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
+  } else {
+    // Flex must not shrink the map back to the window, or the strip would carry
+    // the cards outside the box they are positioned in.
+    const styledWidth = Number.parseFloat(map.style.width)
+    report['overviewMapKeepsItsWidth'] =
+      Math.abs(mapWidth - styledWidth) < 1
+        ? `ok (${String(Math.round(mapWidth))}px in ${String(host.clientWidth)}px)`
+        : `FAIL (drawn ${String(Math.round(mapWidth))}px, styled ${String(Math.round(styledWidth))}px)`
+
+    /*
+     * The strip is cut --edge short of the host, so it breathes like the rest
+     * of the app. Two measurements: the band's own inset, and that nothing of
+     * a card actually paints inside it.
+     */
+    const clipBox = overlay()!.querySelector<HTMLElement>('.overview__clip')!.getBoundingClientRect()
+    const hostBox = host.getBoundingClientRect()
+    const insets = [clipBox.left - hostBox.left, hostBox.right - clipBox.right]
+    const edge = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--edge'),
+    )
+    report['overviewStripBreathes'] = insets.every((i) => Math.abs(i - edge) < 1)
+      ? `ok (${insets.map((i) => i.toFixed(1)).join(' / ')}px, --edge ${String(edge)}px)`
+      : `FAIL (insets ${insets.map((i) => i.toFixed(1)).join(' / ')}px, --edge ${String(edge)}px)`
+
+    /*
+     * The lens is the fixed frame the strip slides under. Every arrow press has
+     * to move the world and leave the frame exactly where it was — the whole
+     * point of the design, and only a screen rect can tell you it happened.
+     */
+    const lensEl = (): HTMLElement | null =>
+      overlay()?.querySelector<HTMLElement>('.overview__viewport') ?? null
+    const lensCentre = (): number => {
+      const box = lensEl()?.getBoundingClientRect()
+      return box === undefined ? Number.NaN : box.left + box.width / 2
+    }
+    const restingLens = lensCentre()
+    let moves = 0
+    let drift = 0
+    for (let i = 0; i < 4; i++) {
+      const before = map.getBoundingClientRect().left
+      press('ArrowRight')
+      if (Math.abs(map.getBoundingClientRect().left - before) > 1) moves += 1
+      drift = Math.max(drift, Math.abs(lensCentre() - restingLens))
+    }
+    report['overviewArrowsSlideTheStrip'] =
+      moves === 4
+        ? `ok (4 presses, 4 moves, lens drift ${drift.toFixed(1)}px)`
+        : `FAIL (${String(moves)} of 4 presses moved the strip)`
+    /*
+     * With the strip slid over, a card crosses the host's left edge. Nothing of
+     * it may paint inside the band: probe the middle of those 6px and see what
+     * is actually on top there.
+     */
+    const boxes = [...overlay()!.querySelectorAll<HTMLElement>('.overview__card')].map((el) =>
+      el.getBoundingClientRect(),
+    )
+    // Whichever edge the strip actually runs past — either proves the cut.
+    const cut = [
+      { at: hostBox.left + edge / 2, side: 'left', b: boxes.find((b) => b.left < hostBox.left + edge && b.right > hostBox.left + edge) },
+      { at: hostBox.right - edge / 2, side: 'right', b: boxes.find((b) => b.right > hostBox.right - edge && b.left < hostBox.right - edge) },
+    ].find((c) => c.b !== undefined)
+    if (cut?.b === undefined) {
+      report['overviewStripIsClipped'] = 'skipped: the strip reaches neither edge'
+    } else {
+      const hit = document.elementFromPoint(cut.at, cut.b.top + cut.b.height / 2)
+      const painted = hit?.closest('.overview__card') ?? null
+      report['overviewStripIsClipped'] =
+        painted === null
+          ? `ok (${cut.side} band holds ${hit?.className ?? 'nothing'}, no card)`
+          : `FAIL (a card paints into the ${cut.side} band)`
+    }
+
+    report['overviewLensHoldsStill'] =
+      drift < 1
+        ? `ok (centre ${String(Math.round(restingLens))}px, drift ${drift.toFixed(1)}px)`
+        : `FAIL (lens moved ${drift.toFixed(1)}px)`
+
+    /*
+     * A background pane ringing repaints the open map, and a repaint must not
+     * drag it back to the focused card. Only a live pty can ring, and the check
+     * window is otherwise silent — which is why this reached a user first.
+     */
+    const walked = selected()
+    const noisy = addedIds.find((id) => id !== focusedId() && id !== walked)
+    if (noisy === undefined) {
+      report['overviewPanSurvivesRepaint'] = 'skipped: no spare background pane to ring'
+    } else {
+      const marked = (): boolean =>
+        (overlay()?.querySelector(
+          `.overview__card[data-pane-id="${noisy}"].overview__card--wants`,
+        ) ?? null) !== null
+      // Re-baselined: the wheel and the sidebar above both moved the map.
+      const settled = map.getBoundingClientRect().left
+      api.write(noisy, `printf '\\a'\n`)
+      // The mark is the proof a repaint ran; without it there is nothing to assert.
+      const repainted = await waitFor(marked)
+      const held = map.getBoundingClientRect().left
+      report['overviewPanSurvivesRepaint'] = !repainted
+        ? 'skipped: the background pane never rang'
+        : Math.abs(held - settled) < 1 && selected() === walked
+          ? `ok (map held at ${String(Math.round(held))}px)`
+          : `FAIL (map ${String(Math.round(settled))} → ${String(Math.round(held))}px, selection ${String(walked)} → ${String(selected())})`
+    }
+    /*
+     * The wheel must pan the map. The canvas claims wheel events in capture and
+     * stops propagation, so the map's own listener never ran and the map sat
+     * still — invisible to every unit test, since the two listeners only meet
+     * on a real event path.
+     */
+    const beforeWheel = map.getBoundingClientRect().left
+    const lensBeforeWheel = lensCentre()
+    const canvasBeforeWheel = canvasScroll()
+    overlay()!.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: -400, deltaMode: 0, bubbles: true, cancelable: true }),
+    )
+    const afterWheel = map.getBoundingClientRect().left
+    const lensDrift = Math.abs(lensCentre() - lensBeforeWheel)
+    report['overviewWheelPans'] =
+      afterWheel > beforeWheel + 1 && lensDrift < 1
+        ? `ok (map ${String(Math.round(beforeWheel))} → ${String(Math.round(afterWheel))}px, lens held)`
+        : `FAIL (wheel moved the map ${String(Math.round(afterWheel - beforeWheel))}px, lens drifted ${lensDrift.toFixed(1)}px)`
+
+    /*
+     * The session behind the scrim follows the lens as it is scrubbed, and
+     * leaving without landing puts it back: cancel means nothing moved.
+     */
+    // Baselined at the wheel itself: the arrow snaps above scrub too, and
+    // measuring from the opening position would pass on their work alone.
+    const scrubbedTo = await waitFor(() => canvasScroll() !== canvasBeforeWheel)
+    report['overviewScrubMovesTheCanvas'] = scrubbedTo
+      ? `ok (canvas ${String(Math.round(canvasBeforeWheel))} → ${String(Math.round(canvasScroll()))}px on one wheel)`
+      : `FAIL (canvas stuck at ${String(Math.round(canvasBeforeWheel))}px while the strip moved)`
+
+    press('Escape')
+    await waitFor(() => overlay() === null)
+    const restored = await waitFor(() => Math.abs(canvasScroll() - openedScroll) <= 2)
+    report['overviewCancelRestoresTheCanvas'] = restored
+      ? `ok (back at ${String(Math.round(canvasScroll()))}px)`
+      : `FAIL (canvas left at ${String(Math.round(canvasScroll()))}px, opened at ${String(Math.round(openedScroll))}px)`
+
+    // Reopen for the checks below; the strip aligns from the canvas again.
+    press('KeyM', { altKey: true })
+    await waitFor(() => overlay() !== null)
+
+    /*
+     * The map is drawn to the viewport, so the sidebar collapsing under it must
+     * re-lay it out. Assert the map's own width: the marker is no proof, since
+     * syncViewport redraws that alone on every canvas scroll.
+     */
+    const mapStyled = (): number =>
+      Number.parseFloat(
+        overlay()?.querySelector<HTMLElement>('.overview__map')?.style.width ?? '0',
+      )
+    const styledBefore = mapStyled()
+    const widthBefore = host.clientWidth
+    press('KeyS', { altKey: true })
+    const widened = await waitFor(() => host.clientWidth !== widthBefore)
+    /*
+     * The map only changes width if the wider room lifts the scale off the
+     * floor. In a small window the floor pins it at both widths, and there is
+     * nothing a re-render could change — unmeasurable, not broken.
+     */
+    const liftsOffTheFloor = (): boolean =>
+      (host.clientWidth - 96) / canvasSpan() > MIN_OVERVIEW_COLUMN_PX / narrowest
+    if (!widened) {
+      report['overviewFollowsSidebar'] = 'skipped: the sidebar did not move'
+    } else if (!liftsOffTheFloor()) {
+      report['overviewFollowsSidebar'] =
+        `skipped: the floor pins the scale at ${String(widthBefore)} and ${String(host.clientWidth)}px alike`
+      press('KeyS', { altKey: true })
+      await waitFor(() => host.clientWidth === widthBefore)
+    } else {
+      const relaidOut = await waitFor(() => mapStyled() !== styledBefore)
+      report['overviewFollowsSidebar'] = relaidOut
+        ? `ok (map ${String(Math.round(styledBefore))} → ${String(Math.round(mapStyled()))}px for host ${String(widthBefore)} → ${String(host.clientWidth)}px)`
+        : `FAIL (map stuck at ${String(Math.round(styledBefore))}px while the host went ${String(widthBefore)} → ${String(host.clientWidth)}px)`
+      press('KeyS', { altKey: true })
+      // Wait for the map too: the host is back a frame before the map redraws,
+      // and the next check would read that half-way state as a stray move.
+      await waitFor(() => host.clientWidth === widthBefore && mapStyled() === styledBefore)
+    }
+
+    /*
+     * Enter lands: the canvas must end up showing exactly the region the lens
+     * framed, not wherever revealing the pane would have gone. Read the scroll
+     * off the track's own transform — the number the user actually sees.
+     */
+    // The scale, straight off the drawing: one card against its own pane.
+    const target = selected() ?? ''
+    const cardBox = overlay()?.querySelector<HTMLElement>(
+      `.overview__card[data-pane-id="${target}"]`,
+    )
+    const paneEl = visiblePanes().find((p) => p.dataset['paneId'] === target)
+    const drawnScale =
+      cardBox === null || cardBox === undefined || paneEl === undefined
+        ? 0
+        : Number.parseFloat(cardBox.style.width) / Number.parseFloat(paneEl.style.width)
+    const lensOnStripPx = Number.parseFloat(lensEl()?.style.left ?? 'NaN')
+    if (drawnScale <= 0 || Number.isNaN(lensOnStripPx)) {
+      report['overviewEnterLands'] = 'skipped: could not measure the strip'
+      press('Escape')
+      await waitFor(() => overlay() === null)
+    } else {
+      const wanted = Math.min(
+        Math.max(0, lensOnStripPx / drawnScale),
+        Math.max(0, canvasSpan() - host.clientWidth),
+      )
+      press('Enter')
+      await waitFor(() => overlay() === null)
+      const landed = await waitFor(() => Math.abs(canvasScroll() - wanted) <= 2)
+      report['overviewEnterLands'] = landed
+        ? `ok (canvas at ${String(Math.round(canvasScroll()))}px, lens framed ${String(Math.round(wanted))}px)`
+        : `FAIL (canvas at ${String(Math.round(canvasScroll()))}px, lens framed ${String(Math.round(wanted))}px)`
+    }
+  }
+
+  if (overlay() !== null) {
+    press('Escape')
+    await waitFor(() => overlay() === null)
+  }
+  await undo()
 }
 
 /**
@@ -778,3 +1157,4 @@ export async function checkTerminalSignals(report: Report): Promise<void> {
     ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
   await waitFor(() => focusedId() === startFocus)
 }
+

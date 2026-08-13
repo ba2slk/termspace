@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLayout } from './layout-model'
 import { overviewLayout } from './overview-model'
 import { createOverviewView, type OverviewHooks } from './overview-view'
+import { t } from './i18n'
 
 const layout = createLayout([
   { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'editor' }, { id: 'a2', title: 'shell' }] },
@@ -19,6 +20,8 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   wants: () => false,
   onJump: vi.fn(),
   onRename: vi.fn(),
+  onLand: vi.fn(),
+  onScrub: vi.fn(),
   ...over,
 })
 
@@ -225,6 +228,32 @@ describe('card title editing', () => {
   })
 })
 
+describe('createOverviewView — key legend', () => {
+  const legend = (): string => host.querySelector('.overview__legend')?.textContent ?? ''
+
+  const joined = (hints: readonly { key: string; label: string }[]): string =>
+    hints.map((h) => `${h.key} ${h.label}`).join(' · ')
+
+  it('names the keys the map answers to, F2 among them', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    expect(t.overview.mapKeys[2]!.key).toBe('F2')
+    expect(legend()).toBe(joined(t.overview.mapKeys))
+  })
+
+  it('swaps to the editor keys while a title is being typed, and back', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    expect(legend()).toBe(joined(t.overview.editKeys))
+
+    host
+      .querySelector<HTMLInputElement>('.overview__rename')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(legend()).toContain(t.overview.mapKeys[0]!.label)
+  })
+})
+
 describe('createOverviewView — mouse', () => {
   it('clicking a card jumps there', () => {
     const jumped: string[] = []
@@ -235,6 +264,18 @@ describe('createOverviewView — mouse', () => {
       .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     expect(jumped).toEqual(['b1'])
     expect(view.isOpen).toBe(false)
+  })
+
+  it('clicking the band around the strip closes without jumping', () => {
+    // The clip band covers most of the empty space, so it must read as outside.
+    const onJump = vi.fn()
+    const view = createOverviewView(host, hooks({ onJump }))
+    view.open()
+    host
+      .querySelector<HTMLElement>('.overview__clip')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(view.isOpen).toBe(false)
+    expect(onJump).not.toHaveBeenCalled()
   })
 
   it('clicking outside the map closes without jumping', () => {
@@ -274,6 +315,357 @@ describe('createOverviewView — viewport tracking', () => {
     const view = createOverviewView(host, hooks())
     expect(() => view.syncViewport()).not.toThrow()
     expect(host.querySelector('.overview')).toBeNull()
+  })
+})
+
+describe('createOverviewView — pannable map', () => {
+  // Twelve wide columns: the scale floor makes the map wider than this viewport.
+  const wide = createLayout(
+    Array.from({ length: 12 }, (_, i) => ({
+      id: `c${String(i)}`,
+      width: 640,
+      panes: [{ id: `p${String(i)}`, title: `pane ${String(i)}` }],
+    })),
+  )
+  const wideHooks = (focused = 'p6'): OverviewHooks =>
+    hooks({ layout: () => ({ ...wide, focusedPaneId: focused }) })
+
+  it('marks the map pannable and starts revealing the focused card', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    expect(host.querySelector('.overview--pannable')).not.toBeNull()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toMatch(/translateX\(-?\d/)
+  })
+
+  it('wheel slides the strip, and the first column can reach the lens', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    overview.dispatchEvent(new WheelEvent('wheel', { deltaY: -9999, cancelable: true }))
+    // Overscrolled to the start: the lens frames map x = 0, the very first column.
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    expect(Number.parseFloat(lens.style.left)).toBeCloseTo(0, 3)
+  })
+
+  it('arrow selection keeps the selected card in view', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    // Walk right to the far column; the transform must have moved left (negative).
+    for (let i = 0; i < 20; i++) view.handleKey(key('ArrowRight'))
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const offset = Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1])
+    expect(offset).toBeLessThan(0)
+  })
+
+  it('a small session is centred and untransformed, as today', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    expect(host.querySelector('.overview--pannable')).toBeNull()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toBe('translateX(0px)')
+  })
+
+  it('a map that fits lets the wheel through to the canvas underneath', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    const event = new WheelEvent('wheel', { deltaY: 400, cancelable: true })
+    overview.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.style.transform).toBe('translateX(0px)')
+  })
+
+  it('a repaint leaves the selection and the pan where the user put them', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    for (let i = 0; i < 20; i++) view.handleKey(key('ArrowRight'))
+    const selectedBefore = host.querySelector<HTMLElement>('.overview__card--selected')?.dataset[
+      'paneId'
+    ]
+    const transformBefore = map.style.transform
+    expect(transformBefore).not.toBe('translateX(0px)')
+
+    // A background pane ringing repaints the map; that is not a navigation event.
+    view.refreshIfOpen()
+    const after = host.querySelector<HTMLElement>('.overview__map')!
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      selectedBefore,
+    )
+    expect(after.style.transform).toBe(transformBefore)
+  })
+
+  it('a repaint falls back to the focused pane when the selection is gone', () => {
+    let current = { ...wide, focusedPaneId: 'p0' }
+    const view = createOverviewView(host, hooks({ layout: () => current }))
+    view.open()
+    for (let i = 0; i < 3; i++) view.handleKey(key('ArrowRight'))
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      'p3',
+    )
+
+    current = {
+      ...wide,
+      columns: wide.columns.filter((c) => c.panes.every((p) => p.id !== 'p3')),
+      focusedPaneId: 'p0',
+    }
+    expect(() => {
+      view.refreshIfOpen()
+    }).not.toThrow()
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      'p0',
+    )
+  })
+
+  it('opening aligns the canvas region into the lens', () => {
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        viewport: () => ({ width: 800, height: 600, scrollX: 4000 }),
+      }),
+    )
+    view.open()
+    // The lens sits on the strip exactly where the canvas scroll is, to scale.
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    const scale = 110 / 640 // the floor, for these 12 columns in an 800px window
+    expect(Number.parseFloat(lens.style.left)).toBeCloseTo(4000 * scale, 3)
+  })
+
+  it('re-lays-out when the viewport changes, keeping the selection', () => {
+    let width = 800
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        viewport: () => ({ width, height: 600, scrollX: 0 }),
+      }),
+    )
+    view.open()
+    for (let i = 0; i < 4; i++) view.handleKey(key('ArrowRight'))
+    const selectedBefore = host.querySelector<HTMLElement>('.overview__card--selected')?.dataset[
+      'paneId'
+    ]
+    // The marker is the viewport drawn to scale, so it is what must move when
+    // the viewport changes — the floored map width can stay put.
+    const markerBefore = host.querySelector<HTMLElement>('.overview__viewport')!.style.width
+
+    // The sidebar collapsed: the map has more room and must be re-laid-out.
+    width = 1200
+    view.refreshIfOpen()
+    expect(host.querySelector<HTMLElement>('.overview__viewport')!.style.width).not.toBe(
+      markerBefore,
+    )
+    expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
+      selectedBefore,
+    )
+  })
+
+  /*
+   * Pan mode inverts the interaction: the lens is fixed and the strip slides.
+   * Screen position of a map coordinate is 48 + x - offset, so a lens that
+   * holds still is one whose style.left tracks the offset exactly.
+   */
+  const offsetOf = (map: HTMLElement): number =>
+    -Number(/translateX\((-?[\d.]+)px\)/.exec(map.style.transform)?.[1] ?? 0)
+  const lensScreenX = (): number => {
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const lens = host.querySelector<HTMLElement>('.overview__viewport')!
+    return 48 + Number.parseFloat(lens.style.left) - offsetOf(map)
+  }
+
+  it('holds the lens still while every arrow press moves the strip', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const restingLens = lensScreenX()
+
+    for (let i = 0; i < 4; i++) {
+      const before = offsetOf(map)
+      view.handleKey(key('ArrowRight'))
+      expect(offsetOf(map)).toBeGreaterThan(before)
+      expect(lensScreenX()).toBeCloseTo(restingLens, 3)
+    }
+  })
+
+  it('moves the strip back one column per left press', () => {
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p6' }),
+        viewport: () => ({ width: 800, height: 600, scrollX: 4000 }),
+      }),
+    )
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    const before = offsetOf(map)
+    view.handleKey(key('ArrowLeft'))
+    expect(offsetOf(map)).toBeLessThan(before)
+  })
+
+  it('tracks the selection to the column under the lens', () => {
+    const view = createOverviewView(host, wideHooks('p0'))
+    view.open()
+    const selected = (): string | undefined =>
+      host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+    expect(selected()).toBe('p0')
+    view.handleKey(key('ArrowRight'))
+    expect(selected()).toBe('p1')
+    view.handleKey(key('ArrowRight'))
+    expect(selected()).toBe('p2')
+  })
+
+  it('Enter lands the canvas where the lens was pointing', () => {
+    const landed: { scrollX: number; paneId: string }[] = []
+    const view = createOverviewView(
+      host,
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p0' }),
+        onLand: (scrollX, paneId) => landed.push({ scrollX, paneId }),
+      }),
+    )
+    view.open()
+    view.handleKey(key('ArrowRight'))
+    view.handleKey(key('ArrowRight'))
+    view.handleKey(key('Enter', { key: 'Enter' }))
+
+    expect(landed).toHaveLength(1)
+    expect(landed[0]!.paneId).toBe('p2')
+    // Never past the canvas's own scroll range.
+    expect(landed[0]!.scrollX).toBeGreaterThanOrEqual(0)
+    expect(view.isOpen).toBe(false)
+  })
+
+  it('holds the map in the clip band in both modes', () => {
+    // Same DOM either way; only the CSS that clips is scoped to pan mode.
+    const panning = createOverviewView(host, wideHooks('p0'))
+    panning.open()
+    expect(host.querySelector('.overview__clip > .overview__map')).not.toBeNull()
+    panning.close()
+
+    const fitting = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    fitting.open()
+    expect(host.querySelector('.overview__clip > .overview__map')).not.toBeNull()
+  })
+
+  describe('scrubbing the canvas behind the scrim', () => {
+    const scrubHooks = (
+      scrubs: number[],
+      lands: number[] = [],
+      scrollX = 4000,
+    ): OverviewHooks =>
+      hooks({
+        layout: () => ({ ...wide, focusedPaneId: 'p6' }),
+        viewport: () => ({ width: 800, height: 600, scrollX }),
+        onScrub: (x) => scrubs.push(x),
+        onLand: (x) => lands.push(x),
+      })
+
+    it('takes the canvas along on the wheel', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      expect(scrubs).toHaveLength(0) // opening aligned FROM the canvas
+      const overview = host.querySelector<HTMLElement>('.overview')!
+      overview.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, cancelable: true }))
+      expect(scrubs).toHaveLength(1)
+      expect(scrubs[0]).toBeGreaterThan(4000)
+    })
+
+    it('takes the canvas along on an arrow snap', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      expect(scrubs).toHaveLength(1)
+      view.handleKey(key('ArrowLeft'))
+      expect(scrubs).toHaveLength(2)
+      expect(scrubs[1]).toBeLessThan(scrubs[0]!)
+    })
+
+    it('never scrolls past the canvas itself', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      const overview = host.querySelector<HTMLElement>('.overview')!
+      overview.dispatchEvent(new WheelEvent('wheel', { deltaY: 99999, cancelable: true }))
+      // 12 columns of 640 + gaps, in an 800px viewport.
+      expect(scrubs.at(-1)).toBeLessThanOrEqual(7824 - 800)
+      expect(scrubs.at(-1)).toBeGreaterThanOrEqual(0)
+    })
+
+    it('leaves the canvas alone when only the selection moves', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowDown'))
+      view.handleKey(key('ArrowUp'))
+      expect(scrubs).toHaveLength(0)
+    })
+
+    it('puts the canvas back when it closes without landing', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      view.handleKey(key('Escape', { key: 'Escape' }))
+      expect(view.isOpen).toBe(false)
+      // Cancel means nothing moved: the last word is the opening position.
+      expect(scrubs.at(-1)).toBe(4000)
+    })
+
+    it('does not scrub back after landing', () => {
+      const scrubs: number[] = []
+      const lands: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs, lands))
+      view.open()
+      view.handleKey(key('ArrowRight'))
+      const afterSnap = scrubs.at(-1)
+      view.handleKey(key('Enter', { key: 'Enter' }))
+      expect(lands).toHaveLength(1)
+      expect(lands[0]).toBe(afterSnap)
+      // No restoring scrub on the way out — the landing is the point.
+      expect(scrubs.at(-1)).toBe(afterSnap)
+    })
+
+    it('leaves the canvas alone when nothing was scrubbed', () => {
+      const scrubs: number[] = []
+      const view = createOverviewView(host, scrubHooks(scrubs))
+      view.open()
+      view.handleKey(key('Escape', { key: 'Escape' }))
+      expect(scrubs).toHaveLength(0)
+    })
+  })
+
+  it('keeps the marker inside the map when the map fits', () => {
+    const view = createOverviewView(
+      host,
+      hooks({ viewport: () => ({ width: 1600, height: 900, scrollX: 0 }) }),
+    )
+    view.open()
+    const map = host.querySelector<HTMLElement>('.overview__map')!
+    expect(map.querySelector('.overview__viewport')).not.toBeNull()
+    expect(host.querySelector('.overview--pannable')).toBeNull()
+  })
+
+  it('a pannable map takes the wheel for itself', () => {
+    const view = createOverviewView(host, wideHooks())
+    view.open()
+    const overview = host.querySelector<HTMLElement>('.overview')!
+    const event = new WheelEvent('wheel', { deltaY: 400, cancelable: true })
+    overview.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
   })
 })
 
