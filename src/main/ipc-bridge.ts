@@ -27,6 +27,7 @@ import {
   createExampleSession,
   listSessions,
   loadSession,
+  renameSessionName,
   saveSession,
   sessionExists,
   sessionFilePath,
@@ -48,6 +49,7 @@ const INVOKE_CHANNELS = [
   'session:save-as',
   'session:create-blank',
   'session:delete',
+  'session:rename',
   'session:editor-command',
   'fonts:list',
   'themes:list',
@@ -174,6 +176,12 @@ export function registerIpcHandlers(
       return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
     }
   })
+
+  ipcMain.handle(
+    'session:rename',
+    (_e, id: string, newName: string): Promise<SaveSessionResult> =>
+      renameSessionName(dir, id, newName),
+  )
 
   ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {
     const path = await sessionFilePath(dir, id)

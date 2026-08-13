@@ -209,6 +209,7 @@ const sidebar = createSessionSidebar(workspace, {
     appBar.closeMenus()
     sidebarMenu.open(at, sidebarMenuItems(sessionId))
   },
+  onRename: (id, newName) => void renameSession(id, newName),
 })
 
 /**
@@ -246,10 +247,41 @@ function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
       run: () => void saveCurrentLayout(),
     },
     { label: t.firstRun.editSessionFile, run: () => void editSessionFile(sessionId) },
+    { label: t.firstRun.renameSession, run: () => sidebar.startRename(sessionId) },
     { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
     { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
     { label: t.firstRun.deleteSession, separatorBefore: true, danger: true, run: () => confirmDelete(sessionId) },
   ]
+}
+
+/** Rename a session. The file follows the name, so the id can change under us. */
+async function renameSession(id: string, newName: string): Promise<void> {
+  const result = await api.renameSession(id, newName)
+  if (!result.ok) {
+    toast.show(result.error ?? t.firstRun.renameFailedToast)
+    return
+  }
+  // Main decides the file name; read the id back rather than deriving it twice.
+  const newId = result.file.replace(/\.ya?ml$/, '').split('/').pop() ?? id
+  if (newId !== id) {
+    const runtime = runtimes.get(id)
+    if (runtime !== undefined) {
+      runtimes.delete(id)
+      runtimes.set(newId, runtime)
+    }
+    const host = hosts.get(id)
+    if (host !== undefined) {
+      hosts.delete(id)
+      hosts.set(newId, host)
+    }
+    if (currentName === id) currentName = newId
+    if (previousName === id) previousName = newId
+    for (const [was, now] of renamedIds) if (now === id) renamedIds.set(was, newId)
+    renamedIds.set(id, newId)
+  }
+  runtimes.get(newId)?.rename(newName)
+  if (newId === currentName) setTitle(newName)
+  await refreshSidebar()
 }
 
 /**
@@ -320,6 +352,9 @@ let knownSessions: readonly SessionSummary[] = []
  * sessions is the common case, and it should not cost a second shortcut.
  */
 let previousName: string | null = null
+
+/** Where a renamed session went, for the ids closures captured before it. */
+const renamedIds = new Map<string, string>()
 
 /** How many panes a runtime holds right now, splits and closes included. */
 function livePaneCount(runtime: SessionRuntime): number {
@@ -698,7 +733,10 @@ function showOnly(name: string | null): void {
   if (name === null) setTitle(null)
 }
 
-function endSession(id: string): void {
+function endSession(from: string): void {
+  // A rename moves a session to a new id, and the runtime's own onEnd closure
+  // was made before that; follow the trail rather than leaking a dead session.
+  const id = renamedIds.get(from) ?? from
   // Ending a session from the list also means returning to the canvas.
   dismissOverlays()
   runtimes.get(id)?.destroy()
@@ -706,6 +744,7 @@ function endSession(id: string): void {
   hosts.get(id)?.remove()
   hosts.delete(id)
   if (previousName === id) previousName = null
+  for (const [was, now] of renamedIds) if (now === id) renamedIds.delete(was)
 
   if (currentName === id) {
     // If it was the visible one, move to whatever remains.
@@ -767,6 +806,9 @@ async function openSession(id: string): Promise<void> {
       onTitle: setTitle,
       onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
       onPanesChanged: renderSidebar,
+      // The same write as Alt+Shift+S: a title lives in the layout, so the
+      // whole layout is what there is to save.
+      onPaneRenamed: () => void saveCurrentLayout(),
       onAttentionChanged: renderSidebar,
       onWatchedPaneChanged: reportWatchedPane,
       onEnd: () => endSession(id),

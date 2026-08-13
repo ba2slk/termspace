@@ -18,8 +18,16 @@ const hooks = (over: Partial<OverviewHooks> = {}): OverviewHooks => ({
   titles: vi.fn(() => Promise.resolve({})),
   wants: () => false,
   onJump: vi.fn(),
+  onRename: vi.fn(),
   ...over,
 })
+
+/** The Enter that ends Korean composition. happy-dom ignores the init flag. */
+const composingEnter = (): KeyboardEvent => {
+  const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+  Object.defineProperty(event, 'isComposing', { value: true })
+  return event
+}
 
 const key = (code: string, mods: Partial<KeyboardEventInit> = {}): KeyboardEvent =>
   new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true, ...mods })
@@ -113,6 +121,107 @@ describe('createOverviewView — keys', () => {
     const view = createOverviewView(host, hooks())
     view.open()
     expect(view.handleKey(key('KeyX'))).toBe(true)
+  })
+})
+
+describe('card title editing', () => {
+  function editing(): { view: ReturnType<typeof createOverviewView>; onRename: OverviewHooks['onRename'] } {
+    const onRename = vi.fn()
+    const view = createOverviewView(host, hooks({ onRename }))
+    view.open()
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    return { view, onRename }
+  }
+
+  it('F2 opens an editor on the selected card; Enter commits', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
+    expect(host.querySelector('.overview__card--selected .overview__title')?.textContent).toBe(
+      'build',
+    )
+  })
+
+  it('Escape cancels without renaming', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'nope'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('reports isEditing across the edit lifecycle', () => {
+    const view = createOverviewView(host, hooks())
+    view.open()
+    expect(view.isEditing).toBe(false)
+    view.handleKey(new KeyboardEvent('keydown', { key: 'F2' }))
+    expect(view.isEditing).toBe(true)
+    host
+      .querySelector<HTMLInputElement>('.overview__rename')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(view.isEditing).toBe(false)
+  })
+
+  it('leaves plain typing to the input', () => {
+    editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    const typed = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true })
+    input.dispatchEvent(typed)
+    expect(typed.defaultPrevented).toBe(false)
+  })
+
+  it('the Enter that ends a composition does not commit', () => {
+    const { onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    input.dispatchEvent(composingEnter())
+    expect(onRename).not.toHaveBeenCalled()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
+  })
+
+  /*
+   * The caller saves the session file on every onRename, so a commit that
+   * changed nothing must not reach the hook at all.
+   */
+  it('an empty or unchanged title is not committed', () => {
+    for (const value of ['   ', 'editor']) {
+      const { onRename } = editing()
+      const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+      input.value = value
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      expect(onRename).not.toHaveBeenCalled()
+    }
+  })
+
+  /*
+   * A ringing pane elsewhere repaints the map. That must not pull the input
+   * out from under the typing: removing it fires no blur, so the view would be
+   * left believing an editor it no longer has is still open.
+   */
+  it('survives a repaint while the title is being typed', () => {
+    const { view, onRename } = editing()
+    const input = host.querySelector<HTMLInputElement>('.overview__rename')!
+    input.value = 'build'
+    view.refreshIfOpen()
+    expect(view.isEditing).toBe(true)
+    expect(host.querySelector('.overview__rename')).toBe(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onRename).toHaveBeenCalledWith('a1', 'build')
+    expect(view.isEditing).toBe(false)
+  })
+
+  it('navigation keys are inert while editing', () => {
+    const { view } = editing()
+    const before = host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')
+    expect(view.handleKey(new KeyboardEvent('keydown', { code: 'ArrowRight', key: 'ArrowRight' }))).toBe(
+      true,
+    )
+    expect(host.querySelector('.overview__card--selected')?.getAttribute('data-pane-id')).toBe(
+      before,
+    )
   })
 })
 

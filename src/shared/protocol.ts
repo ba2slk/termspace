@@ -268,6 +268,8 @@ export interface TermspaceApi {
   shellIntegrationStatus(): Promise<ShellIntegrationStatus>
   /** Move the session file to the trash, so the delete stays reversible. */
   deleteSession(id: string): Promise<SaveSessionResult>
+  /** Rewrite the session's display name in place. The file name (id) never changes. */
+  renameSession(id: string, newName: string): Promise<SaveSessionResult>
   /** Full editor invocation for this session's file, or null when it is missing. */
   editorCommandFor(id: string): Promise<string | null>
   /** Open the session file with the OS default app — for when no session is on screen. */

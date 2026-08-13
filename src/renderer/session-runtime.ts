@@ -26,6 +26,7 @@ import {
   findPane,
   focusDir,
   movePane,
+  renamePane,
   resizeColumn,
   resizePane,
   splitPane,
@@ -88,6 +89,8 @@ function freeContexts(count: number, mine: ContextHolder): void {
 
 export interface SessionRuntime {
   readonly spec: SessionSpec
+  /** Adopt a new display name, so a later save writes it. */
+  rename(name: string): void
   /** Whether this session takes keyboard input; hidden ones must not. */
   setActive(active: boolean): void
   /** Reapply settings to every live terminal. */
@@ -157,6 +160,8 @@ export interface StartSessionOptions {
   readonly onCopied: (chars: number) => void
   /** A pane was added or removed; the session list shows the count. */
   readonly onPanesChanged: () => void
+  /** A pane title was edited; a title alone is not worth losing on a restart. */
+  readonly onPaneRenamed: () => void
   /** A pane started or stopped asking to be looked at; the sidebar shows it. */
   readonly onAttentionChanged: () => void
   /** Focus moved to another pane; main decides notifications by what is watched. */
@@ -170,7 +175,8 @@ interface PaneRecord {
 }
 
 export function startSession(options: StartSessionOptions): SessionRuntime {
-  const { spec, host } = options
+  let spec = options.spec
+  const { host } = options
   // Toggled by main.ts when switching sessions.
   let active = false
 
@@ -244,6 +250,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       // Same pane: setLayout would be a no-op, but the view should still settle on it.
       revealFocused()
+    },
+    onRename: (paneId, title) => {
+      setLayout(renamePane(layout, paneId, title))
+      options.onPaneRenamed()
     },
   })
 
@@ -669,6 +679,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     const action = resolveAction(event, options.bindings(), IS_MAC)
     // The open overview owns every key; nothing may fall through to a pty.
     if (overview.isOpen) {
+      // Except while a title is being typed: this listener captures, so
+      // preventDefault here would cancel the letter before the input sees it.
+      if (overview.isEditing) return
       if (overview.handleKey(event, action?.t === 'overview')) {
         event.preventDefault()
         event.stopPropagation()
@@ -774,7 +787,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   records.get(layout.focusedPaneId)?.terminal.focus()
 
   return {
-    spec,
+    get spec() {
+      return spec
+    },
+    rename(name) {
+      spec = { ...spec, name }
+    },
     applySettings(next) {
       const appearance = {
         fontSize: next.fontSize,

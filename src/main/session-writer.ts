@@ -43,6 +43,20 @@ export function isValidSessionId(id: string): boolean {
   return /^[\p{L}\p{N}._-]+$/u.test(id)
 }
 
+/**
+ * A display name as a file name. Mirrors the save dialog's own derivation, so
+ * a session renamed in place lands where saving it under that name would.
+ * Empty when nothing survives the allowlist — the caller decides what then.
+ */
+export function deriveSessionId(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}._-]/gu, '')
+    .replace(/^[.-]+/, '')
+    .slice(0, 64)
+}
+
 export { shorten }
 
 /**

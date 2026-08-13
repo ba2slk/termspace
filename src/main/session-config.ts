@@ -2,13 +2,14 @@
  * Locates session YAML and hands it to session-schema. Knows where files are,
  * not what makes them valid.
  */
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, parseDocument } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { configDir } from './config-dir'
 import { parseSession, resolveCwd } from './session-schema'
 import {
+  deriveSessionId,
   isValidSessionId,
   SESSION_HEADER,
   toSessionYaml,
@@ -232,6 +233,53 @@ export async function sessionFilePath(dir: string, id: string): Promise<string |
     }
   }
   return null
+}
+
+/**
+ * Rewrite the `name:` field, and take the file name with it. A targeted
+ * document edit rather than a parse-and-reserialize: hand-written comments and
+ * any panes the schema would reject must survive a rename untouched.
+ */
+export async function renameSessionName(
+  dir: string,
+  id: string,
+  newName: string,
+): Promise<SaveSessionResult> {
+  const name = newName.trim()
+  if (name === '') return { ok: false, file: '', error: 'Name must not be empty' }
+  const path = await sessionFilePath(dir, id)
+  if (path === null) return { ok: false, file: '', error: `Session file not found: ${id}` }
+  try {
+    const before = await readFile(path, 'utf8')
+    const doc = parseDocument(before)
+    if (doc.errors.length > 0) {
+      return { ok: false, file: path, error: 'YAML syntax error — fix the file first' }
+    }
+    doc.set('name', name)
+    const text = doc.toString()
+
+    // A name of punctuation alone derives nothing; the file keeps the id it has.
+    const newId = deriveSessionId(name)
+    if (newId === '' || newId === id) {
+      // Same one-generation undo as every other write to a session file.
+      await copyFile(path, `${path}.bak`)
+      await writeFile(path, text, 'utf8')
+      return { ok: true, file: path, error: null }
+    }
+
+    if (await sessionExists(dir, newId)) {
+      return { ok: false, file: path, error: 'A session with this name already exists' }
+    }
+
+    const moved = join(dir, `${newId}.yaml`)
+    // The new file's one generation back is the file as it stood before the rename.
+    await writeFile(`${moved}.bak`, before, 'utf8')
+    await writeFile(moved, text, 'utf8')
+    await unlink(path)
+    return { ok: true, file: moved, error: null }
+  } catch (err) {
+    return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function createExampleSession(dir: string): Promise<string> {

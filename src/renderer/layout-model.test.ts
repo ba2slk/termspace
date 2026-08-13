@@ -12,6 +12,7 @@ import {
   MIN_PANE_HEIGHT,
   movePane,
   PANE_GAP,
+  renamePane,
   resizeColumn,
   resizePane,
   splitDown,
@@ -753,5 +754,18 @@ describe('movePane', () => {
       layout = movePane(layout, dir, HEIGHT, `n-${dir}`)
       expect(layoutViolations(layout)).toEqual([])
     }
+  })
+})
+
+describe('renamePane', () => {
+  it('renames only the target pane', () => {
+    const layout = createLayout([
+      { id: 'c1', width: 640, panes: [{ id: 'a', title: 'one' }, { id: 'b', title: 'two' }] },
+      { id: 'c2', width: 640, panes: [{ id: 'c', title: 'three' }] },
+    ])
+    const next = renamePane(layout, 'b', 'renamed')
+    expect(findPane(next, 'b')?.pane.title).toBe('renamed')
+    expect(findPane(next, 'a')?.pane.title).toBe('one')
+    expect(next.columns[1]).toBe(layout.columns[1]) // untouched column keeps its identity
   })
 })

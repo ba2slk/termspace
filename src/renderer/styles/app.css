@@ -433,6 +433,19 @@ body {
   white-space: nowrap;
 }
 
+/* The row's name while it is being renamed; sized to sit where the name sat. */
+.sidebar__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 0 2px;
+  color: var(--fg);
+  font: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-active);
+  outline: none;
+}
+
 .sidebar__meta {
   flex: 0 0 auto;
   /* Push the slack right, keeping name and count together. */
@@ -811,6 +824,18 @@ body {
   color: var(--fg);
   font-size: var(--fs-ui-sm);
   white-space: nowrap;
+}
+
+/* The card's title while it is being renamed. */
+.overview__rename {
+  min-width: 0;
+  padding: 0;
+  color: var(--fg);
+  font-size: var(--fs-ui-sm);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-active);
+  outline: none;
 }
 
 .overview__card--running .overview__title::after {

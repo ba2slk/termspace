@@ -315,6 +315,18 @@ export function resizeColumn(
   return { ...layout, columns: withColumn(layout, at, { ...column, width }) }
 }
 
+/** The same layout with one pane's title replaced. */
+export function renamePane(layout: Layout, paneId: string, title: string): Layout {
+  return {
+    ...layout,
+    columns: layout.columns.map((column) =>
+      column.panes.some((p) => p.id === paneId)
+        ? { ...column, panes: column.panes.map((p) => (p.id === paneId ? { ...p, title } : p)) }
+        : column,
+    ),
+  }
+}
+
 /**
  * dy is what the pane gains, not which way a seam moves — the same reading as
  * dx in resizeColumn, where a column widens wherever it sits. The seam that

@@ -414,6 +414,21 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
 
+### Renaming (no self-check covers these)
+
+- [ ] Right-click a session row › Rename session, type a new name and press Enter. The row
+      and the title bar show it, and in `~/.config/termspace/sessions/` the file itself has
+      moved to `<new-id>.yaml` — new `name:`, comments intact, the old file gone, and
+      `<new-id>.yaml.bak` holding the file as it stood before the rename. The session keeps
+      running throughout, and the name survives a restart
+- [ ] Rename to a name another session already uses: nothing is written and the reason
+      appears as a toast
+- [ ] Type a Korean name with the IME: the Enter that ends composition only ends
+      composition — a second Enter commits
+- [ ] In the `Alt+M` overview, press `F2` on the selected card and type a title. Letters
+      appear as typed (both English and Korean), Enter commits, and the session file has the
+      new title without pressing save. Escape leaves the card as it was
+
 ### Shell integration (bash and zsh)
 
 The OSC round trip itself is automated — the check emits the hook's sequences with
