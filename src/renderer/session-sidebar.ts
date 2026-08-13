@@ -203,6 +203,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     readonly fromIndex: number
     readonly startY: number
     readonly row: HTMLElement
+    readonly pointerId: number
     moved: boolean
     dropIndex: number
   } | null = null
@@ -236,15 +237,26 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     list.classList.remove('sidebar__list--dragging')
   }
 
+  const releaseDragPointer = (pointerId: number): void => {
+    if (list.hasPointerCapture(pointerId)) list.releasePointerCapture(pointerId)
+  }
+
   function cancelDrag(): void {
     if (drag === null) return
-    // A drag that got as far as moving must not leave a click behind it.
-    swallowClick = drag.moved
+    const { moved, pointerId } = drag
     endDragVisuals()
+    // Cleared before the release: losing capture re-enters here.
     drag = null
+    releaseDragPointer(pointerId)
+    // A drag that got as far as moving must not leave a click behind it.
+    swallowClick = moved
   }
 
   list.addEventListener('pointerdown', (event) => {
+    // A second pointer, or a cancel that never produced a click, must not leave
+    // the previous drag's visuals or its armed swallow behind.
+    cancelDrag()
+    swallowClick = false
     if (event.button !== 0) return
     const target = event.target as HTMLElement | null
     if (target === null) return
@@ -260,6 +272,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       fromIndex: index,
       startY: event.clientY,
       row,
+      pointerId: event.pointerId,
       moved: false,
       dropIndex: index,
     }
@@ -281,12 +294,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     markDrop(drag.dropIndex)
   })
 
-  const releaseDragPointer = (pointerId: number): void => {
-    if (list.hasPointerCapture(pointerId)) list.releasePointerCapture(pointerId)
-  }
-
   const finishDrag = (event: PointerEvent): void => {
-    if (drag === null) return
+    if (drag === null || event.pointerId !== drag.pointerId) return
     const { id, fromIndex, dropIndex, moved } = drag
     endDragVisuals()
     drag = null
@@ -296,10 +305,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     if (dropIndex !== fromIndex) hooks.onReorder(id, dropIndex)
   }
   list.addEventListener('pointerup', finishDrag)
-  list.addEventListener('pointercancel', (event) => {
-    cancelDrag()
-    releaseDragPointer(event.pointerId)
+  list.addEventListener('pointercancel', () => cancelDrag())
+  // A press that leaves the list before it becomes a drag never took capture,
+  // so its pointerup lands elsewhere and would strand the drag forever.
+  list.addEventListener('pointerleave', () => {
+    if (drag?.moved === false) cancelDrag()
   })
+  // Capture can also be revoked from under us: a removed element, a lost window.
+  list.addEventListener('lostpointercapture', () => cancelDrag())
 
   // Capture phase: the row's own click handler must never see this one.
   list.addEventListener(
@@ -315,9 +328,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   const onDragKey = (event: KeyboardEvent): void => {
     if (drag === null || event.key !== 'Escape') return
+    // This Escape belongs to the drag: the terminal and any open menu must not
+    // also act on it. An Escape with no drag under it passes through untouched.
+    event.preventDefault()
+    event.stopPropagation()
     cancelDrag()
   }
-  document.addEventListener('keydown', onDragKey)
+  // Capture, and before every other keydown listener in the app registers.
+  window.addEventListener('keydown', onDragKey, true)
 
   // ── Width drag ───────────────────────────────────────
   let dragFrom: { x: number; width: number } | null = null
@@ -490,8 +508,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     render(sessions, live, current, wanting) {
       wantingIds = wanting ?? new Set()
-      // Rows are rebuilt, so a live preview has nothing to sit on.
+      // Rows are rebuilt, so a live preview has nothing to sit on — and neither
+      // has a drag: a background pty ringing must not move what it measures.
       clearPreview()
+      cancelDrag()
       shown = sessions
       currentId = current
       if (sessions.length === 0) {
@@ -519,7 +539,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     destroy() {
       clearPreview()
-      document.removeEventListener('keydown', onDragKey)
+      window.removeEventListener('keydown', onDragKey, true)
       aside.remove()
       grip.remove()
     },
