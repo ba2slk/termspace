@@ -92,8 +92,9 @@ columns:
 /**
  * A second session, so switching between two can be checked at all.
  *
- * Sorted before "verify", which puts verify on the second row — the one the
- * held-jump check aims at.
+ * The list order follows creation order, not the alphabet, so this file is
+ * written before "verify" (see `ensureSession`) to put verify on the second
+ * row — the one the held-jump check aims at.
  */
 const SPARE_SESSION = `name: spare
 cwd: "~"
@@ -123,8 +124,10 @@ async function ensureSession(group) {
   const dir = sessionDir(group)
   await rm(join(configHome(group), 'termspace'), { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
+  // Creation order is list order (see SPARE_SESSION above): spare first, so
+  // verify lands on the second row.
   await writeFile(join(dir, 'spare.yaml'), SPARE_SESSION, 'utf8')
+  await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
 }
 
 /** Clean up this repo's electron processes; silent when there are none. */
