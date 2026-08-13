@@ -24,6 +24,7 @@ const hooks = (): SidebarHooks => ({
   onCreateBlank: vi.fn(),
   onContextMenu: vi.fn(),
   onRename: vi.fn(),
+  onReorder: vi.fn(),
 })
 
 let host: HTMLElement
@@ -109,5 +110,103 @@ describe('inline rename', () => {
     input.value = '   '
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     expect(onRename).not.toHaveBeenCalled()
+  })
+})
+
+describe('reordering by drag', () => {
+  function renderThreeSessions(over: { live?: ReadonlyMap<string, number> } = {}): {
+    hooks: SidebarHooks
+    rows: HTMLElement[]
+  } {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.render(
+      ['a', 'b', 'c'].map((id) =>
+        summary({ id, name: id, file: `/s/${id}.yaml`, paneCount: 1, createdMs: 1, error: null }),
+      ),
+      over.live ?? new Map(),
+      null,
+    )
+    return { hooks: h, rows: [...host.querySelectorAll<HTMLElement>('.sidebar__row')] }
+  }
+
+  // happy-dom gives every element a zero-size box, so rows need one to drop onto.
+  const stubBoxes = (rows: readonly HTMLElement[]): void => {
+    rows.forEach((row, i) => {
+      row.getBoundingClientRect = () =>
+        ({
+          top: 100 + i * 40,
+          height: 40,
+          bottom: 140 + i * 40,
+          left: 0,
+          right: 200,
+          width: 200,
+          x: 0,
+          y: 100 + i * 40,
+          toJSON: () => ({}),
+        }) as DOMRect
+    })
+  }
+
+  const press = (el: HTMLElement, y: number, type: string): void => {
+    el.dispatchEvent(
+      new PointerEvent(type, { clientX: 20, clientY: y, bubbles: true, cancelable: true, pointerId: 1 }),
+    )
+  }
+
+  it('a press that barely moves still opens the session and reorders nothing', () => {
+    const { hooks: h, rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 113, 'pointermove')
+    press(rows[0]!, 113, 'pointerup')
+    rows[0]!.querySelector<HTMLButtonElement>('.sidebar__open')!.click()
+    expect(h.onReorder).not.toHaveBeenCalled()
+    expect(h.onOpen).toHaveBeenCalledWith('a')
+  })
+
+  it('a drag past the threshold reorders and does not open', () => {
+    const { hooks: h, rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    press(rows[0]!, 210, 'pointerup')
+    rows[0]!.querySelector<HTMLButtonElement>('.sidebar__open')!.click()
+    expect(h.onReorder).toHaveBeenCalledWith('a', 2)
+    expect(h.onOpen).not.toHaveBeenCalled()
+  })
+
+  it('Escape mid-drag cancels: nothing opens, nothing moves', () => {
+    const { hooks: h, rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    press(rows[0]!, 210, 'pointerup')
+    rows[0]!.querySelector<HTMLButtonElement>('.sidebar__open')!.click()
+    expect(h.onReorder).not.toHaveBeenCalled()
+    expect(h.onOpen).not.toHaveBeenCalled()
+  })
+
+  it('a press on the power button never becomes a drag', () => {
+    const { hooks: h, rows } = renderThreeSessions({ live: new Map([['a', 1]]) })
+    stubBoxes(rows)
+    const power = rows[0]!.querySelector<HTMLButtonElement>('.sidebar__close')!
+    press(power, 110, 'pointerdown')
+    press(power, 210, 'pointermove')
+    press(power, 210, 'pointerup')
+    expect(h.onReorder).not.toHaveBeenCalled()
+  })
+
+  it('the wheel dial does not run while a drag is live', () => {
+    const { hooks: h, rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    const list = host.querySelector<HTMLElement>('.sidebar__list')!
+    for (let i = 0; i < 10; i++) {
+      list.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }))
+    }
+    expect(host.querySelectorAll('.sidebar__row--preview')).toHaveLength(0)
   })
 })

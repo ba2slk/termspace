@@ -9,6 +9,7 @@
  */
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
+import { dropIndexAt, REORDER_THRESHOLD, type RowBox } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
@@ -29,6 +30,8 @@ export interface SidebarHooks {
   readonly onContextMenu: (at: { x: number; y: number }, sessionId: string | null) => void
   /** The user typed a new display name for a session. */
   readonly onRename: (id: string, newName: string) => void
+  /** The user dragged a row to a new index. */
+  readonly onReorder: (id: string, toIndex: number) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -174,6 +177,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   list.addEventListener(
     'wheel',
     (event) => {
+      if (drag !== null) return
       if (shown.length === 0) return
       event.preventDefault()
       const step = detent.feed(event.deltaY, event.deltaMode, event.timeStamp)
@@ -189,6 +193,131 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     },
     { passive: false },
   )
+
+  // ── Drag to reorder ──────────────────────────────────
+  //
+  // A row's click already opens a session, which spawns ptys, so the drag may
+  // not borrow it: nothing happens until the pointer has actually travelled.
+  let drag: {
+    readonly id: string
+    readonly fromIndex: number
+    readonly startY: number
+    readonly row: HTMLElement
+    moved: boolean
+    dropIndex: number
+  } | null = null
+  let swallowClick = false
+
+  function rowBoxes(): RowBox[] {
+    return shownRows.map((row) => {
+      const box = row.getBoundingClientRect()
+      return { top: box.top, height: box.height }
+    })
+  }
+
+  function markDrop(index: number): void {
+    for (const row of shownRows) {
+      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
+    }
+    const others = shownRows.filter((_, i) => i !== drag?.fromIndex)
+    const before = others[index]
+    if (before !== undefined) before.classList.add('sidebar__row--drop-before')
+    else others[others.length - 1]?.classList.add('sidebar__row--drop-after')
+  }
+
+  function endDragVisuals(): void {
+    if (drag !== null) {
+      drag.row.classList.remove('sidebar__row--dragging')
+      drag.row.style.transform = ''
+    }
+    for (const row of shownRows) {
+      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
+    }
+    list.classList.remove('sidebar__list--dragging')
+  }
+
+  function cancelDrag(): void {
+    if (drag === null) return
+    // A drag that got as far as moving must not leave a click behind it.
+    swallowClick = drag.moved
+    endDragVisuals()
+    drag = null
+  }
+
+  list.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return
+    const target = event.target as HTMLElement | null
+    if (target === null) return
+    // The power button and the rename input keep their own pointer.
+    if (target.closest('.sidebar__close, .sidebar__rename') !== null) return
+    const row = target.closest<HTMLElement>('.sidebar__row')
+    if (row === null) return
+    const index = shownRows.indexOf(row)
+    const session = shown[index]
+    if (session === undefined) return
+    drag = {
+      id: session.id,
+      fromIndex: index,
+      startY: event.clientY,
+      row,
+      moved: false,
+      dropIndex: index,
+    }
+  })
+
+  list.addEventListener('pointermove', (event) => {
+    if (drag === null) return
+    if (!drag.moved) {
+      if (Math.abs(event.clientY - drag.startY) < REORDER_THRESHOLD) return
+      drag.moved = true
+      // The wheel dial rebuilds rows; it cannot run under a live drag.
+      clearPreview()
+      drag.row.classList.add('sidebar__row--dragging')
+      list.classList.add('sidebar__list--dragging')
+      list.setPointerCapture(event.pointerId)
+    }
+    drag.row.style.transform = `translateY(${String(event.clientY - drag.startY)}px)`
+    drag.dropIndex = dropIndexAt(event.clientY, rowBoxes(), drag.fromIndex)
+    markDrop(drag.dropIndex)
+  })
+
+  const releaseDragPointer = (pointerId: number): void => {
+    if (list.hasPointerCapture(pointerId)) list.releasePointerCapture(pointerId)
+  }
+
+  const finishDrag = (event: PointerEvent): void => {
+    if (drag === null) return
+    const { id, fromIndex, dropIndex, moved } = drag
+    endDragVisuals()
+    drag = null
+    releaseDragPointer(event.pointerId)
+    if (!moved) return
+    swallowClick = true
+    if (dropIndex !== fromIndex) hooks.onReorder(id, dropIndex)
+  }
+  list.addEventListener('pointerup', finishDrag)
+  list.addEventListener('pointercancel', (event) => {
+    cancelDrag()
+    releaseDragPointer(event.pointerId)
+  })
+
+  // Capture phase: the row's own click handler must never see this one.
+  list.addEventListener(
+    'click',
+    (event) => {
+      if (!swallowClick) return
+      swallowClick = false
+      event.stopPropagation()
+      event.preventDefault()
+    },
+    true,
+  )
+
+  const onDragKey = (event: KeyboardEvent): void => {
+    if (drag === null || event.key !== 'Escape') return
+    cancelDrag()
+  }
+  document.addEventListener('keydown', onDragKey)
 
   // ── Width drag ───────────────────────────────────────
   let dragFrom: { x: number; width: number } | null = null
@@ -390,6 +519,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     destroy() {
       clearPreview()
+      document.removeEventListener('keydown', onDragKey)
       aside.remove()
       grip.remove()
     },

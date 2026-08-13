@@ -210,6 +210,8 @@ const sidebar = createSessionSidebar(workspace, {
     sidebarMenu.open(at, sidebarMenuItems(sessionId))
   },
   onRename: (id, newName) => void renameSession(id, newName),
+  // Wired to the main process in the next step; the drag is inert until then.
+  onReorder: () => {},
 })
 
 /**
