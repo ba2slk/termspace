@@ -120,13 +120,9 @@ columns:
  * through (a CSS rule happy-dom cannot see). Sessions-group only, and written
  * last, so it lands after spare and verify in creation order.
  *
- * The id starts with "z" on purpose: `applyOrder` falls back to
- * `id.localeCompare` whenever two files share a birthtime, which happens
- * often enough on a fast filesystem that three writes in one tick can tie.
- * "selfcheck-broken" sorts before "spare" alphabetically and would silently
- * jump to row 1 on a tied timestamp, moving verify off row 2 and breaking
- * `checkHeldSessionJump`'s `Alt+2`. "z…" sorts after both names, so the
- * fallback agrees with the write order instead of fighting it.
+ * The id starts with "z" on purpose and that prefix is load-bearing — see
+ * "Two sessions created in the same tick sorted alphabetically instead of by
+ * write order" in `docs/engineering-notes.md`.
  */
 const BROKEN_SESSION = `name: selfcheck-broken
 cwd: "~"
