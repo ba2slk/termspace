@@ -113,6 +113,27 @@ columns:
 `
 
 /**
+ * A session the schema refuses — `columns: []` fails `columns.min(1)` in
+ * `session-schema.ts` — so the sidebar renders it as an error row. The error
+ * row is a real state the sidebar has to handle, and `checkErrorRowStaysDraggable`
+ * needs a live one to check that its disabled open button still lets a drag
+ * through (a CSS rule happy-dom cannot see). Sessions-group only, and written
+ * last, so it lands after spare and verify in creation order.
+ *
+ * The id starts with "z" on purpose: `applyOrder` falls back to
+ * `id.localeCompare` whenever two files share a birthtime, which happens
+ * often enough on a fast filesystem that three writes in one tick can tie.
+ * "selfcheck-broken" sorts before "spare" alphabetically and would silently
+ * jump to row 1 on a tied timestamp, moving verify off row 2 and breaking
+ * `checkHeldSessionJump`'s `Alt+2`. "z…" sorts after both names, so the
+ * fallback agrees with the write order instead of fighting it.
+ */
+const BROKEN_SESSION = `name: selfcheck-broken
+cwd: "~"
+columns: []
+`
+
+/**
  * A config folder per group, wiped every run.
  *
  * Separate, because a group that toggles a setting or saves a session would
@@ -128,6 +149,11 @@ async function ensureSession(group) {
   // verify lands on the second row.
   await writeFile(join(dir, 'spare.yaml'), SPARE_SESSION, 'utf8')
   await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
+  // Only the sessions group needs an error row; written last so it never
+  // takes a row position another check's fixed assumption depends on.
+  if (group === 'sessions') {
+    await writeFile(join(dir, 'zselfcheck-broken.yaml'), BROKEN_SESSION, 'utf8')
+  }
 }
 
 /** Clean up this repo's electron processes; silent when there are none. */
