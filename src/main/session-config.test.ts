@@ -7,6 +7,7 @@ import {
   listSessions,
   loadSession,
   renameSessionName,
+  reorderSession,
   saveSession,
   sessionsDir,
 } from './session-config'
@@ -280,6 +281,28 @@ describe('renameSessionName', () => {
     await writeFile(join(dir, 'bad.yaml'), 'name: [unclosed\n', 'utf8')
     const result = await renameSessionName(dir, 'bad', 'x', orderPath())
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('reorderSession', () => {
+  const write = (name: string) =>
+    writeFile(join(dir, `${name}.yaml`), `name: ${name}\ncolumns:\n  - panes:\n      - {}\n`)
+
+  it('moves a session and returns the new list', async () => {
+    await write('a')
+    await write('b')
+    await write('c')
+    await listSessions(dir, orderPath())
+    const list = await reorderSession(dir, orderPath(), 'a', 2)
+    expect(list.map((s) => s.id)).toEqual(['b', 'c', 'a'])
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['b', 'c', 'a'])
+  })
+
+  it('moves a session the order file has never seen', async () => {
+    await write('a')
+    await write('b')
+    const list = await reorderSession(dir, orderPath(), 'b', 0)
+    expect(list.map((s) => s.id)).toEqual(['b', 'a'])
   })
 })
 

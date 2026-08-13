@@ -7,7 +7,7 @@ import { basename, join } from 'node:path'
 import { parse as parseYaml, parseDocument } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { configDir } from './config-dir'
-import { applyOrder, renameInOrder } from './session-order'
+import { applyOrder, moveTo, renameInOrder } from './session-order'
 import { readOrder, writeOrder } from './session-order-file'
 import { parseSession, resolveCwd } from './session-schema'
 import {
@@ -307,6 +307,22 @@ export async function renameSessionName(
   } catch (err) {
     return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+/**
+ * Move one session and return the list as it now stands. The renderer draws the
+ * reply rather than guessing — the file is the order.
+ */
+export async function reorderSession(
+  dir: string,
+  orderPath: string,
+  id: string,
+  toIndex: number,
+): Promise<SessionSummary[]> {
+  // Seeds the order first, so a drag before any listing still has ids to move.
+  const seeded = (await listSessions(dir, orderPath)).map((s) => s.id)
+  await writeOrder(orderPath, moveTo(seeded, id, toIndex))
+  return listSessions(dir, orderPath)
 }
 
 export async function createExampleSession(dir: string): Promise<string> {

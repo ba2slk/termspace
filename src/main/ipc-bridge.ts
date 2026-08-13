@@ -28,6 +28,7 @@ import {
   listSessions,
   loadSession,
   renameSessionName,
+  reorderSession,
   saveSession,
   sessionExists,
   sessionFilePath,
@@ -51,6 +52,7 @@ const INVOKE_CHANNELS = [
   'session:create-blank',
   'session:delete',
   'session:rename',
+  'session:reorder',
   'session:editor-command',
   'fonts:list',
   'themes:list',
@@ -183,6 +185,12 @@ export function registerIpcHandlers(
     'session:rename',
     (_e, id: string, newName: string): Promise<SaveSessionResult> =>
       renameSessionName(dir, id, newName, orderPath),
+  )
+
+  ipcMain.handle(
+    'session:reorder',
+    (_e, id: string, toIndex: number): Promise<SessionSummary[]> =>
+      reorderSession(dir, orderPath, id, toIndex),
   )
 
   ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {
