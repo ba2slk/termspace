@@ -3,7 +3,15 @@ import { createSessionSidebar, type SidebarHooks } from './session-sidebar'
 import type { SessionSummary } from '../shared/protocol'
 
 function summary(over: Partial<SessionSummary> = {}): SessionSummary {
-  return { id: 'work', name: 'work', file: '/s/work.yaml', paneCount: 2, error: null, ...over }
+  return {
+    id: 'work',
+    name: 'work',
+    file: '/s/work.yaml',
+    paneCount: 2,
+    createdMs: 0,
+    error: null,
+    ...over,
+  }
 }
 
 const hooks = (): SidebarHooks => ({

@@ -125,6 +125,8 @@ export interface SessionSummary {
   /** Absolute path, shown when reporting a config error. */
   readonly file: string
   readonly paneCount: number
+  /** File creation time (birth time, or last write where the fs has none). */
+  readonly createdMs: number
   /** Why it can't be opened, or null. */
   readonly error: string | null
 }

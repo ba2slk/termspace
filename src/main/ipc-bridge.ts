@@ -33,6 +33,7 @@ import {
   sessionFilePath,
   sessionsDir,
 } from './session-config'
+import { orderFile } from './session-order-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
 import { resolveCwd } from './session-schema'
@@ -92,6 +93,7 @@ export function registerIpcHandlers(
   env: NodeJS.ProcessEnv,
 ): () => void {
   const dir = sessionsDir(env)
+  const orderPath = orderFile(env)
 
   const send = (channel: string, ...args: unknown[]): void => {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -156,7 +158,7 @@ export function registerIpcHandlers(
     onResume: (paneId) => host.resume(paneId),
   })
 
-  ipcMain.handle('session:list', (): Promise<SessionSummary[]> => listSessions(dir))
+  ipcMain.handle('session:list', (): Promise<SessionSummary[]> => listSessions(dir, orderPath))
   ipcMain.handle(
     'session:load',
     (_e, name: string): Promise<LoadSessionResult> => loadSession(dir, name, env),

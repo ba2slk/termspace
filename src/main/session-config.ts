@@ -7,6 +7,8 @@ import { basename, join } from 'node:path'
 import { parse as parseYaml, parseDocument } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { configDir } from './config-dir'
+import { applyOrder } from './session-order'
+import { readOrder, writeOrder } from './session-order-file'
 import { parseSession, resolveCwd } from './session-schema'
 import {
   deriveSessionId,
@@ -49,12 +51,22 @@ async function summarize(dir: string, file: string): Promise<SessionSummary> {
   const path = join(dir, file)
   const id = basename(file).replace(/\.ya?ml$/, '')
 
+  // birthtime is 0 on filesystems that do not record one; the last write is the
+  // closest honest stand-in.
+  let createdMs = 0
+  try {
+    const info = await stat(path)
+    createdMs = info.birthtimeMs > 0 ? info.birthtimeMs : info.mtimeMs
+  } catch {
+    // Vanished between readdir and here — it sorts last and drops next listing.
+  }
+
   let raw: unknown
   try {
     raw = parseYaml(await readFile(path, 'utf8'))
   } catch (err) {
     const detail = err instanceof Error ? err.message.split('\n')[0] : String(err)
-    return { id, name: id, file: path, paneCount: 0, error: `YAML syntax error: ${detail}` }
+    return { id, name: id, file: path, paneCount: 0, createdMs, error: `YAML syntax error: ${detail}` }
   }
 
   // The list only needs a name and pane count, so skip path resolution.
@@ -66,6 +78,7 @@ async function summarize(dir: string, file: string): Promise<SessionSummary> {
       name: id,
       file: path,
       paneCount: 0,
+      createdMs,
       error:
         first === undefined
           ? 'Could not read the configuration'
@@ -78,11 +91,13 @@ async function summarize(dir: string, file: string): Promise<SessionSummary> {
     name: parsed.spec.name,
     file: path,
     paneCount: parsed.spec.columns.reduce((a, c) => a + c.panes.length, 0),
+    createdMs,
     error: null,
   }
 }
 
-export async function listSessions(dir: string): Promise<SessionSummary[]> {
+/** orderPath is the app's order file; the listing follows it and keeps it true. */
+export async function listSessions(dir: string, orderPath: string): Promise<SessionSummary[]> {
   let files: string[]
   try {
     files = (await readdir(dir)).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
@@ -90,8 +105,16 @@ export async function listSessions(dir: string): Promise<SessionSummary[]> {
     return [] // No directory yet — first run
   }
 
-  const summaries = await Promise.all(files.sort().map((f) => summarize(dir, f)))
-  return summaries.sort((a, b) => a.name.localeCompare(b.name))
+  const summaries = await Promise.all(files.map((f) => summarize(dir, f)))
+  const order = await readOrder(orderPath)
+  const listed = applyOrder(summaries, order)
+
+  // Seeds the file on a first run and prunes deleted sessions on every later one.
+  const resolved = listed.map((s) => s.id)
+  if (resolved.length !== order.length || resolved.some((id, i) => order[i] !== id)) {
+    await writeOrder(orderPath, resolved)
+  }
+  return listed
 }
 
 /** id is the file name without extension, not the display name. */
