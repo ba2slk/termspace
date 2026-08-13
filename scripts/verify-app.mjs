@@ -145,9 +145,10 @@ async function ensureSession(group) {
   // verify lands on the second row.
   await writeFile(join(dir, 'spare.yaml'), SPARE_SESSION, 'utf8')
   await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
-  // Only the sessions group needs an error row; written last so it never
-  // takes a row position another check's fixed assumption depends on.
-  if (group === 'sessions') {
+  // Only the sessions group needs an error row, and --serial runs every group
+  // as "all" — mac CI runs serial, so leaving it out skips the check there.
+  // Written last so it never takes a row position another check assumes.
+  if (group === 'sessions' || group === 'all') {
     await writeFile(join(dir, 'zselfcheck-broken.yaml'), BROKEN_SESSION, 'utf8')
   }
 }
