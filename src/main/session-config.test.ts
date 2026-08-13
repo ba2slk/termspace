@@ -7,6 +7,7 @@ import {
   listSessions,
   loadSession,
   renameSessionName,
+  reorderSession,
   saveSession,
   sessionsDir,
 } from './session-config'
@@ -18,6 +19,8 @@ const env = { HOME: '/home/u', SHELL: '/bin/bash' } as NodeJS.ProcessEnv
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'termspace-test-'))
 })
+
+const orderPath = (): string => join(dir, 'order.json')
 
 describe('sessionsDir', () => {
   it('follows XDG_CONFIG_HOME when set', () => {
@@ -34,26 +37,26 @@ describe('sessionsDir', () => {
 
 describe('listSessions', () => {
   it('returns an empty list with no directory; a first run is not an error', async () => {
-    expect(await listSessions(join(dir, 'nope'))).toEqual([])
+    expect(await listSessions(join(dir, 'nope'), orderPath())).toEqual([])
   })
 
-  it('reads yaml files in name order and counts panes', async () => {
+  it('reads yaml files and counts panes', async () => {
     await writeFile(join(dir, 'b.yaml'), 'name: beta\ncolumns:\n  - panes:\n      - {}\n')
     await writeFile(join(dir, 'a.yaml'), 'name: alpha\ncolumns:\n  - panes:\n      - {}\n      - {}\n')
-    const list = await listSessions(dir)
-    expect(list.map((s) => s.name)).toEqual(['alpha', 'beta'])
-    expect(list[0]!.paneCount).toBe(2)
+    const list = await listSessions(dir, orderPath())
+    expect([...list].map((s) => s.name).sort()).toEqual(['alpha', 'beta'])
+    expect(list.find((s) => s.name === 'alpha')!.paneCount).toBe(2)
     expect(list[0]!.error).toBeNull()
   })
 
   it('ignores non-yaml files', async () => {
     await writeFile(join(dir, 'README.md'), '# 메모')
-    expect(await listSessions(dir)).toEqual([])
+    expect(await listSessions(dir, orderPath())).toEqual([])
   })
 
   it('keeps an unopenable session in the list with its error', async () => {
     await writeFile(join(dir, 'broken.yaml'), 'columns: []\n')
-    const list = await listSessions(dir)
+    const list = await listSessions(dir, orderPath())
     expect(list).toHaveLength(1)
     expect(list[0]!.error).not.toBeNull()
   })
@@ -61,14 +64,66 @@ describe('listSessions', () => {
   it('survives malformed YAML', async () => {
     await writeFile(join(dir, 'bad.yaml'), 'name: [불균형\n')
     await writeFile(join(dir, 'good.yaml'), 'name: ok\ncolumns:\n  - panes:\n      - {}\n')
-    const list = await listSessions(dir)
+    const list = await listSessions(dir, orderPath())
     expect(list).toHaveLength(2)
     expect(list.find((s) => s.name === 'bad')!.error).toContain('YAML')
   })
 
   it('defaults the session name to the file name', async () => {
     await writeFile(join(dir, 'noname.yaml'), 'columns: []\n')
-    expect((await listSessions(dir))[0]!.name).toBe('noname')
+    expect((await listSessions(dir, orderPath()))[0]!.name).toBe('noname')
+  })
+})
+
+describe('listSessions ordering', () => {
+  const write = (name: string) =>
+    writeFile(join(dir, `${name}.yaml`), `name: ${name}\ncolumns:\n  - panes:\n      - {}\n`)
+
+  it('follows the recorded order', async () => {
+    await write('a')
+    await write('b')
+    await write('c')
+    await writeFile(orderPath(), JSON.stringify(['c', 'a', 'b']))
+    const list = await listSessions(dir, orderPath())
+    expect(list.map((s) => s.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('puts a session the order does not know after the ones it does', async () => {
+    await write('a')
+    await write('b')
+    await writeFile(orderPath(), JSON.stringify(['b']))
+    const list = await listSessions(dir, orderPath())
+    expect(list.map((s) => s.id)).toEqual(['b', 'a'])
+  })
+
+  it('writes the resolved order back so the first run seeds the file', async () => {
+    await write('a')
+    await write('b')
+    await listSessions(dir, orderPath())
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a', 'b'])
+  })
+
+  it('prunes an id whose file is gone', async () => {
+    await write('a')
+    await writeFile(orderPath(), JSON.stringify(['gone', 'a']))
+    await listSessions(dir, orderPath())
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a'])
+  })
+
+  it('treats a corrupt order file as no order and rewrites it', async () => {
+    await write('a')
+    await writeFile(orderPath(), 'not json at all')
+    const list = await listSessions(dir, orderPath())
+    expect(list.map((s) => s.id)).toEqual(['a'])
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a'])
+  })
+
+  it('reports a creation time for every session, error or not', async () => {
+    await write('a')
+    await writeFile(join(dir, 'broken.yaml'), 'columns: []\n')
+    const list = await listSessions(dir, orderPath())
+    expect(list).toHaveLength(2)
+    for (const s of list) expect(s.createdMs).toBeGreaterThan(0)
   })
 })
 
@@ -151,7 +206,7 @@ describe('saveSession', () => {
   it('keeps backups out of the session list', async () => {
     await saveSession(dir, 'demo', draft('first'), false, '/home/u')
     await saveSession(dir, 'demo', draft('second'), true, '/home/u')
-    expect((await listSessions(dir)).map((s) => s.id)).toEqual(['demo'])
+    expect((await listSessions(dir, orderPath())).map((s) => s.id)).toEqual(['demo'])
   })
 })
 
@@ -163,7 +218,7 @@ describe('renameSessionName', () => {
       '# my notes\nname: old\ncwd: "~"\ncolumns:\n  - width: 640\n    panes:\n      - title: shell\n',
       'utf8',
     )
-    const result = await renameSessionName(dir, 'proj', 'new name')
+    const result = await renameSessionName(dir, 'proj', 'new name', orderPath())
     expect(result.ok).toBe(true)
     const moved = join(dir, 'new-name.yaml')
     const text = await readFile(moved, 'utf8')
@@ -176,7 +231,7 @@ describe('renameSessionName', () => {
 
   it('moves the file to the name the user typed', async () => {
     await writeFile(join(dir, 'proj.yaml'), '# my notes\nname: old\ncwd: "~"\n', 'utf8')
-    const result = await renameSessionName(dir, 'proj', 'catch up')
+    const result = await renameSessionName(dir, 'proj', 'catch up', orderPath())
     expect(result.ok).toBe(true)
     expect(result.file).toBe(join(dir, 'catch-up.yaml'))
     expect(await readFile(join(dir, 'catch-up.yaml'), 'utf8')).toContain('name: catch up')
@@ -188,7 +243,7 @@ describe('renameSessionName', () => {
   it('refuses a name whose file already exists, and writes nothing', async () => {
     await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
     await writeFile(join(dir, 'taken.yaml'), 'name: taken\n', 'utf8')
-    const result = await renameSessionName(dir, 'proj', 'taken')
+    const result = await renameSessionName(dir, 'proj', 'taken', orderPath())
     expect(result.ok).toBe(false)
     expect(result.error).toContain('already exists')
     expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: old')
@@ -197,7 +252,7 @@ describe('renameSessionName', () => {
 
   it('stays in place when the name still derives the same id', async () => {
     await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
-    const result = await renameSessionName(dir, 'proj', 'proj')
+    const result = await renameSessionName(dir, 'proj', 'proj', orderPath())
     expect(result.ok).toBe(true)
     expect(result.file).toBe(join(dir, 'proj.yaml'))
     expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: proj')
@@ -205,26 +260,66 @@ describe('renameSessionName', () => {
 
   it('stays in place when the name derives no id at all', async () => {
     await writeFile(join(dir, 'proj.yaml'), 'name: old\n', 'utf8')
-    const result = await renameSessionName(dir, 'proj', '///')
+    const result = await renameSessionName(dir, 'proj', '///', orderPath())
     expect(result.ok).toBe(true)
     expect(result.file).toBe(join(dir, 'proj.yaml'))
     expect(await readFile(join(dir, 'proj.yaml'), 'utf8')).toContain('name: ///')
   })
 
   it('rejects an empty name', async () => {
-    const result = await renameSessionName(dir, 'proj', '   ')
+    const result = await renameSessionName(dir, 'proj', '   ', orderPath())
     expect(result.ok).toBe(false)
   })
 
   it('reports a missing session', async () => {
-    const result = await renameSessionName(dir, 'nope', 'x')
+    const result = await renameSessionName(dir, 'nope', 'x', orderPath())
     expect(result.ok).toBe(false)
     expect(result.error).toContain('not found')
   })
 
   it('refuses to rewrite a file with YAML syntax errors', async () => {
     await writeFile(join(dir, 'bad.yaml'), 'name: [unclosed\n', 'utf8')
-    const result = await renameSessionName(dir, 'bad', 'x')
+    const result = await renameSessionName(dir, 'bad', 'x', orderPath())
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('reorderSession', () => {
+  const write = (name: string) =>
+    writeFile(join(dir, `${name}.yaml`), `name: ${name}\ncolumns:\n  - panes:\n      - {}\n`)
+
+  it('moves a session and returns the new list', async () => {
+    await write('a')
+    await write('b')
+    await write('c')
+    await listSessions(dir, orderPath())
+    const list = await reorderSession(dir, orderPath(), 'a', 2)
+    expect(list.map((s) => s.id)).toEqual(['b', 'c', 'a'])
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['b', 'c', 'a'])
+  })
+
+  it('moves a session the order file has never seen', async () => {
+    await write('a')
+    await write('b')
+    const list = await reorderSession(dir, orderPath(), 'b', 0)
+    expect(list.map((s) => s.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('renameSessionName and the order', () => {
+  it('keeps the session where it was when the file moves', async () => {
+    for (const n of ['a', 'b', 'c'])
+      await writeFile(join(dir, `${n}.yaml`), `name: ${n}\ncolumns:\n  - panes:\n      - {}\n`)
+    await listSessions(dir, orderPath())
+    await renameSessionName(dir, 'b', 'zulu', orderPath())
+    const list = await listSessions(dir, orderPath())
+    expect(list.map((s) => s.id)).toEqual(['a', 'zulu', 'c'])
+  })
+
+  it('leaves the order alone when the file name does not change', async () => {
+    await writeFile(join(dir, 'a.yaml'), 'name: a\ncolumns:\n  - panes:\n      - {}\n')
+    await listSessions(dir, orderPath())
+    await renameSessionName(dir, 'a', 'a but nicer', orderPath())
+    expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a-but-nicer'])
   })
 })

@@ -42,6 +42,7 @@ import {
   checkAttentionClearsOnReturn,
   checkCloseGuard,
   checkCopyToast,
+  checkErrorRowStaysDraggable,
   checkFileDrop,
   checkHeldSessionJump,
   checkImeInput,
@@ -51,6 +52,7 @@ import {
   checkSaveSession,
   checkSessionStepShortcut,
   checkShellIntegration,
+  checkSidebarReorder,
   checkWheelSessionSwitch,
 } from './sessions'
 
@@ -137,6 +139,8 @@ const GROUPS: Readonly<
     await checkWheelSessionSwitch(report)
     await checkSessionStepShortcut(report)
     await checkAttentionClearsOnReturn(report)
+    await checkSidebarReorder(report)
+    await checkErrorRowStaysDraggable(report)
   },
 }
 

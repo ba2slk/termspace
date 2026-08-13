@@ -210,6 +210,12 @@ const sidebar = createSessionSidebar(workspace, {
     sidebarMenu.open(at, sidebarMenuItems(sessionId))
   },
   onRename: (id, newName) => void renameSession(id, newName),
+  onReorder: (id, toIndex) => {
+    void api.reorderSession(id, toIndex).then((list) => {
+      knownSessions = list
+      renderSidebar()
+    })
+  },
 })
 
 /**

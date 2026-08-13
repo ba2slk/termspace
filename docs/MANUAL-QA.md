@@ -213,6 +213,8 @@ English copy.
   column, so a fresh empty session had no handles at all)
 - **A row's pane count follows splits and closes** — the sidebar is the only place that
   claims to know a session's shape without showing it
+- **Dragging a session row changes the list order**, a plain click still opens a session,
+  and the order survives pressing refresh and restarting the app
 
 **Copy notification**
 - Selecting by drag shows the "Copied · N chars" toast, which disappears shortly after
@@ -493,6 +495,10 @@ below needs a real Mac and a person in front of it. Each line says what "pass" m
 - [ ] **Trackpad scrolling.** Two-finger scroll and the inertia after lifting feel
       continuous, over the canvas and inside a terminal's scrollback. Pass = no steps,
       stalls or runaway drift in either place
+- [ ] **Trackpad session drag.** A row in the session list can be dragged to a new place
+      with a trackpad press-and-slide, and Ctrl + click on a row opens the context menu
+      without dragging it. Pass = the order changes on release, and the Ctrl + click
+      leaves the row where it was
 - [ ] **Korean IME.** Composition in a terminal pane draws the in-progress syllable in
       place and commits once. Pass = what appears matches what was typed, with no
       duplicated or stranded jamo

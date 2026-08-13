@@ -28,11 +28,13 @@ import {
   listSessions,
   loadSession,
   renameSessionName,
+  reorderSession,
   saveSession,
   sessionExists,
   sessionFilePath,
   sessionsDir,
 } from './session-config'
+import { orderFile } from './session-order-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
 import { resolveCwd } from './session-schema'
@@ -50,6 +52,7 @@ const INVOKE_CHANNELS = [
   'session:create-blank',
   'session:delete',
   'session:rename',
+  'session:reorder',
   'session:editor-command',
   'fonts:list',
   'themes:list',
@@ -92,6 +95,7 @@ export function registerIpcHandlers(
   env: NodeJS.ProcessEnv,
 ): () => void {
   const dir = sessionsDir(env)
+  const orderPath = orderFile(env)
 
   const send = (channel: string, ...args: unknown[]): void => {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -156,7 +160,7 @@ export function registerIpcHandlers(
     onResume: (paneId) => host.resume(paneId),
   })
 
-  ipcMain.handle('session:list', (): Promise<SessionSummary[]> => listSessions(dir))
+  ipcMain.handle('session:list', (): Promise<SessionSummary[]> => listSessions(dir, orderPath))
   ipcMain.handle(
     'session:load',
     (_e, name: string): Promise<LoadSessionResult> => loadSession(dir, name, env),
@@ -180,7 +184,13 @@ export function registerIpcHandlers(
   ipcMain.handle(
     'session:rename',
     (_e, id: string, newName: string): Promise<SaveSessionResult> =>
-      renameSessionName(dir, id, newName),
+      renameSessionName(dir, id, newName, orderPath),
+  )
+
+  ipcMain.handle(
+    'session:reorder',
+    (_e, id: string, toIndex: number): Promise<SessionSummary[]> =>
+      reorderSession(dir, orderPath, id, toIndex),
   )
 
   ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {

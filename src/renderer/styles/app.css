@@ -377,6 +377,35 @@ body {
   outline-offset: -1px;
 }
 
+/* The row under the pointer. It moves by transform, so it keeps its layout slot
+   and the rows below it stay put: only the drop line says where it would land. */
+.sidebar__row--dragging {
+  opacity: 0.7;
+  position: relative;
+  z-index: 1;
+}
+
+/* Where it would land. One rule, drawn on the neighbour it would push down. */
+.sidebar__row--drop-before {
+  box-shadow: 0 -1px 0 0 var(--border-active);
+}
+
+.sidebar__row--drop-after {
+  box-shadow: 0 1px 0 0 var(--border-active);
+}
+
+.sidebar__list--dragging {
+  cursor: grabbing;
+  /* Without this the drag paints a text selection across the names it passes. */
+  user-select: none;
+}
+
+/* A session with a bad file is still a session: its row must drag. The button is
+   disabled and covers the row, and a disabled control swallows pointer events. */
+.sidebar__open:disabled {
+  pointer-events: none;
+}
+
 .sidebar__open {
   display: flex;
   align-items: center;

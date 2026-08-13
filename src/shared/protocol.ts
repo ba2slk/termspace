@@ -125,6 +125,8 @@ export interface SessionSummary {
   /** Absolute path, shown when reporting a config error. */
   readonly file: string
   readonly paneCount: number
+  /** File creation time (birth time, or last write where the fs has none). */
+  readonly createdMs: number
   /** Why it can't be opened, or null. */
   readonly error: string | null
 }
@@ -270,6 +272,8 @@ export interface TermspaceApi {
   deleteSession(id: string): Promise<SaveSessionResult>
   /** Rewrite the session's display name in place. The file name (id) never changes. */
   renameSession(id: string, newName: string): Promise<SaveSessionResult>
+  /** Move a session to an index in the list; returns the list as it now stands. */
+  reorderSession(id: string, toIndex: number): Promise<readonly SessionSummary[]>
   /** Full editor invocation for this session's file, or null when it is missing. */
   editorCommandFor(id: string): Promise<string | null>
   /** Open the session file with the OS default app — for when no session is on screen. */

@@ -92,8 +92,9 @@ columns:
 /**
  * A second session, so switching between two can be checked at all.
  *
- * Sorted before "verify", which puts verify on the second row — the one the
- * held-jump check aims at.
+ * The list order follows creation order, not the alphabet, so this file is
+ * written before "verify" (see `ensureSession`) to put verify on the second
+ * row — the one the held-jump check aims at.
  */
 const SPARE_SESSION = `name: spare
 cwd: "~"
@@ -112,6 +113,23 @@ columns:
 `
 
 /**
+ * A session the schema refuses — `columns: []` fails `columns.min(1)` in
+ * `session-schema.ts` — so the sidebar renders it as an error row. The error
+ * row is a real state the sidebar has to handle, and `checkErrorRowStaysDraggable`
+ * needs a live one to check that its disabled open button still lets a drag
+ * through (a CSS rule happy-dom cannot see). Sessions-group only, and written
+ * last, so it lands after spare and verify in creation order.
+ *
+ * The id starts with "z" on purpose and that prefix is load-bearing — see
+ * "Two sessions created in the same tick sorted alphabetically instead of by
+ * write order" in `docs/engineering-notes.md`.
+ */
+const BROKEN_SESSION = `name: selfcheck-broken
+cwd: "~"
+columns: []
+`
+
+/**
  * A config folder per group, wiped every run.
  *
  * Separate, because a group that toggles a setting or saves a session would
@@ -123,8 +141,16 @@ async function ensureSession(group) {
   const dir = sessionDir(group)
   await rm(join(configHome(group), 'termspace'), { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
+  // Creation order is list order (see SPARE_SESSION above): spare first, so
+  // verify lands on the second row.
   await writeFile(join(dir, 'spare.yaml'), SPARE_SESSION, 'utf8')
+  await writeFile(join(dir, 'verify.yaml'), VERIFY_SESSION, 'utf8')
+  // Only the sessions group needs an error row, and --serial runs every group
+  // as "all" — mac CI runs serial, so leaving it out skips the check there.
+  // Written last so it never takes a row position another check assumes.
+  if (group === 'sessions' || group === 'all') {
+    await writeFile(join(dir, 'zselfcheck-broken.yaml'), BROKEN_SESSION, 'utf8')
+  }
 }
 
 /** Clean up this repo's electron processes; silent when there are none. */

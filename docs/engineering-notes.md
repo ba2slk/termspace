@@ -320,6 +320,26 @@ The values were not copied by eye — each repository's own exported terminal pa
 carried over, because being off by one cell while still calling it "that theme" is
 exactly the failure mode.
 
+**Two sessions created in the same tick sorted alphabetically instead of by write
+order.** `applyOrder` falls back to creation time for any id not yet in the order file,
+and breaks a tie on that time with `id.localeCompare`. The tie-break has to be
+deterministic for two reasons at once: `readdir` order is not stable across
+filesystems, and the very first listing writes whatever order it resolves into the
+order file — an unstable tie-break would freeze in whichever arrangement happened to
+win that race, not necessarily the one just shown.
+
+The visible cost is a first-run one: session files that share a birthtime (a batch
+copy of a dotfiles session directory onto a new machine) start alphabetical rather
+than in write order, until the user drags a row — the first drag replaces the
+fallback with a real order and the alphabetical start is gone for good.
+
+It also broke the self-check before it was ever seen by a user. `checkHeldSessionJump`
+holds `Alt+2` and expects the "verify" session at row 2, but three fixtures written in
+one tick can share a birthtime on a fast filesystem, and `selfcheck-broken` sorts
+before `spare` alphabetically — enough to bump verify off row 2. The fixture id was
+renamed with a leading "z" so the alphabetical fallback agrees with the write order
+instead of fighting it.
+
 ---
 
 ## Self-Check
