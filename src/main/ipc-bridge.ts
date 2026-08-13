@@ -182,7 +182,7 @@ export function registerIpcHandlers(
   ipcMain.handle(
     'session:rename',
     (_e, id: string, newName: string): Promise<SaveSessionResult> =>
-      renameSessionName(dir, id, newName),
+      renameSessionName(dir, id, newName, orderPath),
   )
 
   ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {

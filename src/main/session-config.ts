@@ -7,7 +7,7 @@ import { basename, join } from 'node:path'
 import { parse as parseYaml, parseDocument } from 'yaml'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { configDir } from './config-dir'
-import { applyOrder } from './session-order'
+import { applyOrder, renameInOrder } from './session-order'
 import { readOrder, writeOrder } from './session-order-file'
 import { parseSession, resolveCwd } from './session-schema'
 import {
@@ -58,7 +58,8 @@ async function summarize(dir: string, file: string): Promise<SessionSummary> {
     const info = await stat(path)
     createdMs = info.birthtimeMs > 0 ? info.birthtimeMs : info.mtimeMs
   } catch {
-    // Vanished between readdir and here — it sorts last and drops next listing.
+    // Vanished between readdir and here — createdMs stays 0, so it sorts first
+    // this pass, then drops out on the next listing.
   }
 
   let raw: unknown
@@ -267,6 +268,7 @@ export async function renameSessionName(
   dir: string,
   id: string,
   newName: string,
+  orderPath: string,
 ): Promise<SaveSessionResult> {
   const name = newName.trim()
   if (name === '') return { ok: false, file: '', error: 'Name must not be empty' }
@@ -299,6 +301,8 @@ export async function renameSessionName(
     await writeFile(`${moved}.bak`, before, 'utf8')
     await writeFile(moved, text, 'utf8')
     await unlink(path)
+    // The file moved, so the id did; the position must not follow it.
+    await writeOrder(orderPath, renameInOrder(await readOrder(orderPath), id, newId))
     return { ok: true, file: moved, error: null }
   } catch (err) {
     return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
