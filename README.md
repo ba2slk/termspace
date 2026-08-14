@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <img src="build/icon-256.png" alt="" width="96" height="96" />
 </p>
@@ -172,11 +174,7 @@ rebindable in `Ctrl` + `,`(`⌘Cmd` + `,`) › Shortcuts.
 
 ## Settings
 
-`Ctrl` + `,`(`⌘Cmd` + `,`) holds the terminal font and size, interface scale, the language
-(English / 한국어), mouse and notification behaviour, and **14 built-in
-palettes** — the [Zenbones](https://github.com/zenbones-theme/zenbones.nvim)
-family, Dracula, and the Termspace default. Drop a YAML into
-`~/.config/termspace/themes/` for your own.
+`Ctrl` + `,` (`Cmd` + `,`) holds the terminal font and size, interface scale, the language (English / 한국어, changes require a restart), mouse and notification behaviour, and **14 built-in palettes** — the [Zenbones](https://github.com/zenbones-theme/zenbones.nvim) family, Dracula, and the Termspace default. Drop a YAML into `~/.config/termspace/themes/` for your own.
 
 ## Developing
 
