@@ -24,7 +24,10 @@ export function sessionsDir(env: NodeJS.ProcessEnv): string {
 
 /*
  * The example carries the same header as a saved session and uses every field
- * once, so reading one file is enough to write your own.
+ * once, so reading one file is enough to write your own. Nothing in it may
+ * depend on the machine: no directory beyond the home, no command that only
+ * one platform ships (a first run that opens on an error reads as a broken
+ * install, see #29). The relative cwd is shown commented out for that reason.
  */
 export const EXAMPLE_SESSION = `${SESSION_HEADER}
 name: example
@@ -36,14 +39,14 @@ columns:
   - width: 720
     panes:
       - title: shell
-      - title: log
-        command: journalctl -f -n 20
+      - title: hello
+        command: echo 'Welcome to Termspace'
         height: 0.35
 
   - width: 640
     panes:
       - title: notes
-        cwd: dev              # relative to the cwd above
+        # cwd: dev            # a pane's cwd is relative to the one above
         prefill: ls -la
 `
 
