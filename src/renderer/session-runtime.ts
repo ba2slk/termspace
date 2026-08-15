@@ -34,6 +34,7 @@ import {
   type Direction,
   type Layout,
 } from './layout-model'
+import { layoutSnapshot } from './layout-snapshot'
 import { createOverviewView } from './overview-view'
 import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
 import { attachResizeDrag } from './resize-drag'
@@ -882,25 +883,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       return true
     },
 
-    snapshot() {
-      // cwd is left to main: only it holds the pty and sees where the shell moved.
-      return {
-        columns: layout.columns.map((column) => ({
-          width: column.width,
-          panes: column.panes.map((pane) => {
-            const paneSpec = paneSpecs.get(pane.id)
-            return {
-              paneId: pane.id,
-              title: pane.title,
-              command: paneSpec?.command ?? null,
-              prefill: paneSpec?.prefill ?? null,
-              fallbackCwd: paneSpec?.cwd ?? spec.cwd,
-              heightRatio: pane.heightRatio,
-            }
-          }),
-        })),
-      }
-    },
+    snapshot: () => layoutSnapshot(layout, paneSpecs, spec.cwd),
     relayout() {
       canvas.render(layout)
       syncSizes()
