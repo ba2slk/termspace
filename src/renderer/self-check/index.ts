@@ -115,7 +115,7 @@ const GROUPS: Readonly<
     // The dropdown was left open for the shot. An open menu swallows every
     // keydown at window capture, so close it before anything key-driven runs.
     press('Escape')
-    await sleep(250)
+    await waitFor(() => document.querySelector<HTMLElement>('.command-menu:not([hidden])') === null)
     await checkSidebar(report)
     await capture(report, 'sidebar-collapsed-then-restored')
     await checkScrollbackSearch(report)
@@ -167,6 +167,8 @@ export async function run(): Promise<void> {
      * a fixed sleep was too short on a cold, shared machine.
      */
     await waitFor(() => document.querySelector('.sidebar__row') !== null, 20_000)
+    // Nothing marks the end of boot: the list is the last thing drawn, and the
+    // settings and bindings behind it arrive on IPC replies of their own.
     await sleep(300)
     for (const name of names) {
       const group = GROUPS[name]
