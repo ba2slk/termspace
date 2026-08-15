@@ -326,8 +326,8 @@ export async function checkSettings(report: Report): Promise<void> {
   const themeSelect = sheet.querySelector<HTMLSelectElement>('[data-setting="theme"]')
   const themeIds = [...(themeSelect?.options ?? [])].map((o) => o.value)
   report['themeChoices'] = String(themeIds.length)
-  report['themeListHasKanagawabones'] =
-    themeIds.includes('kanagawabones') ? 'ok' : `FAIL (${themeIds.join(',')})`
+  report['themeListHasKanagawaWave'] =
+    themeIds.includes('kanagawa-wave') ? 'ok' : `FAIL (${themeIds.join(',')})`
   report['themeSwatches'] = String(sheet.querySelectorAll('.settings__swatch').length)
 
   // Picking one must actually change the terminal colours.
@@ -339,12 +339,12 @@ export async function checkSettings(report: Report): Promise<void> {
   }
   const bgBefore = paneBg()
   if (themeSelect !== null) {
-    themeSelect.value = 'kanagawabones'
+    themeSelect.value = 'kanagawa-wave'
     themeSelect.dispatchEvent(new Event('change', { bubbles: true }))
     await sleep(700)
   }
   report['themeAppliesToTerminal'] =
-    paneBg() === '#1F1F28'
+    paneBg() === '#1f1f28'
       ? `ok (${bgBefore} → ${paneBg()})`
       : `FAIL (${bgBefore} → ${paneBg()})`
 
@@ -357,7 +357,7 @@ export async function checkSettings(report: Report): Promise<void> {
   report['paneBgFollowsTheme'] =
     paneStyle === 'rgb(31, 31, 40)'
       ? 'ok'
-      : `FAIL (${String(paneStyle)} — terminal is #1F1F28, pane is not)`
+      : `FAIL (${String(paneStyle)} — terminal is #1f1f28, pane is not)`
 
   // Restore — the check must not alter the user's settings.
   if (themeSelect !== null) {

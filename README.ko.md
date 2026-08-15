@@ -174,10 +174,11 @@ detach/attach 기능은 없습니다. 창을 닫으면 안에서 돌던 프로�
 ## 설정
 
 `Ctrl` + `,`(`⌘Cmd` + `,`)에서 터미널 글꼴과 크기, 인터페이스 크기, 언어(English / 한국어), 마우스와
-알림 동작을 바꿉니다. 팔레트는 **14종**이 기본으로 들어 있습니다.
-[Zenbones](https://github.com/zenbones-theme/zenbones.nvim) 계열과 Dracula, Termspace
-기본 팔레트입니다. 직접 만든 팔레트는 `~/.config/termspace/themes/`에 YAML로 넣어두면
-목록에 같이 나옵니다.
+알림 동작을 바꿉니다. 어두운 팔레트 **19종**이 기본으로 들어 있습니다. Catppuccin, Gruvbox,
+Nord, Tokyo Night, Solarized, Dracula,
+[Zenbones](https://github.com/zenbones-theme/zenbones.nvim) 3종, 그리고 Termspace 기본
+팔레트입니다. 직접 만든 팔레트는 `~/.config/termspace/themes/`에 YAML로 넣어두면 목록에 같이
+나옵니다.
 
 ## 개발
 

@@ -269,7 +269,7 @@ English copy.
 
 **Settings (`Ctrl+,`)**
 - It opens
-- The palette list shows all 14 built-ins, and picking one **actually changes the
+- The palette list shows all 19 built-ins, and picking one **actually changes the
   terminal colors** (a palette that's only listed but never applied is the same as not
   having it)
 - A color swatch sits next to each name
