@@ -17,6 +17,13 @@ export interface TerminalTheme {
   readonly foreground: string
   readonly cursor: string
   readonly selection: string
+  /**
+   * The palette's signature colour, always one of its own sixteen.
+   *
+   * Chrome that wants to borrow the palette reads this rather than guessing:
+   * every scheme has a colour it is known by, and it is not always the blue.
+   */
+  readonly accent: string
   readonly black: string
   readonly red: string
   readonly green: string
@@ -44,6 +51,7 @@ export const DEFAULT_THEME: TerminalTheme = {
   foreground: '#cfcbc4',
   cursor: '#cfcbc4',
   selection: 'rgba(255,255,255,0.14)',
+  accent: '#7a9bbf',
   black: '#3a3733',
   red: '#cf7a6a',
   green: '#8aa872',
@@ -102,6 +110,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#bfbdb6',
     cursor: '#e6b450',
     selection: '#3388ff40',
+    accent: '#fdb04c',
     black: '#1b1f29',
     red: '#f06b73',
     green: '#70bf56',
@@ -128,6 +137,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#CDD6F4',
     cursor: '#F5E0DC',
     selection: '#585B70',
+    accent: '#F5C2E7',
     black: '#45475A',
     red: '#F38BA8',
     green: '#A6E3A1',
@@ -154,6 +164,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#F8F8F2',
     cursor: '#F8F8F2',
     selection: '#44475A',
+    accent: '#FF79C6',
     black: '#21222C',
     red: '#FF5555',
     green: '#50FA7B',
@@ -180,6 +191,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#EBEFC0',
     cursor: '#EDF2C2',
     selection: '#37382D',
+    accent: '#00A3CB',
     black: '#0E101A',
     red: '#E03600',
     green: '#5DCD97',
@@ -207,6 +219,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#d3c6aa',
     cursor: '#d3c6aa',
     selection: '#543a48',
+    accent: '#a7c080',
     black: '#475258',
     red: '#e67e80',
     green: '#a7c080',
@@ -234,6 +247,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#e6edf3',
     cursor: '#e6edf3',
     selection: 'rgba(255,255,255,0.14)',
+    accent: '#58a6ff',
     black: '#484f58',
     red: '#ff7b72',
     green: '#3fb950',
@@ -261,6 +275,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#ebdbb2',
     cursor: '#ebdbb2',
     selection: '#665c54',
+    accent: '#d79921',
     black: '#282828',
     red: '#cc241d',
     green: '#98971a',
@@ -287,6 +302,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#dcd7ba',
     cursor: '#dcd7ba',
     selection: '#2d4f67',
+    accent: '#7e9cd8',
     black: '#090618',
     red: '#c34043',
     green: '#76946a',
@@ -314,6 +330,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#d6deeb',
     cursor: '#80a4c2',
     selection: '#1b90dd4d',
+    accent: '#82AAFF',
     black: '#011627',
     red: '#EF5350',
     green: '#22da6e',
@@ -340,6 +357,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#cdcecf',
     cursor: '#aeafb0',
     selection: '#2b3b51',
+    accent: '#719cd6',
     black: '#393b44',
     red: '#c94f6d',
     green: '#81b29a',
@@ -366,6 +384,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#D8DEE9',
     cursor: '#D8DEE9',
     selection: '#434C5E',
+    accent: '#81A1C1',
     black: '#3B4252',
     red: '#BF616A',
     green: '#A3BE8C',
@@ -395,6 +414,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#dcdfe4',
     cursor: '#a3b3cc',
     selection: '#474e5d',
+    accent: '#61afef',
     black: '#282c34',
     red: '#e06c75',
     green: '#98c379',
@@ -421,6 +441,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#e0def4',
     cursor: '#524f67',
     selection: '#403d52',
+    accent: '#eb6f92',
     black: '#26233a',
     red: '#eb6f92',
     green: '#31748f',
@@ -447,6 +468,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#839496',
     cursor: '#93a1a1',
     selection: '#073642',
+    accent: '#268bd2',
     black: '#073642',
     red: '#dc322f',
     green: '#859900',
@@ -474,6 +496,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#787c99',
     cursor: '#c0caf5',
     selection: '#515c7e4d',
+    accent: '#7aa2f7',
     black: '#363b54',
     red: '#f7768e',
     green: '#73daca',
@@ -502,6 +525,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#c5c8c6',
     cursor: '#c5c8c6',
     selection: '#373b41',
+    accent: '#81a2be',
     black: '#000000',
     red: '#cc6666',
     green: '#b5bd68',
@@ -528,6 +552,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#B4BDC3',
     cursor: '#C4CACF',
     selection: '#3D4042',
+    accent: '#6099C0',
     black: '#1C1917',
     red: '#DE6E7C',
     green: '#819B69',
@@ -554,6 +579,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     foreground: '#BBBBBB',
     cursor: '#C9C9C9',
     selection: '#404040',
+    accent: '#6099C0',
     black: '#191919',
     red: '#DE6E7C',
     green: '#819B69',

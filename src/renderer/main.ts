@@ -8,6 +8,7 @@ import { shorten } from '../shared/home-path'
 import { api } from './api'
 import { createAppBar } from './app-bar'
 import { createEmptyCanvas } from './empty-canvas'
+import { resolveFocusBorder } from './focus-border'
 import { barTitle } from './pane-title'
 import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
@@ -81,6 +82,25 @@ function applyTerminalBackground(theme: TerminalTheme): void {
   document.documentElement.style.setProperty('--term-bg', theme.background)
   // The IME preedit overlay draws with these; see .composition-view.
   document.documentElement.style.setProperty('--term-fg', theme.foreground)
+}
+
+/**
+ * Colour the focused pane's border, or hand it back to the tokens.
+ *
+ * Removing the properties rather than writing the token's own value keeps one
+ * definition of white: `.pane--focused` falls back to --border-active by
+ * itself.
+ */
+function applyFocusBorder(next: AppSettings, theme: TerminalTheme): void {
+  const style = document.documentElement.style
+  const resolved = resolveFocusBorder(next, theme)
+  if (resolved === null) {
+    style.removeProperty('--focus-border')
+    style.removeProperty('--focus-ring')
+    return
+  }
+  style.setProperty('--focus-border', resolved.border)
+  style.setProperty('--focus-ring', resolved.ring)
 }
 
 /** Brief notices for things that happen out of sight, like the clipboard. */
@@ -480,6 +500,7 @@ async function saveSettings(next: AppSettings): Promise<void> {
   syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
+  applyFocusBorder(settings, currentTheme())
   appBar.syncControls()
   for (const runtime of runtimes.values()) runtime.applySettings(settings)
 }
@@ -491,6 +512,7 @@ const settingsView = createSettingsView(canvasHost, {
     syncPeek()
     applyUiScale(next.uiScale)
     applyTerminalBackground(currentTheme())
+    applyFocusBorder(next, currentTheme())
     appBar.syncControls()
     for (const runtime of runtimes.values()) runtime.applySettings(next)
   },
@@ -873,6 +895,7 @@ async function boot(): Promise<void> {
   syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
+  applyFocusBorder(settings, currentTheme())
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)

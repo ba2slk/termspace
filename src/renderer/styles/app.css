@@ -714,10 +714,12 @@ body {
  * leaves you searching.
  */
 .pane--focused {
-  border-color: var(--border-active);
+  /* The setting sets --focus-border at runtime; with it unset the token stands,
+     which is what "white" means. */
+  border-color: var(--focus-border, var(--border-active));
   /* A hard 1px ring outside the border, not a blur. It ends inside the 6px gap,
      so it neither reaches the neighbour nor changes the layout. */
-  box-shadow: 0 0 0 1px var(--ring-active);
+  box-shadow: 0 0 0 1px var(--focus-ring, var(--ring-active));
 }
 
 .pane__body {
@@ -760,11 +762,12 @@ body {
   max-width: calc(100% - 12px);
   overflow: hidden;
   padding: 1px 6px;
-  background: var(--bg-raised);
-  /* The overview card's border, one step above the seams between panes. */
-  border: 1px solid var(--border-focus);
+  /* Drawn in the terminal's own colours, like the IME preedit: it sits on the
+     terminal, not on the chrome, so a palette change carries it along. */
+  background: color-mix(in srgb, var(--term-fg, #cfcbc4) 10%, var(--term-bg, #1b1b1b));
+  border: 1px solid color-mix(in srgb, var(--term-fg, #cfcbc4) 25%, var(--term-bg, #1b1b1b));
   border-radius: var(--radius-sm);
-  color: var(--fg);
+  color: var(--term-fg, #cfcbc4);
   font-size: var(--fs-ui-sm);
   /* Bolder than the terminal text it sits over, or it reads as one more line of it. */
   font-weight: 600;
@@ -781,8 +784,8 @@ body {
 
 /* The pane taking keys: filled like the overview's selected card. */
 .pane--focused .pane__label {
-  background: var(--overview-selected-fill);
-  border-color: var(--border-active);
+  background: color-mix(in srgb, var(--term-fg, #cfcbc4) 18%, var(--term-bg, #1b1b1b));
+  border-color: var(--focus-border, var(--border-active));
 }
 
 /* Outside the active region: the browser skips layout and paint for this subtree. */
@@ -1561,6 +1564,21 @@ button.keys__chord:hover {
 }
 
 .settings__select:disabled {
+  color: var(--fg-faint);
+}
+
+/* A typed colour, beside the control that decides whether it is used. */
+.settings__hex {
+  width: 11ch;
+  padding: 4px 10px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.settings__hex:disabled {
   color: var(--fg-faint);
 }
 

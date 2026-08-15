@@ -367,6 +367,64 @@ export async function checkSettings(report: Report): Promise<void> {
   }
 
   /*
+   * The focused pane's border colour.
+   *
+   * Read as a computed colour off the pane itself: the setting writes a custom
+   * property on the root, and only the resolved border proves it reached the
+   * pane rather than the token still winning.
+   */
+  const focusRow = (): { select: HTMLSelectElement; hex: HTMLInputElement } | null => {
+    const select = sheet.querySelector<HTMLSelectElement>('select[data-setting="focusBorder"]')
+    const hex = sheet.querySelector<HTMLInputElement>('input[data-setting="focusBorderColor"]')
+    return select === null || hex === null ? null : { select, hex }
+  }
+  const focusedBorder = (): string | null => {
+    const pane = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')
+    return pane === null ? null : getComputedStyle(pane).borderTopColor
+  }
+  const whiteBorder = focusedBorder()
+
+  if (focusRow() === null) {
+    report['focusBorderControl'] = 'FAIL (no focused pane border row)'
+  } else if (whiteBorder === null) {
+    report['focusBorderControl'] = 'skipped: no focused pane on screen'
+  } else {
+    report['focusBorderControl'] = 'ok'
+
+    // Each commit redraws the sheet, so the controls are found again every time.
+    const picked = focusRow()
+    if (picked !== null) {
+      picked.select.value = 'custom'
+      picked.select.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await waitFor(() => focusRow()?.hex.disabled === false)
+    report['focusBorderCustomEnablesField'] =
+      focusRow()?.hex.disabled === false ? 'ok' : 'FAIL (the colour field stayed inert)'
+
+    const typed = focusRow()?.hex
+    if (typed !== undefined) {
+      typed.value = '#ff0000'
+      typed.dispatchEvent(new Event('input', { bubbles: true }))
+      typed.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await waitFor(() => focusedBorder() === 'rgb(255, 0, 0)')
+    report['focusBorderCustomPaintsThePane'] =
+      focusedBorder() === 'rgb(255, 0, 0)'
+        ? `ok (${whiteBorder} → ${String(focusedBorder())})`
+        : `FAIL (${whiteBorder} → ${String(focusedBorder())})`
+
+    // Restore — the check must not alter the user's settings.
+    const back = focusRow()
+    if (back !== null) {
+      back.select.value = 'white'
+      back.select.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await waitFor(() => focusedBorder() === whiteBorder)
+    report['focusBorderWhiteRestoresTheToken'] =
+      focusedBorder() === whiteBorder ? 'ok' : `FAIL (${String(focusedBorder())})`
+  }
+
+  /*
    * Interface size. Measured in pixels rather than read back off the slider:
    * the setting is only worth anything if the chrome actually grows, and the
    * canvas beside it must not, since a column's width is an absolute count.

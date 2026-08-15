@@ -22,12 +22,31 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({}).locale).toBe('')
   })
 
+  it('accepts only the three focus border modes', () => {
+    expect(normalizeSettings({ focusBorder: 'palette' }).focusBorder).toBe('palette')
+    expect(normalizeSettings({ focusBorder: 'custom' }).focusBorder).toBe('custom')
+    expect(normalizeSettings({ focusBorder: 'neon' }).focusBorder).toBe(DEFAULT_SETTINGS.focusBorder)
+    expect(normalizeSettings({ focusBorder: 3 }).focusBorder).toBe(DEFAULT_SETTINGS.focusBorder)
+  })
+
+  it('takes the focus border colour only as a six-digit hex', () => {
+    // It reaches a CSS declaration, so anything else falls back rather than
+    // being passed through.
+    expect(normalizeSettings({ focusBorderColor: '#FF0000' }).focusBorderColor).toBe('#ff0000')
+    expect(normalizeSettings({ focusBorderColor: ' #a1b2c3 ' }).focusBorderColor).toBe('#a1b2c3')
+    const stock = DEFAULT_SETTINGS.focusBorderColor
+    expect(normalizeSettings({ focusBorderColor: 'red' }).focusBorderColor).toBe(stock)
+    expect(normalizeSettings({ focusBorderColor: '#abc' }).focusBorderColor).toBe(stock)
+    expect(normalizeSettings({ focusBorderColor: 'ff0000' }).focusBorderColor).toBe(stock)
+  })
+
   it('reads a file with none of the new keys as the defaults for them', () => {
     const old = normalizeSettings({ fontSize: 15, theme: 'nord' })
     expect(old.fontSize).toBe(15)
     expect(old.uiScale).toBe(DEFAULT_SETTINGS.uiScale)
     expect(old.locale).toBe(DEFAULT_SETTINGS.locale)
     expect(old.paneLabels).toBe(DEFAULT_SETTINGS.paneLabels)
+    expect(old.focusBorder).toBe(DEFAULT_SETTINGS.focusBorder)
   })
 
   it('reads the on/off settings as 0 or 1, whatever the file says', () => {
