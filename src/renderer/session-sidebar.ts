@@ -10,7 +10,7 @@
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
-import { dropIndexAt, REORDER_THRESHOLD, type RowBox } from './sidebar-reorder'
+import { dropIndexAt, REORDER_THRESHOLD, rowShift, type RowBox } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
@@ -207,6 +207,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     readonly pointerId: number
     moved: boolean
     dropIndex: number
+    /** Row positions taken before any row was pushed; a pushed row measures wrong. */
+    boxes: readonly RowBox[]
   } | null = null
   let swallowClick = false
 
@@ -217,14 +219,23 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     })
   }
 
+  /*
+   * A preview of the drop: the other rows step aside at once, leaving the slot
+   * the dragged row would take. Transforms only; the DOM order changes when the
+   * drop commits, so a cancel leaves nothing to undo.
+   */
   function markDrop(index: number): void {
-    for (const row of shownRows) {
-      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
-    }
-    const others = shownRows.filter((_, i) => i !== drag?.fromIndex)
-    const before = others[index]
-    if (before !== undefined) before.classList.add('sidebar__row--drop-before')
-    else others[others.length - 1]?.classList.add('sidebar__row--drop-after')
+    if (drag === null) return
+    const { boxes, fromIndex } = drag
+    const dragged = boxes[fromIndex]
+    if (dragged === undefined) return
+    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
+    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    shownRows.forEach((row, i) => {
+      if (i === fromIndex) return
+      const shift = rowShift(i, fromIndex, index)
+      row.style.transform = shift === 0 ? '' : `translateY(${String(shift * slot)}px)`
+    })
   }
 
   function endDragVisuals(): void {
@@ -232,9 +243,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.row.classList.remove('sidebar__row--dragging')
       drag.row.style.transform = ''
     }
-    for (const row of shownRows) {
-      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
-    }
+    for (const row of shownRows) row.style.transform = ''
     list.classList.remove('sidebar__list--dragging')
   }
 
@@ -279,6 +288,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       pointerId: event.pointerId,
       moved: false,
       dropIndex: index,
+      boxes: [],
     }
   })
 
@@ -289,19 +299,39 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.moved = true
       // The wheel dial rebuilds rows; it cannot run under a live drag.
       clearPreview()
+      drag.boxes = rowBoxes()
       drag.row.classList.add('sidebar__row--dragging')
       list.classList.add('sidebar__list--dragging')
       list.setPointerCapture(event.pointerId)
     }
     drag.row.style.transform = `translateY(${String(event.clientY - drag.startY)}px)`
-    drag.dropIndex = dropIndexAt(event.clientY, rowBoxes(), drag.fromIndex)
+    drag.dropIndex = dropIndexAt(event.clientY, drag.boxes, drag.fromIndex)
     markDrop(drag.dropIndex)
   })
+
+  /*
+   * A drop that reorders keeps the preview on screen: the new order arrives with
+   * the next render, after main has written it, and clearing the transforms
+   * before then would flash the old order for a few frames. The render replaces
+   * the rows, transforms and all.
+   */
+  function settleIntoSlot(): void {
+    if (drag === null) return
+    const { boxes, fromIndex, dropIndex, row } = drag
+    const dragged = boxes[fromIndex]
+    if (dragged === undefined) return
+    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
+    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    row.style.transform = `translateY(${String((dropIndex - fromIndex) * slot)}px)`
+    row.classList.remove('sidebar__row--dragging')
+    list.classList.remove('sidebar__list--dragging')
+  }
 
   const finishDrag = (event: PointerEvent): void => {
     if (drag === null || event.pointerId !== drag.pointerId) return
     const { id, fromIndex, dropIndex, moved } = drag
-    endDragVisuals()
+    if (moved && dropIndex !== fromIndex) settleIntoSlot()
+    else endDragVisuals()
     drag = null
     releaseDragPointer(event.pointerId)
     if (!moved) return
