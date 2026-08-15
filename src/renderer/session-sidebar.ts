@@ -209,21 +209,20 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     dropIndex: number
     /** Row positions taken before any row was pushed; a pushed row measures wrong. */
     boxes: readonly RowBox[]
-    ghost: HTMLElement | null
   } | null = null
   let swallowClick = false
 
   function rowBoxes(): RowBox[] {
     return shownRows.map((row) => {
       const box = row.getBoundingClientRect()
-      return { top: box.top, height: box.height, left: box.left, width: box.width }
+      return { top: box.top, height: box.height }
     })
   }
 
   /*
-   * A preview of the drop: the other rows step aside at once and a faint copy
-   * of the dragged row sits in the slot it would take. Transforms only; the DOM
-   * order changes when the drop commits, so a cancel leaves nothing to undo.
+   * A preview of the drop: the other rows step aside at once, leaving the slot
+   * the dragged row would take. Transforms only; the DOM order changes when the
+   * drop commits, so a cancel leaves nothing to undo.
    */
   function markDrop(index: number): void {
     if (drag === null) return
@@ -237,31 +236,12 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       const shift = rowShift(i, fromIndex, index)
       row.style.transform = shift === 0 ? '' : `translateY(${String(shift * slot)}px)`
     })
-    // The slot the row would take: its own when nothing moved, else where the
-    // shifted rows left the hole.
-    const hole = index === fromIndex ? fromIndex : index < fromIndex ? index : index + 1
-    const holeTop = boxes[hole]?.top ?? dragged.top + slot * (hole - fromIndex)
-    if (drag.ghost === null) {
-      const ghost = drag.row.cloneNode(true) as HTMLElement
-      ghost.classList.remove('sidebar__row--dragging')
-      ghost.classList.add('sidebar__row--ghost')
-      ghost.style.transform = ''
-      list.append(ghost)
-      drag.ghost = ghost
-    }
-    // Placed within the list, which scrolls: viewport y → list content y.
-    const listBox = list.getBoundingClientRect()
-    drag.ghost.style.top = `${String(holeTop - listBox.top + list.scrollTop)}px`
-    drag.ghost.style.left = `${String((dragged.left ?? listBox.left) - listBox.left)}px`
-    drag.ghost.style.width = `${String(dragged.width ?? listBox.width)}px`
   }
 
   function endDragVisuals(): void {
     if (drag !== null) {
       drag.row.classList.remove('sidebar__row--dragging')
       drag.row.style.transform = ''
-      drag.ghost?.remove()
-      drag.ghost = null
     }
     for (const row of shownRows) row.style.transform = ''
     list.classList.remove('sidebar__list--dragging')
@@ -309,7 +289,6 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       moved: false,
       dropIndex: index,
       boxes: [],
-      ghost: null,
     }
   })
 

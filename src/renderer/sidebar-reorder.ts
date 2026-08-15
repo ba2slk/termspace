@@ -8,8 +8,6 @@
 export interface RowBox {
   readonly top: number
   readonly height: number
-  readonly left?: number
-  readonly width?: number
 }
 
 /** How far the pointer must travel before a press becomes a drag, not a click. */

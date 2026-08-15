@@ -355,8 +355,6 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 0 6px 8px;
-  /* The drag ghost is placed within it. */
-  position: relative;
 }
 
 .sidebar__row {
@@ -390,12 +388,6 @@ body {
   background: var(--bg-raised);
 }
 
-/* The preview of where it lands: a faint copy in the slot the others opened. */
-.sidebar__row--ghost {
-  position: absolute;
-  opacity: 0.35;
-  pointer-events: none;
-}
 
 .sidebar__list--dragging {
   cursor: grabbing;
