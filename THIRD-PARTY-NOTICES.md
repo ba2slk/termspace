@@ -207,7 +207,9 @@ THE SOFTWARE.
 
 ## One Half
 
-<https://github.com/sonph/onehalf> — source of the One Half Dark palette.
+<https://github.com/sonph/onehalf> — source of the One Half Dark palette. Its bright
+black is taken from Windows Terminal's copy of the same scheme
+(<https://github.com/microsoft/terminal>, MIT, `defaults.json`).
 
 ```
 MIT License

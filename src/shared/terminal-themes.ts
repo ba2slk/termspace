@@ -384,7 +384,9 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     brightWhite: '#ECEFF4',
   },
   // iterm/OneHalfDark.itermcolors. Upstream's bright black equals the
-  // background; it is copied as published rather than invented.
+  // background, which hides dim text; the value here is the one Windows
+  // Terminal ships for this same scheme (microsoft/terminal
+  // src/cascadia/TerminalSettingsModel/defaults.json, MIT).
   {
     id: 'onehalf-dark',
     label: 'One Half Dark',
@@ -401,7 +403,7 @@ export const BUILT_IN_THEMES: readonly TerminalTheme[] = [
     magenta: '#c678dd',
     cyan: '#56b6c2',
     white: '#dcdfe4',
-    brightBlack: '#282c34',
+    brightBlack: '#5a6374',
     brightRed: '#e06c75',
     brightGreen: '#98c379',
     brightYellow: '#e5c07b',
