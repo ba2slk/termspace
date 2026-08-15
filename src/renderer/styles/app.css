@@ -762,11 +762,12 @@ body {
   max-width: calc(100% - 12px);
   overflow: hidden;
   padding: 1px 6px;
-  background: var(--bg-raised);
-  /* The overview card's border, one step above the seams between panes. */
-  border: 1px solid var(--border-focus);
+  /* Drawn in the terminal's own colours, like the IME preedit: it sits on the
+     terminal, not on the chrome, so a palette change carries it along. */
+  background: color-mix(in srgb, var(--term-fg, #cfcbc4) 10%, var(--term-bg, #1b1b1b));
+  border: 1px solid color-mix(in srgb, var(--term-fg, #cfcbc4) 25%, var(--term-bg, #1b1b1b));
   border-radius: var(--radius-sm);
-  color: var(--fg);
+  color: var(--term-fg, #cfcbc4);
   font-size: var(--fs-ui-sm);
   /* Bolder than the terminal text it sits over, or it reads as one more line of it. */
   font-weight: 600;
@@ -783,7 +784,7 @@ body {
 
 /* The pane taking keys: filled like the overview's selected card. */
 .pane--focused .pane__label {
-  background: var(--overview-selected-fill);
+  background: color-mix(in srgb, var(--term-fg, #cfcbc4) 18%, var(--term-bg, #1b1b1b));
   border-color: var(--focus-border, var(--border-active));
 }
 
