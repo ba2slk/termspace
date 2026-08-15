@@ -30,6 +30,7 @@ const api: TermspaceApi = {
   reorderSession: (id, toIndex) => ipcRenderer.invoke('session:reorder', id, toIndex),
   editorCommandFor: (id) => ipcRenderer.invoke('session:editor-command', id),
   openSessionFileExternal: (id) => ipcRenderer.send('session:open-external', id),
+  openExternal: (url) => ipcRenderer.send('app:open-external', url),
   listMonoFonts: () => ipcRenderer.invoke('fonts:list'),
   listUserThemes: () => ipcRenderer.invoke('themes:list'),
   openThemesDir: () => ipcRenderer.send('themes:reveal'),

@@ -280,6 +280,8 @@ export interface TermspaceApi {
   editorCommandFor(id: string): Promise<string | null>
   /** Open the session file with the OS default app — for when no session is on screen. */
   openSessionFileExternal(id: string): void
+  /** Hand a URL to the browser. Main decides which schemes may leave the app. */
+  openExternal(url: string): void
   /** Monospace fonts installed on this machine. */
   listMonoFonts(): Promise<readonly string[]>
   /** User palettes from ~/.config/termspace/themes/, added to the bundled ones. */

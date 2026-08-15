@@ -16,6 +16,7 @@ import {
 } from './chrome'
 import {
   checkAppKeysWithoutSession,
+  checkClickableLinks,
   checkFocusVisibility,
   checkCanvasHostScrollLock,
   checkGridFillsPane,
@@ -92,6 +93,7 @@ const GROUPS: Readonly<
     await checkLayoutEditing(report)
     checkRendererBudget(report)
     await checkGridFillsPane(report)
+    await checkClickableLinks(report)
   },
 
   // Anything that needs frames or the clipboard, which need an active window.

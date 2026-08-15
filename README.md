@@ -55,6 +55,7 @@ while you're looking somewhere else.
 | Switching sessions | The wheel over the session list steps through sessions, and `Alt` + `1`–`9` opens one directly. Pressing the current session's number again returns to the previous one. |
 | Panning and resizing with the mouse | Mice have no horizontal wheel, so the wheel over the middle of the title bar pans the canvas, as does `Shift` + wheel anywhere. The gaps between panes are drag handles for resizing. |
 | Notifications from off-screen panes | A pane that rings marks its session in the list. `OSC 9` and `OSC 777` notifications also reach the desktop, unless you were watching that pane at the time. |
+| Links in output | `Ctrl` + click (`Cmd` + click on macOS) opens a URL in the browser. `OSC 8` hyperlinks work the same way. A plain click still selects. |
 
 ## Install
 
