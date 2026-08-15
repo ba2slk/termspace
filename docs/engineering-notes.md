@@ -353,6 +353,17 @@ before `spare` alphabetically — enough to bump verify off row 2. The fixture i
 renamed with a leading "z" so the alphabetical fallback agrees with the write order
 instead of fighting it.
 
+**The pane count beside a session never moved.** It was read from the session's YAML,
+which a split never touches, so the number stayed at whatever the file said however many
+panes were on screen. It comes from the running session now, and the self-check splits a
+pane and reads the row back — the only way to tell a live count from a stale one.
+
+**A narrow session list spent its width on the `Alt+N` chord instead of names.** The
+chord is hover-only, but it still held its column while invisible: every name ellipsised
+against a gap showing nothing. It is out of flow now, and a row with nothing left beside
+the count drops it. Only a real layout shows this, since happy-dom measures every box as
+zero, so the assertion lives in the self-check rather than a DOM test.
+
 ---
 
 ## Self-Check
