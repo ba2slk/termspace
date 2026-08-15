@@ -285,6 +285,12 @@ English copy.
   they report as monospace, but rendering a terminal with them shows no characters at
   all)
 - 0/1 settings appear as on/off toggles, not sliders, and clicking actually flips them
+- **Custom focus border paints the focused pane's border that colour, and White puts the
+  token's colour back** (the border is set through a runtime custom property with the
+  token as its fallback, so reading the class or the setting proves nothing — only the
+  pane's computed `border-top-color` says which of the two actually won)
+- The colour field is inert unless the mode is Custom (in the other two modes it names a
+  colour nothing reads)
 - **Interface size grows the title bar in pixels while the canvas track's width does not
   move** (a column's width is an absolute pixel count and has to mean the same thing at
   every scale, so anything that scaled the canvas along with the chrome would be wrong,
