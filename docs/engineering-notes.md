@@ -154,6 +154,19 @@ never even started.
 
 ---
 
+**A dark bar appeared in the middle of the window and stayed.** Reported 2026-08-15:
+typing in a pane cut off by the window's right edge, and once the text passed that
+edge an 8px strip in the canvas colour stood down the full height at about a third of
+the window in, over the terminal text, and no scroll or focus move removed it. Pixel
+sampling of the screenshot put the strip at exactly `.canvas-gutter--right`, only 318px
+left of where it belonged. The canvas host was `overflow: hidden`, which clips but is
+still a scroll container the browser may scroll on its own: xterm parks its textarea
+on the cursor cell, and when the caret leaves the visible box Chromium reveals it by
+scrolling the nearest scrollable ancestor — the host — while the app's own scroll model
+(a transform on the track) knew nothing of it, so nothing put it back. `overflow: clip`
+clips without being scrollable at all, by the browser or by script. The self-check
+now writes `scrollLeft = 300` to the host and expects to read back 0.
+
 ## Input
 
 **Copy was completely broken.** WebGL draws to a canvas, so `window.getSelection()` is
