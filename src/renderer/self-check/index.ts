@@ -22,6 +22,7 @@ import {
   checkNavigation,
   checkOverview,
   checkOverviewScaleFloor,
+  checkPaneTitlePeek,
   checkTerminalSignals,
   checkRendererBudget,
   checkSessionAndPty,
@@ -82,6 +83,7 @@ const GROUPS: Readonly<
     await capture(report, 'fresh')
     await checkNavigation(report)
     checkFocusVisibility(report)
+    await checkPaneTitlePeek(report)
     await checkOverview(report)
     await checkOverviewScaleFloor(report)
     await checkTerminalSignals(report)
