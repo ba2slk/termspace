@@ -10,6 +10,7 @@ import { defaultBindingsFor } from '../shared/keybindings'
 import { DEFAULT_SETTINGS, isDefaultSetting } from '../shared/settings-defaults'
 import { BUILT_IN_THEMES } from '../shared/terminal-themes'
 import { api } from './api'
+import { normalizeHex } from './focus-border'
 import { IS_MAC } from './platform'
 import { createKeybindingsPanel, type KeybindingsPanel } from './keybindings-view'
 import { t } from './i18n'
@@ -206,18 +207,26 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
    * Drawn on every row, not only changed ones: appearing and disappearing would
    * shift the control beside it the moment a slider left its default.
    */
-  function resetButton(key: keyof AppSettings): HTMLButtonElement {
+  function resetButton(
+    key: keyof AppSettings,
+    ...also: readonly (keyof AppSettings)[]
+  ): HTMLButtonElement {
+    const keys = [key, ...also]
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'settings__reset'
     button.textContent = '↺'
     button.title = t.settings.resetRow
     button.dataset['reset'] = key
-    const stock = settings === null || isDefaultSetting(settings, key)
+    const snapshot = settings
+    const stock = snapshot === null || keys.every((k) => isDefaultSetting(snapshot, k))
     button.disabled = stock
     button.setAttribute('aria-hidden', String(stock))
     button.addEventListener('click', () => {
-      if (settings !== null) commit({ ...settings, [key]: DEFAULT_SETTINGS[key] })
+      if (settings === null) return
+      const next = { ...settings }
+      for (const k of keys) Object.assign(next, { [k]: DEFAULT_SETTINGS[k] })
+      commit(next)
     })
     return button
   }
@@ -493,6 +502,77 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
   }
 
   /**
+   * The focused pane's border colour: a mode, and the colour the custom mode
+   * uses. One row, because the field is meaningless without the mode beside it.
+   */
+  function focusBorderRow(mode: string, color: string): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'settings__row'
+
+    const text = document.createElement('div')
+    text.className = 'settings__text'
+    const label = document.createElement('span')
+    label.textContent = t.settings.focusBorderLabel
+    const description = document.createElement('small')
+    description.textContent = t.settings.focusBorderDesc
+    text.append(label, description)
+
+    const control = document.createElement('div')
+    control.className = 'settings__control'
+
+    const select = document.createElement('select')
+    select.className = 'settings__select'
+    select.dataset['setting'] = 'focusBorder'
+    for (const [id, name] of [
+      ['white', t.settings.focusBorderWhite],
+      ['palette', t.settings.focusBorderPalette],
+      ['custom', t.settings.focusBorderCustom],
+    ] as const) {
+      const option = document.createElement('option')
+      option.value = id
+      option.textContent = name
+      select.append(option)
+    }
+    select.value = mode
+    select.addEventListener('change', () => {
+      if (settings !== null) commit({ ...settings, focusBorder: select.value })
+    })
+
+    const hex = document.createElement('input')
+    hex.type = 'text'
+    hex.className = 'settings__hex'
+    hex.dataset['setting'] = 'focusBorderColor'
+    hex.value = color
+    hex.maxLength = 7
+    hex.spellcheck = false
+    hex.title = t.settings.focusBorderColorTitle
+    hex.setAttribute('aria-label', t.settings.focusBorderLabel)
+    // The colour only means anything in custom mode; the other two would show a
+    // field that changes nothing.
+    hex.disabled = mode !== 'custom'
+    hex.addEventListener('input', () => {
+      // Half-typed is not a colour yet, so nothing is applied until it is one.
+      const typed = normalizeHex(hex.value)
+      if (typed === null || settings === null) return
+      settings = { ...settings, focusBorderColor: typed }
+      hooks.onChange(settings) // show it live, like a slider being dragged
+    })
+    hex.addEventListener('change', () => {
+      if (settings === null) return
+      const typed = normalizeHex(hex.value)
+      if (typed === null) hex.value = settings.focusBorderColor
+      else commit({ ...settings, focusBorderColor: typed })
+    })
+    hex.addEventListener('blur', () => {
+      if (settings !== null) hex.value = settings.focusBorderColor
+    })
+
+    control.append(select, hex, resetButton('focusBorder', 'focusBorderColor'))
+    row.append(text, control)
+    return row
+  }
+
+  /**
    * Language. Applied at startup only, so the row says so rather than pretending
    * the screen behind it will change.
    */
@@ -591,6 +671,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
 
     const appearance = document.createElement('div')
     appearance.append(fieldRow(APPEARANCE, settings.uiScale))
+    appearance.append(focusBorderRow(settings.focusBorder, settings.focusBorderColor))
     appearance.append(localeRow(settings.locale))
 
     const toggles = document.createElement('div')

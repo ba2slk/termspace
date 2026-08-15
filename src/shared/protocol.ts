@@ -111,6 +111,16 @@ export interface AppSettings {
    */
   readonly uiScale: number
   /**
+   * What colours the focused pane's border.
+   *
+   * 'white' is the chrome's own highlight, the same one every other active
+   * edge uses. 'palette' follows the terminal palette's accent, so the border
+   * changes with the colours behind it. 'custom' uses focusBorderColor.
+   */
+  readonly focusBorder: string
+  /** The colour for 'custom' mode, as #rrggbb. Ignored in the other two. */
+  readonly focusBorderColor: string
+  /**
    * Interface language: 'en', 'ko', or empty for the system's.
    *
    * Read at startup only. Every screen bakes its strings in when it is built,

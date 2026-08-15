@@ -714,10 +714,12 @@ body {
  * leaves you searching.
  */
 .pane--focused {
-  border-color: var(--border-active);
+  /* The setting sets --focus-border at runtime; with it unset the token stands,
+     which is what "white" means. */
+  border-color: var(--focus-border, var(--border-active));
   /* A hard 1px ring outside the border, not a blur. It ends inside the 6px gap,
      so it neither reaches the neighbour nor changes the layout. */
-  box-shadow: 0 0 0 1px var(--ring-active);
+  box-shadow: 0 0 0 1px var(--focus-ring, var(--ring-active));
 }
 
 .pane__body {
@@ -782,7 +784,7 @@ body {
 /* The pane taking keys: filled like the overview's selected card. */
 .pane--focused .pane__label {
   background: var(--overview-selected-fill);
-  border-color: var(--border-active);
+  border-color: var(--focus-border, var(--border-active));
 }
 
 /* Outside the active region: the browser skips layout and paint for this subtree. */
@@ -1561,6 +1563,21 @@ button.keys__chord:hover {
 }
 
 .settings__select:disabled {
+  color: var(--fg-faint);
+}
+
+/* A typed colour, beside the control that decides whether it is used. */
+.settings__hex {
+  width: 8ch;
+  padding: 4px 8px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.settings__hex:disabled {
   color: var(--fg-faint);
 }
 

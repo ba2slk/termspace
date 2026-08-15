@@ -29,6 +29,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Empty means the default palette; an unknown name also falls back.
   theme: '',
   uiScale: 100,
+  // The chrome's own white highlight: exactly what the app looked like before
+  // this setting existed.
+  focusBorder: 'white',
+  // Only read in custom mode, but a sensible starting point once it is picked:
+  // the default palette's blue.
+  focusBorderColor: '#7a9bbf',
   // Empty follows the system locale.
   locale: '',
 }

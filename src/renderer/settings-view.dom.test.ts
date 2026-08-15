@@ -46,7 +46,9 @@ beforeEach(() => {
 describe('restoring one setting', () => {
   it('offers a button on every row', () => {
     open({})
-    for (const key of ['fontSize', 'uiScale', 'copyOnSelect', 'fontFamily', 'theme', 'locale'] as const) {
+    for (const key of [
+      'fontSize', 'uiScale', 'copyOnSelect', 'fontFamily', 'theme', 'locale', 'focusBorder',
+    ] as const) {
       expect(reset(key), key).not.toBeNull()
     }
   })
@@ -78,5 +80,65 @@ describe('restoring one setting', () => {
     expect(latest.copyOnSelect).toBe(DEFAULT_SETTINGS.copyOnSelect)
     reset('theme').click()
     expect(latest.theme).toBe(DEFAULT_SETTINGS.theme)
+  })
+})
+
+describe('the focused pane border', () => {
+  const select = (): HTMLSelectElement =>
+    document.body.querySelector<HTMLSelectElement>('select[data-setting="focusBorder"]')!
+  const hex = (): HTMLInputElement =>
+    document.body.querySelector<HTMLInputElement>('input[data-setting="focusBorderColor"]')!
+
+  it('offers the three modes', () => {
+    open({})
+    expect([...select().options].map((o) => o.value)).toEqual(['white', 'palette', 'custom'])
+    expect(select().value).toBe('white')
+  })
+
+  it('commits the mode as soon as it is picked', () => {
+    open({})
+    select().value = 'palette'
+    select().dispatchEvent(new Event('change', { bubbles: true }))
+    expect(latest.focusBorder).toBe('palette')
+    expect(saveSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the colour field inert outside custom mode', () => {
+    open({ focusBorder: 'palette' })
+    expect(hex().disabled).toBe(true)
+    open({ focusBorder: 'custom' })
+    expect(hex().disabled).toBe(false)
+  })
+
+  it('takes a typed colour with or without the hash', () => {
+    open({ focusBorder: 'custom' })
+    hex().value = 'FF0000'
+    hex().dispatchEvent(new Event('input', { bubbles: true }))
+    expect(latest.focusBorderColor).toBe('#ff0000')
+  })
+
+  it('commits nothing while the colour is still half typed', () => {
+    open({ focusBorder: 'custom', focusBorderColor: '#7a9bbf' })
+    hex().value = '#ff00'
+    hex().dispatchEvent(new Event('input', { bubbles: true }))
+    expect(latest.focusBorderColor).toBe('#7a9bbf')
+    expect(saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('puts the last good colour back when the field is left invalid', () => {
+    open({ focusBorder: 'custom', focusBorderColor: '#7a9bbf' })
+    const field = hex()
+    field.value = 'nope'
+    field.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(field.value).toBe('#7a9bbf')
+    expect(saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('restores both keys from the one button', () => {
+    open({ focusBorder: 'custom', focusBorderColor: '#ff0000' })
+    expect(reset('focusBorder').disabled).toBe(false)
+    reset('focusBorder').click()
+    expect(latest.focusBorder).toBe(DEFAULT_SETTINGS.focusBorder)
+    expect(latest.focusBorderColor).toBe(DEFAULT_SETTINGS.focusBorderColor)
   })
 })

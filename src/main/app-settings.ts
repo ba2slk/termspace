@@ -12,6 +12,9 @@ import { configDir } from './config-dir'
 
 export { DEFAULT_SETTINGS }
 
+/** What the focused pane's border may follow. */
+export const FOCUS_BORDER_MODES = ['white', 'palette', 'custom'] as const
+
 /** Interface languages with a catalogue. Empty means the system's. */
 export const LOCALES = ['', 'en', 'ko'] as const
 
@@ -68,6 +71,19 @@ function cleanLocale(value: unknown): string {
   return typeof value === 'string' && (LOCALES as readonly string[]).includes(value) ? value : ''
 }
 
+function cleanFocusBorder(value: unknown): string {
+  return typeof value === 'string' && (FOCUS_BORDER_MODES as readonly string[]).includes(value)
+    ? value
+    : DEFAULT_SETTINGS.focusBorder
+}
+
+/** Reaches a CSS declaration, so nothing but a plain hex colour gets through. */
+function cleanHexColor(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_SETTINGS.focusBorderColor
+  const trimmed = value.trim().toLowerCase()
+  return /^#[0-9a-f]{6}$/.test(trimmed) ? trimmed : DEFAULT_SETTINGS.focusBorderColor
+}
+
 /** Unknown keys and out-of-range values fall back to defaults. */
 export function normalizeSettings(raw: unknown): AppSettings {
   if (raw === null || typeof raw !== 'object') return { ...DEFAULT_SETTINGS }
@@ -89,6 +105,8 @@ export function normalizeSettings(raw: unknown): AppSettings {
     fontFamily: cleanFontFamily(input['fontFamily']),
     theme: cleanId(input['theme']),
     uiScale: clampNumber(input['uiScale'], 'uiScale'),
+    focusBorder: cleanFocusBorder(input['focusBorder']),
+    focusBorderColor: cleanHexColor(input['focusBorderColor']),
     locale: cleanLocale(input['locale']),
   }
 }
@@ -114,6 +132,8 @@ const HEADER = `# Termspace settings
 # fontFamily          terminal font. Empty uses the default stack
 # theme               terminal palette. Empty uses the default colours
 # uiScale             size of the app's own text and title bar (%). Not the terminal's
+# focusBorder         what colours the focused pane's border: white, palette, or custom
+# focusBorderColor    the colour custom uses, as #rrggbb
 # locale              interface language: en, ko, or empty to follow the system
 `
 
