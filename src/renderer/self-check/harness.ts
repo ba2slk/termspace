@@ -37,6 +37,51 @@ export async function waitFor(done: () => boolean, timeoutMs = 4000): Promise<bo
   return done()
 }
 
+/**
+ * Wait for a condition only main can answer.
+ *
+ * The clipboard and the session list are read over IPC, so the question cannot
+ * be asked from inside `waitFor`'s synchronous predicate. `pollMs` is the gap
+ * between asks: a round trip is not free, and a few of these hit shared state.
+ */
+export async function waitForAsync(
+  done: () => Promise<boolean>,
+  timeoutMs = 4000,
+  pollMs = 200,
+): Promise<boolean> {
+  const until = performance.now() + timeoutMs
+  for (;;) {
+    if (await done()) return true
+    if (performance.now() >= until) return false
+    await sleep(pollMs)
+  }
+}
+
+/**
+ * Wait for a measurement to stop changing.
+ *
+ * The end of a glide is announced by nothing: inertia just runs out. One
+ * unchanged reading is not enough — a throttled rAF holds the value still for a
+ * while — so require several consecutive quiet reads.
+ */
+export async function holdsStill(read: () => number, timeoutMs = 4000): Promise<number> {
+  const until = performance.now() + timeoutMs
+  let last = read()
+  let quiet = 0
+  while (performance.now() < until && quiet < 4) {
+    // The poll interval, not a guess at how long the glide runs.
+    await sleep(80)
+    const now = read()
+    quiet = now === last ? quiet + 1 : 0
+    last = now
+  }
+  return read()
+}
+
+/** The canvas glide, settled. Returns where it came to rest. */
+export const trackSettles = async (timeoutMs = 4000): Promise<number> =>
+  holdsStill(trackOffset, timeoutMs)
+
 /** Shortcuts match on `code`, but dialogs listen on `key`, so fill in both. */
 export const KEY_OF_CODE: Readonly<Record<string, string>> = {
   Escape: 'Escape',
@@ -106,6 +151,64 @@ export const visiblePanes = (): HTMLElement[] => [
 ]
 export const focusedId = (): string | undefined =>
   document.querySelector<HTMLElement>('.pane--focused')?.dataset['paneId']
+
+/** The overview, while it is open over the session on screen. */
+export const overlay = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
+
+/** The pane the open overview has selected. */
+export const selectedCard = (): string | undefined =>
+  overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+
+/** A session's row in the list, by file name. */
+export const rowOf = (id: string): HTMLElement | undefined =>
+  [...document.querySelectorAll<HTMLElement>('.sidebar__row')].find(
+    (row) => row.dataset['sessionId'] === id,
+  )
+
+/**
+ * The xterm instance behind a pane, through the dev seam the renderer parks on
+ * the host element. One type for every check: what a terminal offers does not
+ * depend on who is asking.
+ */
+export interface TermSeam {
+  cols: number
+  rows: number
+  options: { theme?: { background?: string } }
+  buffer: { active: { viewportY: number; cursorY: number } }
+  selectAll(): void
+  getSelection(): string
+  clear(): void
+  write(data: string, cb?: () => void): void
+}
+
+export interface HoveredLink {
+  text: string
+  range: { start: { x: number }; end: { x: number } }
+}
+
+export const termOf = (host: Element | null | undefined): TermSeam | undefined =>
+  (host as unknown as { __term?: TermSeam } | null | undefined)?.__term
+
+/** The terminal host of the focused pane — what most checks type into. */
+export const focusedHost = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>('.pane--focused .terminal-host')
+
+export const hoveredLinkOf = (host: Element | null | undefined): HoveredLink | null =>
+  (host as unknown as { __hoveredLink?: HoveredLink | null } | null | undefined)?.__hoveredLink ??
+  null
+
+/** One wheel notch, on whatever is meant to receive it. */
+export function wheel(
+  target: EventTarget | null | undefined,
+  deltaX: number,
+  deltaY: number,
+  deltaMode = 0,
+): void {
+  target?.dispatchEvent(
+    new WheelEvent('wheel', { deltaX, deltaY, deltaMode, bubbles: true, cancelable: true }),
+  )
+}
 
 export function trackOffset(): number {
   const track = document.querySelector<HTMLElement>('.session-host:not([hidden]) .canvas-track')
