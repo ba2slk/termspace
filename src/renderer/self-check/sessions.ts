@@ -1190,3 +1190,78 @@ export async function checkErrorRowStaysDraggable(report: Report): Promise<void>
       ? 'ok'
       : `FAIL (pointer-events: ${style.pointerEvents} — the press would hit the button, not the row)`
 }
+
+/**
+ * A narrowed list spends its width on names, not on the Alt+N chord.
+ *
+ * The chord is hover-only, and it used to hold its column even while invisible:
+ * names ellipsised against a gap showing nothing. It is out of flow now, and a
+ * row with nothing left beside the count drops it. Only real layout can show
+ * this — happy-dom measures every box as zero.
+ */
+export async function checkSidebarNarrowName(report: Report): Promise<void> {
+  const row = document.querySelector<HTMLElement>('.sidebar__row')
+  const grip = document.querySelector<HTMLElement>('.sidebar__grip')
+  const open = row?.querySelector<HTMLElement>('.sidebar__open') ?? null
+  const name = row?.querySelector<HTMLElement>('.sidebar__name') ?? null
+  const meta = row?.querySelector<HTMLElement>('.sidebar__meta') ?? null
+  const hint = row?.querySelector<HTMLElement>('.sidebar__hint') ?? null
+  if (row === null || grip === null || open === null || name === null || meta === null) {
+    report['sidebarNarrowName'] = 'skipped (list not on screen)'
+    return
+  }
+  if (hint === null) {
+    report['sidebarNarrowName'] = 'skipped (row carries no chord)'
+    return
+  }
+
+  const wideBefore = open.getBoundingClientRect().width
+  const nameBefore = name.textContent ?? ''
+  name.textContent = 'a session name far too long for a narrow list'
+
+  const dragGrip = (dx: number): void => {
+    const box = grip.getBoundingClientRect()
+    const at = (x: number): PointerEventInit => ({
+      clientX: x,
+      clientY: box.top + box.height / 2,
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+    })
+    const from = box.left + box.width / 2
+    grip.dispatchEvent(new PointerEvent('pointerdown', at(from)))
+    grip.dispatchEvent(new PointerEvent('pointermove', at(from + dx)))
+    grip.dispatchEvent(new PointerEvent('pointerup', at(from + dx)))
+  }
+
+  dragGrip(-400)
+  const narrowed = await waitFor(() => open.getBoundingClientRect().width < wideBefore - 20)
+  if (!narrowed) {
+    name.textContent = nameBefore
+    report['sidebarNarrowName'] = 'skipped (the width grip did not take the drag)'
+    return
+  }
+  const box = open.getBoundingClientRect()
+  const edge = box.right - Number.parseFloat(getComputedStyle(open).paddingRight)
+  const slack = edge - meta.getBoundingClientRect().right
+  report['sidebarNarrowNameUsesRow'] =
+    slack < 12
+      ? `ok (${slack.toFixed(0)}px spare)`
+      : `FAIL (${slack.toFixed(0)}px held for the chord)`
+  report['sidebarNarrowHintDropped'] = row.classList.contains('sidebar__row--tight')
+    ? 'ok'
+    : 'FAIL (chord kept beside a name with no room for it)'
+  await capture(report, 'sidebar-narrow')
+
+  // Leave the list at the width it was found at, and with its own name back.
+  // The name goes back first: the widening drag is what re-measures the row.
+  // Back by the exact amount, not by 400: the narrowing drag hit the minimum,
+  // and the same distance out again would leave the list wider than it was.
+  name.textContent = nameBefore
+  dragGrip(wideBefore - box.width)
+  await waitFor(() => open.getBoundingClientRect().width > wideBefore - 2)
+  report['sidebarWideHintKept'] =
+    row.classList.contains('sidebar__row--tight') === false
+      ? 'ok'
+      : 'FAIL (chord still dropped at full width)'
+}
