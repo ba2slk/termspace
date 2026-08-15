@@ -138,11 +138,10 @@ function sidebar(state: Partial<SidebarMenuState> = {}): {
 }
 
 describe('the sidebar menu', () => {
-  it('is grouped: run the session, its file, the list, then delete', () => {
+  it('is grouped: run the session, its file, then delete', () => {
     expect(groups(sidebar({}).items)).toEqual([
       [t.firstRun.viewing, t.firstRun.endSession],
       [t.firstRun.renameSession, t.firstRun.saveLayout, t.firstRun.editSessionFile],
-      [t.firstRun.newSession, t.firstRun.openSessionsDir],
       [t.firstRun.deleteSession],
     ])
   })

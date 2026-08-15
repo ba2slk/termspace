@@ -163,8 +163,8 @@ export function sidebarMenuItems(
       run: actions.saveLayout,
     },
     { label: t.firstRun.editSessionFile, run: actions.editSessionFile },
-    { label: t.firstRun.newSession, separatorBefore: true, run: actions.newSession },
-    { label: t.firstRun.openSessionsDir, run: actions.openSessionsDir },
+    // List commands (new session, the folder) belong to the empty-space menu:
+    // this one is about the row under the pointer.
     {
       label: t.firstRun.deleteSession,
       separatorBefore: true,
