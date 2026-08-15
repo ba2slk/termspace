@@ -179,10 +179,11 @@ rebindable in `Ctrl` + `,`(`⌘Cmd` + `,`) › Shortcuts.
 ## Settings
 
 `Ctrl` + `,`(`⌘Cmd` + `,`) holds the terminal font and size, interface scale, the language
-(English / 한국어), mouse and notification behaviour, and **14 built-in
-palettes** — the [Zenbones](https://github.com/zenbones-theme/zenbones.nvim)
-family, Dracula, and the Termspace default. Drop a YAML into
-`~/.config/termspace/themes/` for your own.
+(English / 한국어), mouse and notification behaviour, and **19 built-in dark
+palettes** — Catppuccin, Gruvbox, Nord, Tokyo Night, Solarized, Dracula, the
+[Zenbones](https://github.com/zenbones-theme/zenbones.nvim) trio, and the
+Termspace default. Drop a YAML into `~/.config/termspace/themes/` for your
+own.
 
 ## Developing
 
