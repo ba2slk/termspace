@@ -3,7 +3,7 @@
  * Install the built AppImage into ~/Applications with a desktop launcher.
  * Writes only inside the user's home and never needs sudo.
  */
-import { chmod, copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -56,6 +56,24 @@ async function findAppImage() {
   return path
 }
 
+/*
+ * Drop the other builds in release/. Every AppImage is 130 MB and nothing reads
+ * an old one: the release artifact lives on GitHub, and this script only ever
+ * installs the one matching package.json.
+ */
+async function pruneOldAppImages(keep) {
+  const dir = join(root, 'release')
+  const removed = []
+  for (const name of await readdir(dir)) {
+    if (!/^Termspace-.*\.AppImage$/.test(name)) continue
+    const path = join(dir, name)
+    if (path === keep) continue
+    await rm(path)
+    removed.push(name)
+  }
+  return removed
+}
+
 async function installIcons() {
   for (const size of [32, 48, 64, 128, 256]) {
     const dir = join(ICON_DIR, `${size}x${size}`, 'apps')
@@ -78,6 +96,7 @@ async function main() {
   await rename(staged, TARGET)
 
   await installIcons()
+  const pruned = await pruneOldAppImages(source)
 
   const noSandbox = await needsNoSandbox()
   const exec = noSandbox ? `${TARGET} --no-sandbox` : TARGET
@@ -119,6 +138,7 @@ async function main() {
   console.log(`installed  Termspace ${await appVersion()}`)
   console.log(`AppImage   ${TARGET}`)
   console.log(`launcher   ${DESKTOP_FILE}`)
+  if (pruned.length > 0) console.log(`pruned     ${pruned.length} older AppImage(s) in release/`)
   console.log('')
 
   if (!noSandbox) {
