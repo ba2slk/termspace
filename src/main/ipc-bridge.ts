@@ -13,6 +13,7 @@ import type {
   SpawnRequest,
   SpawnResult,
 } from '../shared/protocol'
+import { isOpenableUrl } from './external-url'
 import { RC_LINE, RC_LINE_ZSH } from './shell-integration'
 import { activateWindow } from './window-manager'
 import { loadSettings, saveSettings, settingsFile } from './app-settings'
@@ -80,6 +81,7 @@ const ON_CHANNELS = [
   'clipboard:write',
   'session:reveal-dir',
   'session:open-external',
+  'app:open-external',
   'window:minimize',
   'window:close',
   'window:confirm-close',
@@ -206,6 +208,15 @@ export function registerIpcHandlers(
     void sessionFilePath(dir, id).then((path) => {
       if (path !== null) void shell.openPath(path)
     })
+  })
+
+  /*
+   * A link a program printed. The scheme rule is the same one the window's
+   * open handler enforces, so a URL cannot reach the desktop by either path
+   * without passing it.
+   */
+  ipcMain.on('app:open-external', (_e, url: unknown) => {
+    if (isOpenableUrl(url)) void shell.openExternal(url as string)
   })
 
   ipcMain.handle('fonts:list', (): Promise<string[]> => listMonoFonts())

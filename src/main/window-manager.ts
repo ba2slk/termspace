@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, screen, shell } from 'electron'
 import { join } from 'node:path'
+import { isOpenableUrl } from './external-url'
 import { APP_NAME } from '../shared/version'
 import { stringsFor } from '../shared/ui-strings'
 
@@ -154,17 +155,9 @@ export function createMainWindow(locale: string): BrowserWindow {
   win.once('ready-to-show', () => win.show())
 
   // A link opened in-app would turn the renderer into an arbitrary page. Hand it
-  // to the external browser, and only for known schemes — these URLs come from
-  // program output, and file:// or custom schemes can launch anything.
+  // to the external browser, and only for the schemes isOpenableUrl allows.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    try {
-      const scheme = new URL(url).protocol
-      if (scheme === 'http:' || scheme === 'https:' || scheme === 'mailto:') {
-        void shell.openExternal(url)
-      }
-    } catch {
-      // Not a URL — don't open
-    }
+    if (isOpenableUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
