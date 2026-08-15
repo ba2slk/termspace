@@ -1568,8 +1568,8 @@ button.keys__chord:hover {
 
 /* A typed colour, beside the control that decides whether it is used. */
 .settings__hex {
-  width: 8ch;
-  padding: 4px 8px;
+  width: 11ch;
+  padding: 4px 10px;
   background: var(--bg-raised);
   color: var(--fg);
   border: 1px solid var(--border);
