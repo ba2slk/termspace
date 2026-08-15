@@ -538,6 +538,38 @@ export function checkFocusVisibility(report: Report): void {
 }
 
 /**
+ * The canvas host must not be scrollable by the browser.
+ *
+ * Its own scrolling is a transform on the track. A host the browser can also
+ * scroll gets moved behind the app's back: xterm parks its textarea on the
+ * cursor cell, and typing past the window's edge makes Chromium reveal that
+ * caret by scrolling the nearest scroll container. The right gutter then sits
+ * in the middle of the window as a dark bar, and nothing in the app resets it.
+ */
+export function checkCanvasHostScrollLock(report: Report): void {
+  const host = document.getElementById('canvas')
+  if (host === null) {
+    report['canvasHostScrollLock'] = 'FAIL (no canvas)'
+    return
+  }
+  const before = host.scrollLeft
+  host.scrollLeft = 300
+  const after = host.scrollLeft
+  host.scrollLeft = before
+  report['canvasHostScrollLock'] =
+    after === 0 ? 'ok' : `FAIL (the browser scrolled the canvas host to ${String(after)}px)`
+
+  // Where the browser scrolled the host, the right gutter is what shows.
+  const gutter = document.querySelector<HTMLElement>('.canvas-gutter--right')
+  if (gutter === null) {
+    report['rightGutterAtWindowEdge'] = 'FAIL (no right gutter)'
+    return
+  }
+  const gap = Math.abs(host.getBoundingClientRect().right - gutter.getBoundingClientRect().right)
+  report['rightGutterAtWindowEdge'] = gap < 1 ? 'ok' : `FAIL (${String(Math.round(gap))}px in)`
+}
+
+/**
  * Peek: holding the move modifier labels every pane, releasing it clears them.
  *
  * Measured in pixels rather than by class: the label is an overlay on a pane

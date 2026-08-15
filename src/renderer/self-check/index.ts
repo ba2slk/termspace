@@ -17,6 +17,7 @@ import {
 import {
   checkAppKeysWithoutSession,
   checkFocusVisibility,
+  checkCanvasHostScrollLock,
   checkGridFillsPane,
   checkLayoutEditing,
   checkNavigation,
@@ -83,6 +84,7 @@ const GROUPS: Readonly<
     await capture(report, 'fresh')
     await checkNavigation(report)
     checkFocusVisibility(report)
+    checkCanvasHostScrollLock(report)
     await checkPaneTitlePeek(report)
     await checkOverview(report)
     await checkOverviewScaleFloor(report)

@@ -541,7 +541,12 @@ body {
   position: relative;
   height: 100%;
   min-width: 0;
-  overflow: hidden; /* Scrolling is done with transform, not browser overflow. */
+  /*
+   * clip, not hidden: scrolling is a transform on the track, and hidden still
+   * lets the browser scroll this box on its own (revealing the caret when a
+   * program types past the window's edge), which nothing here would undo.
+   */
+  overflow: clip;
 }
 
 /*
