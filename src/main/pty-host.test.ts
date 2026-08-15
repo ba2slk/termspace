@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { spawn } from 'node-pty'
 import { describe, expect, it } from 'vitest'
-import { foregroundCommandViaPs } from './pty-host'
+import { createPtyHost, foregroundCommandViaPs } from './pty-host'
 
 /*
  * The ps path is what mac uses instead of /proc, and no mac runs this suite
@@ -60,4 +60,30 @@ describe.skipIf(!hasPs || !hasBash)('the foreground command through ps', () => {
       term.kill()
     }
   }, 20_000)
+})
+
+describe('createPtyHost spawn', () => {
+  it('fails when cwd does not exist', () => {
+    const host = createPtyHost()
+    const result = host.spawn(
+      {
+        paneId: 'test-pane-1',
+        cwd: '/path/does/not/exist/surely/12345',
+        shell: '/bin/sh',
+        command: null,
+        prefill: null,
+        cols: 80,
+        rows: 24,
+      },
+      {
+        onData: () => {},
+        onExit: () => {},
+        onAttention: () => {},
+      },
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Directory does not exist')
+    expect(result.message).toContain('/path/does/not/exist/surely/12345')
+  })
 })
