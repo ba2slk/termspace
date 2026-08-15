@@ -49,7 +49,29 @@ const disabled = (
   items: readonly { readonly label: string; readonly disabled?: boolean }[],
 ): string[] => items.filter((item) => item.disabled === true).map((item) => item.label)
 
+const groups = (
+  items: readonly { readonly label: string; readonly separatorBefore?: boolean }[],
+): string[][] => {
+  const out: string[][] = []
+  for (const item of items) {
+    if (item.separatorBefore === true || out.length === 0) out.push([])
+    out[out.length - 1]!.push(item.label)
+  }
+  return out
+}
+
 describe('the ☰ menu', () => {
+  it('is grouped by what each command acts on', () => {
+    expect(groups(command({ sidebarVisible: true }).items)).toEqual([
+      [t.firstRun.closePane],
+      [t.firstRun.saveLayout, t.firstRun.saveLayoutAs, t.firstRun.editSessionFile],
+      [t.firstRun.newSession, t.firstRun.openSessionsDir],
+      [t.firstRun.hideSessionList, t.firstRun.fullscreen],
+      [t.firstRun.settings, t.firstRun.devTools],
+      [t.firstRun.quit],
+    ])
+  })
+
   it('greys out the pane and layout commands with nothing on the canvas', () => {
     expect(disabled(command({ hasSession: false, hasSessionId: false }).items)).toEqual([
       t.firstRun.closePane,
@@ -116,6 +138,15 @@ function sidebar(state: Partial<SidebarMenuState> = {}): {
 }
 
 describe('the sidebar menu', () => {
+  it('is grouped: run the session, its file, the list, then delete', () => {
+    expect(groups(sidebar({}).items)).toEqual([
+      [t.firstRun.viewing, t.firstRun.endSession],
+      [t.firstRun.renameSession, t.firstRun.saveLayout, t.firstRun.editSessionFile],
+      [t.firstRun.newSession, t.firstRun.openSessionsDir],
+      [t.firstRun.deleteSession],
+    ])
+  })
+
   it('offers the list commands over empty space', () => {
     expect(labels(sidebar({ sessionId: null }).items)).toEqual([
       t.firstRun.newSession,

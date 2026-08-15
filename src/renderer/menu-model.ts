@@ -48,6 +48,8 @@ export function commandItems(
   state: CommandState,
   actions: CommandActions,
 ): readonly CommandItem[] {
+  // Grouped by what they act on: the pane, this session's file, the session
+  // list, the view, the app. Quit stands alone.
   return [
     {
       label: t.firstRun.closePane,
@@ -55,11 +57,11 @@ export function commandItems(
       disabled: !state.hasSession,
       run: actions.closePane,
     },
-    { label: t.firstRun.newSession, separatorBefore: true, run: actions.newSession },
     {
       label: t.firstRun.saveLayout,
       hint: state.hint('save-layout'),
       disabled: !state.hasSession,
+      separatorBefore: true,
       run: actions.saveLayout,
     },
     {
@@ -72,19 +74,24 @@ export function commandItems(
       disabled: !state.hasSessionId,
       run: actions.editSessionFile,
     },
+    { label: t.firstRun.newSession, separatorBefore: true, run: actions.newSession },
+    { label: t.firstRun.openSessionsDir, run: actions.openSessionsDir },
     {
       label: state.sidebarVisible ? t.firstRun.hideSessionList : t.firstRun.showSessionList,
       hint: state.hint('toggle-sidebar'),
       separatorBefore: true,
       run: actions.toggleSidebar,
     },
-    { label: t.firstRun.settings, hint: state.hint('settings'), run: actions.settings },
-    { label: t.firstRun.openSessionsDir, run: actions.openSessionsDir },
     {
       label: t.firstRun.fullscreen,
       hint: state.hint('fullscreen'),
-      separatorBefore: true,
       run: actions.fullscreen,
+    },
+    {
+      label: t.firstRun.settings,
+      hint: state.hint('settings'),
+      separatorBefore: true,
+      run: actions.settings,
     },
     { label: t.firstRun.devTools, run: actions.devTools },
     { label: t.firstRun.quit, separatorBefore: true, run: actions.quit },
@@ -148,13 +155,14 @@ export function sidebarMenuItems(
      * one nobody asked for. Shown disabled rather than hidden, so the rule —
      * this belongs to the session you are looking at — is visible.
      */
+    // This session's file: its name first, then what goes into it.
+    { label: t.firstRun.renameSession, separatorBefore: true, run: actions.renameSession },
     {
       label: t.firstRun.saveLayout,
       disabled: !state.isCurrent,
       run: actions.saveLayout,
     },
     { label: t.firstRun.editSessionFile, run: actions.editSessionFile },
-    { label: t.firstRun.renameSession, run: actions.renameSession },
     { label: t.firstRun.newSession, separatorBefore: true, run: actions.newSession },
     { label: t.firstRun.openSessionsDir, run: actions.openSessionsDir },
     {
