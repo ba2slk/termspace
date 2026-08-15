@@ -1040,28 +1040,6 @@ body {
   pointer-events: none;
 }
 
-/* ── Key chips ────────────────────────────────────────── */
-
-.kbd {
-  display: inline-block;
-  padding: 2px 7px;
-  font-size: var(--fs-ui-sm);
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--fg-dim);
-}
-
-.chip-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.chip-row__plus {
-  color: var(--fg-faint);
-}
-
 /* ── Empty state and full-screen sheets ───────────────── */
 
 /*
@@ -1106,21 +1084,6 @@ body {
 
 .button:hover {
   border-color: var(--border-focus);
-}
-
-.key-hints {
-  margin-top: 18px;
-}
-
-.session-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.session-row__meta {
-  font-size: var(--fs-ui-sm);
-  color: var(--fg-faint);
 }
 
 /* ── Error card and exit banner ───────────────────────── */
