@@ -1266,3 +1266,89 @@ export async function checkTerminalSignals(report: Report): Promise<void> {
   await waitFor(() => focusedId() === startFocus)
 }
 
+
+/*
+ * A URL printed by a program has to become a link.
+ *
+ * Nothing about it is in the DOM: the addon decides which cells the link covers
+ * and the renderer draws the underline onto a canvas. So hover the text and
+ * measure the range the link reports, in the pane's own pixels.
+ */
+export async function checkClickableLinks(report: Report): Promise<void> {
+  const pane = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')
+  const host = pane?.querySelector<HTMLElement>('.terminal-host') ?? null
+  const seam = host as unknown as {
+    __term?: {
+      write(data: string, cb?: () => void): void
+      cols: number
+      rows: number
+      buffer: { active: { cursorY: number } }
+    }
+    __hoveredLink?: { text: string; range: { start: { x: number }; end: { x: number } } } | null
+  } | null
+  const term = seam?.__term
+  const screen = host?.querySelector<HTMLElement>('.xterm-screen') ?? null
+  if (pane === null || term === undefined || seam == null || screen === null) {
+    report['linkHover'] = 'FAIL (no focused terminal)'
+    return
+  }
+
+  const url = 'https://example.com/termspace-link'
+  // Straight into the buffer: the pty stays out of it, and no browser is opened.
+  await new Promise<void>((resolve) => term.write(`\r\n${url}\r\n`, resolve))
+  // The write left the cursor on the line below the URL.
+  const row = term.buffer.active.cursorY - 1
+
+  const rect = screen.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0 || row < 0) {
+    // A pane that is not being drawn cannot be pointed at.
+    report['linkHover'] = 'skipped: terminal not drawn, nothing to point at'
+    return
+  }
+  const cellWidth = rect.width / term.cols
+  const cellHeight = rect.height / term.rows
+
+  // Aim at the middle of the third character, well inside the URL.
+  const hoverAt = (offsetCells: number): void => {
+    screen.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        clientX: rect.left + cellWidth * (offsetCells + 0.5),
+        clientY: rect.top + cellHeight * (row + 0.5),
+      }),
+    )
+  }
+  const link = (): { text: string; range: { start: { x: number }; end: { x: number } } } | null =>
+    seam.__hoveredLink ?? null
+  // Re-point each round: the linkifier only asks when the cell under it moves.
+  await waitFor(() => {
+    hoverAt(link() === null ? 2 : 3)
+    return link()?.text === url
+  }, 6000)
+
+  const hovered = link()
+  if (hovered === null || hovered.text !== url) {
+    report['linkHover'] = `skipped: no hover state (${hovered === null ? 'none' : hovered.text})`
+    return
+  }
+  report['linkHover'] = `ok (${hovered.text})`
+
+  const cells = hovered.range.end.x - hovered.range.start.x + 1
+  const left = rect.left + (hovered.range.start.x - 1) * cellWidth
+  const width = cells * cellWidth
+  const paneRect = pane.getBoundingClientRect()
+  const inside = left >= paneRect.left - 1 && left + width <= paneRect.right + 1
+  report['linkUnderlineRange'] =
+    width > 0 && inside
+      ? `ok (${cells} cells, ${width.toFixed(0)}px)`
+      : `FAIL (${width.toFixed(0)}px at ${left.toFixed(0)}, pane ${paneRect.left.toFixed(0)}–${paneRect.right.toFixed(0)})`
+  // The pointer cursor is xterm's own sign that it treats these cells as a link.
+  report['linkPointerCursor'] = screen.classList.contains('xterm-cursor-pointer')
+    ? 'ok'
+    : 'note: no pointer cursor class while hovering'
+
+  // Leave the hover behind, so the next check finds an ordinary pane.
+  screen.dispatchEvent(
+    new MouseEvent('mousemove', { bubbles: true, clientX: rect.left + 1, clientY: rect.bottom - 1 }),
+  )
+}
