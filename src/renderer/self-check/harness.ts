@@ -219,8 +219,23 @@ export function trackOffset(): number {
 export async function openSession(displayName: string): Promise<void> {
   const rows = [...document.querySelectorAll<HTMLButtonElement>('.sidebar__open')]
   const match = rows.find((row) => row.querySelector('.sidebar__name')?.textContent === displayName)
+  // A fallback row is whichever session was first, so its name proves nothing.
+  const wanted = match === undefined ? null : displayName
   ;(match ?? rows[0])?.click()
-  await sleep(2600)
+  /*
+   * Opening spawns a pty per pane and the title follows the session. Wait for
+   * both: the panes appear a frame before the terminals are attached, and a
+   * check that starts typing in between types into nothing.
+   */
+  await waitFor(
+    () =>
+      (wanted === null || document.title.includes(wanted)) &&
+      visiblePanes().length > 0 &&
+      visiblePanes().every((pane) => pane.querySelector('.terminal-host') !== null) &&
+      // A renderer attached is the session drawing, not merely built.
+      visiblePanes().some((pane) => pane.querySelector('canvas') !== null),
+    15_000,
+  )
 }
 
 /**
@@ -263,9 +278,12 @@ export async function claimFocus(report: Report, key: string): Promise<boolean> 
   let focused = false
   for (let attempt = 0; attempt < 3 && !focused; attempt++) {
     focused = await api.focusWindow()
+    // Nothing to observe between tries: the window manager answers when it
+    // answers, and its refusal is the only signal there is.
     if (!focused) await sleep(400)
   }
-  await sleep(200)
+  // The compositor can report focus a frame before the page holds it.
+  await waitFor(() => document.hasFocus(), 600)
   // Not a verdict, a hint: Wayland can report false while everything still works.
   report[key] = focused ? 'ok' : 'note: window did not take focus (see wheel and clipboard below)'
   return focused

@@ -4,15 +4,55 @@ import { maxColumnWidth } from '../layout-geometry'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   capture,
+  focusedHost,
   focusedId,
+  holdsStill,
   openSession,
   panes,
   press,
   type Report,
+  rowOf,
   sleep,
+  termOf,
+  trackSettles,
   visiblePanes,
   waitFor,
+  waitForAsync,
+  wheel,
 } from './harness'
+
+/** The dropdown currently open, and its entries. */
+const menuItems = (): HTMLButtonElement[] => [
+  ...document.querySelectorAll<HTMLButtonElement>('.command-menu:not([hidden]) .command-menu__item'),
+]
+
+/**
+ * The save/create dialog is built once and toggled, so its fields are in the
+ * DOM whether or not it is open — waiting for one of them would wait for
+ * nothing. The confirm dialog shares the class, hence the exclusion.
+ */
+const saveDialogOpen = (): boolean =>
+  document.querySelector<HTMLElement>('.save-session:not(.confirm-close)')?.hidden === false
+
+/**
+ * Has the dialog caught up with the name typed into it?
+ *
+ * Whether a name is taken is one IPC round trip, and nothing on screen moves
+ * until the reply lands — the button keeps the wording and the disabled state
+ * it had for the name before. The path line is redrawn by the same pass, so it
+ * is what says the controls beside it now mean what they read.
+ */
+const dialogChecked = async (id: string): Promise<boolean> =>
+  waitFor(
+    () => document.querySelector('.save-session__path')?.textContent?.includes(`${id}.yaml`) === true,
+    3000,
+  )
+
+const refreshList = (): void => {
+  ;[...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')]
+    .find((b) => b.title === t.sidebar.refreshList)
+    ?.click()
+}
 
 /**
  * A file dropped on a terminal.
@@ -37,7 +77,8 @@ export async function checkFileDrop(report: Report): Promise<void> {
 
   const drop = new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true })
   host.dispatchEvent(drop)
-  await sleep(200)
+  // Nothing positive to wait for: give a navigation the time it would need.
+  await waitFor(() => document.querySelector('.pane--focused') === null, 300)
   report['dropDoesNotNavigate'] = drop.defaultPrevented ? 'ok' : 'FAIL (Chromium would open the file)'
   report['dropKeptTheApp'] =
     document.querySelector('.pane--focused') !== null ? 'ok' : 'FAIL (the page went away)'
@@ -60,13 +101,14 @@ export async function checkFileDrop(report: Report): Promise<void> {
  */
 export async function checkShellIntegration(report: Report): Promise<void> {
   const paneId = focusedId()
-  const hostEl = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const term = (hostEl as unknown as
-    | { __term?: { selectAll(): void; getSelection(): string } }
-    | null)?.__term
+  const term = termOf(focusedHost())
   if (paneId === undefined || term === undefined) {
     report['shellHook'] = 'FAIL (could not reach the terminal instance)'
     return
+  }
+  const selection = (): string => {
+    term.selectAll()
+    return term.getSelection()
   }
 
   // The shell echoes the line it is given, so the marker is assembled by printf
@@ -74,51 +116,48 @@ export async function checkShellIntegration(report: Report): Promise<void> {
   const marker = 'SHELLHOOKOK'
   const payload = btoa('qatn')
   // Earlier checks can leave text sitting on the prompt; clear the line first.
+  // The pty reads what it is given in order, so nothing has to be waited for.
   api.write(paneId, '\u0015')
-  await sleep(200)
   // Both sequences, wrapped in ordinary text that must still be drawn.
   api.write(
     paneId,
     `printf 'A\\033]1173;A\\007B\\033]1173;C;${payload}\\007C SHELLHOOK%s\\n' OK\n`,
   )
 
-  let text = ''
-  for (let attempt = 0; attempt < 30 && !text.includes(`ABC ${marker}`); attempt++) {
-    await sleep(200)
-    term.selectAll()
-    text = term.getSelection()
-  }
+  await waitFor(() => selection().includes(`ABC ${marker}`), 6000)
+  const text = selection()
   report['shellHookKeptOutput'] = text.includes(`ABC ${marker}`)
     ? 'ok'
     : text.includes(marker)
       ? `FAIL (text around the sequence was eaten: ${JSON.stringify(text.slice(text.indexOf(marker) - 12, text.indexOf(marker) + 12))})`
       : 'skipped (the marker never printed; the shell did not start)'
 
-  let active = false
-  for (let attempt = 0; attempt < 20 && !active; attempt++) {
-    await sleep(200)
-    active = (await api.shellIntegrationStatus()).active
-  }
+  const active = await waitForAsync(async () => (await api.shellIntegrationStatus()).active, 4000)
   report['shellHookReceived'] = active ? 'ok' : 'FAIL (the sourced marker never reached main)'
 }
 
 export async function checkImeInput(report: Report): Promise<void> {
   const paneId = focusedId()
-  const hostEl = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
+  const hostEl = focusedHost()
   const textarea = hostEl?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
-  const term = (hostEl as unknown as
-    | { __term?: { selectAll(): void; getSelection(): string; clear(): void } }
-    | null)?.__term
+  const term = termOf(hostEl)
   if (paneId === undefined || textarea === undefined || textarea === null || term === undefined) {
     report['imeSingleInsert'] = 'FAIL (could not reach the terminal input element)'
     return
   }
 
   // cat echoes plainly; a shell line editor would obscure who drew what.
+  const selection = (): string => {
+    term.selectAll()
+    return term.getSelection()
+  }
   api.write(paneId, 'cat\n')
-  await sleep(900)
+  // The shell echoes the line it was given, and then hands the tty over: wait
+  // for that echo, and for the screen to go quiet behind it.
+  await waitFor(() => selection().includes('cat'), 6000)
+  await holdsStill(() => selection().length, 2000)
   term.clear()
-  await sleep(200)
+  await waitFor(() => !selection().includes('cat'), 1000)
 
   const key = (init: KeyboardEventInit): void => {
     textarea.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...init }))
@@ -148,6 +187,10 @@ export async function checkImeInput(report: Report): Promise<void> {
 
   /*
    * Event order differs per IME, so walk every plausible sequence.
+   *
+   * The sleeps inside a scenario are the IME's own timing — the gap xterm's
+   * zero-delay timer needs to have run in, and the pause between keystrokes.
+   * They stand for a human typing, not for the app catching up.
    */
   const scenarios: readonly { readonly name: string; readonly run: () => Promise<void> }[] = [
     {
@@ -199,7 +242,6 @@ export async function checkImeInput(report: Report): Promise<void> {
         input(HAN, false)
         await sleep(120)
         key({ keyCode: 229, isComposing: false })
-        await sleep(60)
       },
     },
     {
@@ -241,18 +283,17 @@ export async function checkImeInput(report: Report): Promise<void> {
    * clear() only empties the scrollback, leaving the cursor line, so echoed
    * characters accumulate and absolute counts would read as duplication.
    */
-  const seen = (): number => {
-    term.selectAll()
-    return term.getSelection().split(HAN).length - 1
-  }
+  const seen = (): number => selection().split(HAN).length - 1
 
   const wrong: string[] = []
   for (const scenario of scenarios) {
     textarea.value = ''
-    await sleep(150)
     const before = seen()
     await scenario.run()
-    await sleep(600)
+    // The echo comes back over the pty. Wait for it, then for it to stop: a
+    // duplicate that arrived late is exactly what this check is counting.
+    await waitFor(() => seen() > before, 3000)
+    await holdsStill(seen, 2000)
     const delta = seen() - before
     report[`ime_${scenario.name}`] = `${String(delta)}`
     if (delta !== 1) wrong.push(`${scenario.name}=${String(delta)}`)
@@ -269,22 +310,25 @@ export async function checkImeInput(report: Report): Promise<void> {
    * stripe above the line being typed.
    */
   // Bring the pane back on screen, or the capture below shows nothing.
-  document
-    .querySelector<HTMLElement>('.session-host:not([hidden])')
-    ?.dispatchEvent(new WheelEvent('wheel', { deltaY: -100_000, bubbles: true, cancelable: true }))
-  await sleep(1200)
+  wheel(document.querySelector<HTMLElement>('.session-host:not([hidden])'), 0, -100_000)
+  await trackSettles()
 
   // Push the cursor off the first row; an off-by-one row is invisible at row 0.
+  const cursorRow = (): number => term.buffer.active.cursorY
+  const rowBefore = cursorRow()
   api.write(paneId, 'x\nx\nx\n')
-  await sleep(400)
+  await waitFor(() => cursorRow() > rowBefore, 3000)
   textarea.value = ''
-  await sleep(150)
   key({ keyCode: 229 })
   comp('compositionstart', '')
   textarea.value = AN
   comp('compositionupdate', AN)
   input(AN, true)
-  await sleep(250)
+  // The overlay is drawn when xterm has taken the composition.
+  await waitFor(
+    () => hostEl?.querySelector<HTMLElement>('.composition-view')?.classList.contains('active') === true,
+    2000,
+  )
 
   const view = hostEl?.querySelector<HTMLElement>('.composition-view')
   const screen = hostEl?.querySelector<HTMLElement>('.xterm-screen')
@@ -327,10 +371,19 @@ export async function checkImeInput(report: Report): Promise<void> {
   }
   comp('compositionend', AN)
   input(AN, false)
-  await sleep(300)
+  await waitFor(
+    () => hostEl?.querySelector<HTMLElement>('.composition-view')?.classList.contains('active') !== true,
+    2000,
+  )
 
   api.write(paneId, '\u0003') // end cat
-  await sleep(300)
+  /*
+   * The next check types at the prompt, so wait for a shell that answers.
+   * The marker is assembled by printf: while cat is still running it echoes
+   * the line itself, and a marker written whole would match its own echo.
+   */
+  api.write(paneId, `printf 'IMEDO%s\\n' NE\n`)
+  await waitFor(() => selection().includes('IMEDONE'), 8000)
 }
 
 /**
@@ -347,25 +400,30 @@ export async function checkSaveSession(report: Report): Promise<void> {
 
   // Start a long-running job first, so the save has something to capture.
   const capturePane = focusedId()
+  const term = termOf(focusedHost())
   if (capturePane !== undefined) {
     api.write(capturePane, 'sleep 300\n')
-    await sleep(800)
+    // The hook reports the command once the shell has taken the line.
+    if (term !== undefined) {
+      await waitFor(() => {
+        term.selectAll()
+        return term.getSelection().includes('sleep 300')
+      }, 5000)
+    }
   }
 
   const menu = document.querySelector<HTMLElement>('.app-bar__btn')
   menu?.click()
-  await sleep(300)
+  await waitFor(() => menuItems().length > 0)
 
-  const item = [...document.querySelectorAll<HTMLButtonElement>('.command-menu__item')].find((b) =>
-    b.textContent?.includes(t.firstRun.saveLayoutAs),
-  )
+  const item = menuItems().find((b) => b.textContent?.includes(t.firstRun.saveLayoutAs))
   if (item === undefined) {
     report['saveSessionMenu'] = 'FAIL (the menu has no such item)'
     return
   }
   report['saveSessionMenu'] = 'ok'
   item.click()
-  await sleep(400)
+  await waitFor(saveDialogOpen)
 
   const field = document.querySelector<HTMLInputElement>('.save-session__input')
   const button = document.querySelector<HTMLButtonElement>('.save-session .button--accent')
@@ -388,7 +446,7 @@ export async function checkSaveSession(report: Report): Promise<void> {
     cwdField.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
-  await sleep(500)
+  await dialogChecked(name)
   report['saveButtonSaysSave'] = button.textContent === t.saveSession.save ? 'ok' : `FAIL (${String(button.textContent)})`
 
   // Present in the DOM is not the same as visible — stacking or size can hide it.
@@ -415,7 +473,7 @@ export async function checkSaveSession(report: Report): Promise<void> {
 
   const before = (await api.listSessions()).length
   button.click()
-  await sleep(1200)
+  await waitForAsync(async () => (await api.listSessions()).some((s) => s.id === name), 8000)
 
   const after = await api.listSessions()
   const saved = after.find((s) => s.id === name)
@@ -439,30 +497,33 @@ export async function checkSaveSession(report: Report): Promise<void> {
     : commands.includes('sleep 300')
       ? 'ok'
       : `FAIL (${commands.map(String).join(',') || 'none'})`
-  // Undo: the sleeping pane must not outlive this check.
-  if (capturePane !== undefined) {
-    api.write(capturePane, '\x03')
-    await sleep(300)
-  }
+  // Undo: the sleeping pane must not outlive this check. The pty takes the
+  // interrupt in order behind the writes above, so there is nothing to wait for.
+  if (capturePane !== undefined) api.write(capturePane, '\x03')
 
   // Reopening with an existing name must not silently overwrite.
   menu?.click()
-  await sleep(250)
-  ;[...document.querySelectorAll<HTMLButtonElement>('.command-menu__item')]
+  await waitFor(() => menuItems().length > 0)
+  menuItems()
     .find((b) => b.textContent?.includes(t.firstRun.saveLayoutAs))
     ?.click()
-  await sleep(400)
+  await waitFor(saveDialogOpen)
   const field2 = document.querySelector<HTMLInputElement>('.save-session__input')
   if (field2 !== null) {
     field2.value = name
     field2.dispatchEvent(new Event('input', { bubbles: true }))
-    await sleep(600)
-    const button2 = document.querySelector<HTMLButtonElement>('.save-session .button--accent')
+    const button2 = (): HTMLButtonElement | null =>
+      document.querySelector<HTMLButtonElement>('.save-session .button--accent')
+    // The path line already reads this name from the save above, so the warning
+    // the taken name raises is what says this reply has landed.
+    await waitFor(() => document.querySelector('.save-session__status--warn') !== null, 3000)
     report['overwriteNeedsConsent'] =
-      button2?.textContent === t.saveSession.overwrite ? 'ok' : `FAIL (${String(button2?.textContent)})`
+      button2()?.textContent === t.saveSession.overwrite
+        ? 'ok'
+        : `FAIL (${String(button2()?.textContent)})`
   }
   press('Escape')
-  await sleep(300)
+  await waitFor(() => !saveDialogOpen())
 }
 
 /**
@@ -507,11 +568,8 @@ export async function checkSaveCurrentLayout(report: Report): Promise<void> {
   }
   report['saveCurrentSeeded'] = 'ok'
 
-  const refresh = [...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')].find(
-    (b) => b.title === t.sidebar.refreshList,
-  )
-  refresh?.click()
-  await sleep(600)
+  refreshList()
+  await waitFor(() => rowOf(id) !== undefined)
   await openSession(displayName)
   if (!document.title.includes(displayName)) {
     report['saveCurrentOpened'] = `FAIL (${document.title})`
@@ -528,11 +586,22 @@ export async function checkSaveCurrentLayout(report: Report): Promise<void> {
     return
   }
   report['saveCurrentButton'] = saveButton.disabled ? 'FAIL (disabled with a session open)' : 'ok'
+  const paneCountBefore = panes().length
   press('ArrowDown', { altKey: true, shiftKey: true })
-  await sleep(2600)
+  // The save reads the panes, so wait for the new one to hold a terminal too.
+  await waitFor(
+    () =>
+      panes().length === paneCountBefore + 1 &&
+      panes().every((pane) => pane.querySelector('.terminal-host') !== null),
+    8000,
+  )
 
   saveButton.click()
-  await sleep(1200)
+  await waitForAsync(
+    async () =>
+      ((await api.loadSession(id)).spec?.columns.reduce((a, c) => a + c.panes.length, 0) ?? 0) === 2,
+    8000,
+  )
 
   const after = await api.listSessions()
   const added = after.map((s) => s.id).filter((seen) => !before.includes(seen))
@@ -559,13 +628,15 @@ export async function checkSaveCurrentLayout(report: Report): Promise<void> {
     (row) => row.querySelector('.sidebar__name')?.textContent === displayName,
   )
   seededRow?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
-  await sleep(600)
   // Re-query: ending a session re-renders the list, detaching the row above.
-  const stillRunning = [...document.querySelectorAll<HTMLElement>('.sidebar__row')].some(
-    (row) =>
-      row.querySelector('.sidebar__name')?.textContent === displayName &&
-      row.querySelector('.sidebar__close') !== null,
-  )
+  const running = (): boolean =>
+    [...document.querySelectorAll<HTMLElement>('.sidebar__row')].some(
+      (row) =>
+        row.querySelector('.sidebar__name')?.textContent === displayName &&
+        row.querySelector('.sidebar__close') !== null,
+    )
+  await waitFor(() => !running(), 4000)
+  const stillRunning = running()
   report['saveCurrentEnded'] = stillRunning ? 'FAIL (still running)' : 'ok'
   await openSession('verify')
 }
@@ -577,8 +648,8 @@ export async function checkNewSession(report: Report): Promise<void> {
   // The menu differs over a row versus empty space.
   const row = document.querySelector<HTMLElement>('.sidebar__row')
   row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 140 }))
-  await sleep(300)
-  const rowItems = [...document.querySelectorAll<HTMLElement>('.command-menu:not([hidden]) .command-menu__item')]
+  await waitFor(() => menuItems().length > 0)
+  const rowItems = menuItems()
   report['sidebarRowMenu'] = rowItems.map((b) => b.textContent).join(' / ') || 'none'
   report['sidebarRowMenuHasEnd'] =
     rowItems.some((b) => b.textContent?.includes(t.firstRun.endSession)) ? 'ok' : 'FAIL'
@@ -593,17 +664,17 @@ export async function checkNewSession(report: Report): Promise<void> {
       ? 'ok'
       : `FAIL (${String(deleteEntry && getComputedStyle(deleteEntry).color)})`
   press('Escape')
-  await sleep(250)
+  await waitFor(() => menuItems().length === 0)
 
   const list = document.querySelector<HTMLElement>('.sidebar__list')
   list?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 520 }))
-  await sleep(300)
-  const emptyItems = [...document.querySelectorAll<HTMLElement>('.command-menu:not([hidden]) .command-menu__item')]
+  await waitFor(() => menuItems().length > 0)
+  const emptyItems = menuItems()
   report['sidebarEmptyMenu'] = emptyItems.map((b) => b.textContent).join(' / ') || 'none'
   report['sidebarEmptyMenuHasNew'] =
     emptyItems.some((b) => b.textContent === t.firstRun.newSession) ? 'ok' : 'FAIL'
   press('Escape')
-  await sleep(250)
+  await waitFor(() => menuItems().length === 0)
 
   // The header's + must be there even when the list is non-empty.
   const plus = [...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')].find(
@@ -616,7 +687,7 @@ export async function checkNewSession(report: Report): Promise<void> {
   report['newSessionButton'] = 'ok'
 
   plus.click()
-  await sleep(400)
+  await waitFor(saveDialogOpen)
   const field = document.querySelector<HTMLInputElement>('.save-session__input')
   const button = document.querySelector<HTMLButtonElement>('.save-session .button--accent')
   if (field === null || button === null) {
@@ -628,18 +699,20 @@ export async function checkNewSession(report: Report): Promise<void> {
   // An existing name must block creation rather than overwrite.
   field.value = 'verify'
   field.dispatchEvent(new Event('input', { bubbles: true }))
-  await sleep(600)
+  await dialogChecked('verify')
   report['blankRefusesExistingName'] = button.disabled ? 'ok' : 'FAIL (overwrite was allowed)'
 
   const name = 'selfcheck-blank'
   field.value = name
   field.dispatchEvent(new Event('input', { bubbles: true }))
-  await sleep(500)
+  await dialogChecked(name)
   report['blankButtonSaysCreate'] =
     button.textContent === t.saveSession.create ? 'ok' : `FAIL (${String(button.textContent)})`
 
   button.click()
-  await sleep(2600)
+  // Creating opens it too, and the title is the last part of that to land.
+  await waitForAsync(async () => (await api.listSessions()).some((s) => s.id === name), 8000)
+  await waitFor(() => document.title.includes(name), 8000)
 
   const created = (await api.listSessions()).find((session) => session.id === name)
   report['blankSessionCreated'] =
@@ -657,12 +730,13 @@ export async function checkNewSession(report: Report): Promise<void> {
     (r) => r.dataset['sessionId'] === name,
   )
   madeRow?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 160 }))
-  await sleep(300)
-  const deleteItem = [
-    ...document.querySelectorAll<HTMLButtonElement>('.command-menu:not([hidden]) .command-menu__item'),
-  ].find((b) => b.textContent === t.firstRun.deleteSession)
+  await waitFor(() => menuItems().length > 0)
+  const deleteItem = menuItems().find((b) => b.textContent === t.firstRun.deleteSession)
   deleteItem?.click()
-  await sleep(400)
+  await waitFor(() => {
+    const layer = document.querySelector<HTMLElement>('.confirm-close')
+    return layer !== null && !layer.hidden
+  })
 
   const confirmLayer = document.querySelector<HTMLElement>('.confirm-close')
   report['deleteAsksFirst'] =
@@ -674,7 +748,7 @@ export async function checkNewSession(report: Report): Promise<void> {
       ? 'ok'
       : `FAIL (${String(confirmButton?.textContent)} — an irreversible delete)`
   confirmButton?.click()
-  await sleep(1400)
+  await waitForAsync(async () => !(await api.listSessions()).some((s) => s.id === name), 8000)
 
   report['sessionDeleted'] = (await api.listSessions()).some((s) => s.id === name)
     ? 'FAIL (still listed; not moved to the trash)'
@@ -712,7 +786,16 @@ export async function checkNewSession(report: Report): Promise<void> {
       new PointerEvent('pointermove', { ...at, clientX: at.clientX + dx, pointerId: 1 }),
     )
     handle.dispatchEvent(new PointerEvent('pointerup', { ...at, pointerId: 1 }))
-    await sleep(400)
+    // The column reflows on the release; wait for the width to come to rest.
+    await holdsStill(
+      () =>
+        Math.round(
+          document
+            .querySelector<HTMLElement>('.session-host:not([hidden]) .pane')
+            ?.getBoundingClientRect().width ?? 0,
+        ),
+      2000,
+    )
   }
   const widthAfter =
     document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane')?.getBoundingClientRect()
@@ -733,13 +816,7 @@ export async function checkWheelSessionSwitch(report: Report): Promise<void> {
     report['wheelSwitchSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
   }
-  ;[...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')]
-    .find((b) => b.title === t.sidebar.refreshList)
-    ?.click()
-  const rowOf = (id: string): HTMLElement | undefined =>
-    [...document.querySelectorAll<HTMLElement>('.sidebar__row')].find(
-      (r) => r.dataset['sessionId'] === id,
-    )
+  refreshList()
   await waitFor(() => rowOf(name) !== undefined)
 
   // The dial only walks openable rows, so measure the distance on those.
@@ -756,16 +833,9 @@ export async function checkWheelSessionSwitch(report: Report): Promise<void> {
 
   const titleBefore = document.title
   const list = document.querySelector<HTMLElement>('.sidebar__list')
+  // One mouse notch in line mode; sign follows where the target sits.
   const notch = (): void => {
-    // One mouse notch in line mode; sign follows where the target sits.
-    list?.dispatchEvent(
-      new WheelEvent('wheel', {
-        deltaY: to > from ? 3 : -3,
-        deltaMode: 1,
-        bubbles: true,
-        cancelable: true,
-      }),
-    )
+    wheel(list, 0, to > from ? 3 : -3, 1)
   }
 
   notch()
@@ -798,9 +868,7 @@ export async function checkWheelSessionSwitch(report: Report): Promise<void> {
   // Leave the group where it started.
   await openSession('verify')
   await api.deleteSession(name)
-  ;[...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')]
-    .find((b) => b.title === t.sidebar.refreshList)
-    ?.click()
+  refreshList()
   await waitFor(() => rowOf(name) === undefined)
 }
 
@@ -813,15 +881,6 @@ export async function checkWheelSessionSwitch(report: Report): Promise<void> {
  */
 export async function checkAttentionClearsOnReturn(report: Report): Promise<void> {
   const name = 'selfcheck-attention'
-  const rowOf = (id: string): HTMLElement | undefined =>
-    [...document.querySelectorAll<HTMLElement>('.sidebar__row')].find(
-      (r) => r.dataset['sessionId'] === id,
-    )
-  const refresh = (): void => {
-    ;[...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')]
-      .find((b) => b.title === t.sidebar.refreshList)
-      ?.click()
-  }
   const wants = (id: string): boolean =>
     rowOf(id)?.querySelector('.sidebar__dot--wants') != null
 
@@ -837,7 +896,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
     report['returnClearsSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
   }
-  refresh()
+  refreshList()
   await waitFor(() => rowOf(name) !== undefined)
   await openSession(name)
   if (!document.title.includes(name)) {
@@ -856,7 +915,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
   report['returnClearsOnArrival'] = cleared ? 'ok' : 'FAIL (mark survived the return)'
 
   await api.deleteSession(name)
-  refresh()
+  refreshList()
   await waitFor(() => rowOf(name) === undefined)
 }
 
@@ -873,21 +932,12 @@ export async function checkSessionStepShortcut(report: Report): Promise<void> {
     report['stepSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
   }
-  const refresh = (): void => {
-    ;[...document.querySelectorAll<HTMLButtonElement>('.sidebar__action')]
-      .find((b) => b.title === t.sidebar.refreshList)
-      ?.click()
-  }
-  const rowOf = (id: string): HTMLElement | undefined =>
-    [...document.querySelectorAll<HTMLElement>('.sidebar__row')].find(
-      (r) => r.dataset['sessionId'] === id,
-    )
   const running = (): string[] =>
     [...document.querySelectorAll<HTMLElement>('.sidebar__row')]
       .filter((r) => r.querySelector('.sidebar__dot--on') !== null)
       .map((r) => r.dataset['sessionId'] ?? '?')
 
-  refresh()
+  refreshList()
   await waitFor(() => rowOf(name) !== undefined)
   // Two running sessions is the smallest ring the step can be seen in.
   await openSession(name)
@@ -912,21 +962,21 @@ export async function checkSessionStepShortcut(report: Report): Promise<void> {
 
   await openSession('verify')
   await api.deleteSession(name)
-  refresh()
+  refreshList()
   await waitFor(() => rowOf(name) === undefined)
 }
 
 /** Copy-on-select needs feedback — the clipboard is invisible until pasted. */
 export async function checkCopyToast(report: Report): Promise<void> {
-  const hostEl = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const term = (hostEl as unknown as { __term?: { selectAll(): void } } | null)?.__term
+  const hostEl = focusedHost()
+  const term = termOf(hostEl)
   if (term === undefined || hostEl === null) {
     report['copyToast'] = 'FAIL (could not reach the terminal)'
     return
   }
   term.selectAll()
   hostEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  await sleep(200)
+  await waitFor(() => document.querySelector<HTMLElement>('.toast')?.hidden === false, 2000)
   const toast = document.querySelector<HTMLElement>('.toast')
   // The toast copy up to the character count, which cannot be predicted here.
   const copiedPrefix = t.firstRun.copied('\u0000').split('\u0000')[0] ?? ''
@@ -936,7 +986,7 @@ export async function checkCopyToast(report: Report): Promise<void> {
       : `FAIL (${String(toast?.hidden)} ${String(toast?.textContent)})`
 
   // Must fade; a permanent toast is scenery, not a notice.
-  await sleep(1600)
+  await waitFor(() => toast?.hidden === true, 4000)
   report['copyToastFades'] = toast?.hidden === true ? 'ok' : 'FAIL (never fades)'
 }
 
@@ -949,10 +999,7 @@ export async function checkCopyToast(report: Report): Promise<void> {
  */
 export async function checkResizeSync(report: Report): Promise<void> {
   const paneId = focusedId()
-  const hostEl = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const term = (hostEl as unknown as
-    | { __term?: { cols: number; rows: number; selectAll(): void; getSelection(): string; clear(): void } }
-    | null)?.__term
+  const term = termOf(focusedHost())
   if (paneId === undefined || term === undefined) {
     report['resizeSync'] = 'FAIL (missing prerequisites for this check)'
     return
@@ -961,12 +1008,17 @@ export async function checkResizeSync(report: Report): Promise<void> {
   /** Ask stty directly. Comes back as one "rows cols" line. */
   const askPty = async (): Promise<string> => {
     term.clear()
-    await sleep(200)
     api.write(paneId, 'stty size\n')
-    await sleep(900)
-    term.selectAll()
-    const match = /(\d+)\s+(\d+)/.exec(term.getSelection().replace('stty size', ''))
-    return match === null ? '?' : `${match[1]}x${match[2]}`
+    let answer = '?'
+    // The reply is what is being waited for, so read it as it arrives.
+    await waitFor(() => {
+      term.selectAll()
+      const match = /(\d+)\s+(\d+)/.exec(term.getSelection().replace('stty size', ''))
+      if (match === null) return false
+      answer = `${match[1]}x${match[2]}`
+      return true
+    }, 6000)
+    return answer
   }
 
   /*
@@ -994,11 +1046,12 @@ export async function checkResizeSync(report: Report): Promise<void> {
    */
   for (let i = 0; i < 6; i++) {
     press('ArrowLeft', { ctrlKey: true, altKey: true })
+    // Input pacing: the point is to exercise the intermediate widths.
     await sleep(30)
   }
 
-  // Comfortably past the 100ms debounce.
-  await sleep(900)
+  // The resize is debounced, so wait for the terminal's own size to settle.
+  await holdsStill(() => term.cols, 3000)
 
   const termSize = `${String(term.rows)}x${String(term.cols)}`
   const after = await askPty()
@@ -1018,7 +1071,10 @@ export async function checkResizeSync(report: Report): Promise<void> {
 export async function checkCloseGuard(report: Report): Promise<void> {
   // Same path as the window button: main blocks and asks the renderer.
   api.window.close()
-  await sleep(600)
+  await waitFor(() => {
+    const asking = document.querySelector<HTMLElement>('.confirm-close')
+    return asking !== null && !asking.hidden
+  }, 6000)
 
   const layer = document.querySelector<HTMLElement>('.confirm-close')
   if (layer === null || layer.hidden) {
@@ -1044,7 +1100,7 @@ export async function checkCloseGuard(report: Report): Promise<void> {
 
   // Cancelling leaves the app running.
   press('Escape')
-  await sleep(500)
+  await waitFor(() => layer.hidden === true)
   report['closeGuardCancels'] =
     layer.hidden && visiblePanes().length > 0 ? 'ok' : 'FAIL (state is wrong after cancelling)'
 }
@@ -1070,6 +1126,7 @@ export async function checkHeldSessionJump(report: Report): Promise<void> {
   // Faster than any autorepeat, so the check does not depend on the setting.
   for (let i = 0; i < 61; i++) {
     press('Digit2', { altKey: true })
+    // Input pacing: this is the autorepeat being reproduced, not a wait.
     await sleep(25)
   }
 

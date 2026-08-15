@@ -3,16 +3,34 @@ import { t } from '../i18n'
 import { IS_MAC } from '../platform'
 import {
   capture,
+  focusedHost,
   focusedId,
+  overlay,
   panes,
   press,
   type Report,
   SKIPPED,
   sleep,
+  termOf,
   trackOffset,
+  trackSettles,
   visiblePanes,
   waitFor,
+  wheel,
 } from './harness'
+
+/** Whichever dropdown is open, if any. */
+const openMenu = (): HTMLElement | null =>
+  [...document.querySelectorAll<HTMLElement>('.command-menu')].find((m) => !m.hidden) ?? null
+
+/** The settings sheet, as the backdrop reports it — the sheet's own hidden is always false. */
+const settingsOpen = (): boolean =>
+  document.querySelector<HTMLElement>('.settings')?.closest<HTMLElement>('.sheet-layer')?.hidden ===
+  false
+
+const menuItems = (): HTMLButtonElement[] => [
+  ...document.querySelectorAll<HTMLButtonElement>('.command-menu:not([hidden]) .command-menu__item'),
+]
 
 export async function checkAppBarMenu(report: Report): Promise<void> {
   const bar = document.querySelector<HTMLElement>('.app-bar')
@@ -45,7 +63,7 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
   }
 
   bar.querySelector<HTMLButtonElement>('.app-bar__btn')?.click()
-  await sleep(250)
+  await waitFor(() => openMenu() !== null)
   const menu = document.querySelector<HTMLElement>('.command-menu')
   report['menuOpens'] = menu !== null && !menu.hidden ? 'ok' : 'FAIL'
 
@@ -63,7 +81,7 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
   window.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }),
   )
-  await sleep(300)
+  await waitFor(() => openMenu() === null)
 }
 
 /** Split control: one button opening a dropdown of all four directions. */
@@ -89,8 +107,9 @@ export async function checkSplitControl(report: Report): Promise<void> {
    * inheriting panes from an earlier check turns this into a test of the window
    * size. Each direction below is tried from one pane and undone afterwards.
    */
+  const beforeMove = focusedId()
   press('ArrowRight', { altKey: true })
-  await sleep(200)
+  await waitFor(() => focusedId() !== beforeMove)
   const canvasEl = document.querySelector<HTMLElement>('.session-host:not([hidden])')
   report['splitCanvasHeight'] = String(canvasEl?.clientHeight ?? 0)
 
@@ -102,19 +121,15 @@ export async function checkSplitControl(report: Report): Promise<void> {
 
   // All four directions must be listed.
   chevron.click()
-  await sleep(250)
-  const labels = [
-    ...document.querySelectorAll<HTMLButtonElement>('.command-menu__item'),
-  ].map((b) => b.firstChild?.textContent)
+  await waitFor(() => menuItems().length > 0)
+  const labels = menuItems().map((b) => b.firstChild?.textContent)
   report['splitMenuDirections'] = labels.join(' / ') || 'NONE'
   report['splitMenuHasFour'] =
     labels.length === 4 ? 'ok' : `FAIL (${String(labels.length)})`
 
   // Split down must insert below.
   const before = panes().length
-  const down = [...document.querySelectorAll<HTMLButtonElement>('.command-menu__item')].find(
-    (b) => b.firstChild?.textContent === t.appBar.splitDownItem,
-  )
+  const down = menuItems().find((b) => b.firstChild?.textContent === t.appBar.splitDownItem)
   report['splitDownEnabled'] =
     down?.disabled === false ? 'ok' : `FAIL (disabled=${String(down?.disabled)})`
   down?.click()
@@ -125,11 +140,9 @@ export async function checkSplitControl(report: Report): Promise<void> {
 
   // Split up must insert above.
   chevron.click()
-  await sleep(250)
+  await waitFor(() => menuItems().length > 0)
   const upBefore = panes().length
-  const up = [...document.querySelectorAll<HTMLButtonElement>('.command-menu__item')].find(
-    (b) => b.firstChild?.textContent === t.appBar.splitUpItem,
-  )
+  const up = menuItems().find((b) => b.firstChild?.textContent === t.appBar.splitUpItem)
   report['splitUpEnabled'] = up?.disabled === false ? 'ok' : `FAIL (disabled=${String(up?.disabled)})`
   up?.click()
   await waitFor(() => panes().length === upBefore + 1)
@@ -142,11 +155,9 @@ export async function checkSplitControl(report: Report): Promise<void> {
    * are drawn only for what is near the viewport, so a narrow window has fewer.
    */
   chevron.click()
-  await sleep(250)
+  await waitFor(() => menuItems().length > 0)
   const columnsBefore = panes().length
-  const left = [...document.querySelectorAll<HTMLButtonElement>('.command-menu__item')].find(
-    (b) => b.firstChild?.textContent === t.appBar.addColumnLeft,
-  )
+  const left = menuItems().find((b) => b.firstChild?.textContent === t.appBar.addColumnLeft)
   const columns = (): number => panes().length
   left?.click()
   await waitFor(() => columns() === columnsBefore + 1)
@@ -155,7 +166,7 @@ export async function checkSplitControl(report: Report): Promise<void> {
 
   // Capture the open dropdown — spacing and tone need eyes.
   chevron.click()
-  await sleep(300)
+  await waitFor(() => menuItems().length > 0)
 }
 
 /**
@@ -207,11 +218,9 @@ export async function checkSidebar(report: Report): Promise<void> {
   // positions, not recomputed — a wrong formula would otherwise pass itself.
   // Requires scroll at 0, or the first pane is pushed off to the left.
   const canvasHost = document.querySelector<HTMLElement>('.session-host:not([hidden])')
-  canvasHost?.dispatchEvent(
-    new WheelEvent('wheel', { deltaX: -100_000, bubbles: true, cancelable: true }),
-  )
+  wheel(canvasHost, -100_000, 0)
   // Wait for 0; leftover inertia would still have the pane displaced.
-  for (let i = 0; i < 60 && trackOffset() !== 0; i++) await sleep(80)
+  await waitFor(() => trackOffset() === 0, 5000)
 
   const sidebarBox = sidebar?.getBoundingClientRect()
   const paneBoxes = [
@@ -247,26 +256,16 @@ export async function checkSidebar(report: Report): Promise<void> {
    */
   // Park away from 0, where a jump would be invisible.
   const canvasEl = document.querySelector<HTMLElement>('.session-host:not([hidden])')
-  canvasEl?.dispatchEvent(
-    new WheelEvent('wheel', { deltaY: 600, bubbles: true, cancelable: true }),
-  )
-  // Wait for the glide to settle.
-  let quietFor = 0
-  let previous = trackOffset()
-  for (let i = 0; i < 50 && quietFor < 4; i++) {
-    await sleep(80)
-    const now = trackOffset()
-    if (now === previous) quietFor += 1
-    else {
-      quietFor = 0
-      previous = now
-    }
-  }
-  const parkedAt = trackOffset()
+  wheel(canvasEl, 0, 600)
+  const parkedAt = await trackSettles()
+  const collapsed = (): boolean => workspace.classList.contains('canvas--sidebar-hidden')
+  const wasCollapsed = collapsed()
   press('KeyS', { altKey: true })
-  await sleep(600)
+  await waitFor(() => collapsed() !== wasCollapsed)
   press('KeyS', { altKey: true })
-  await sleep(600)
+  await waitFor(() => collapsed() === wasCollapsed)
+  // The scroll is restored on the layout pass behind the sidebar's own.
+  await trackSettles()
   report['sidebarToggleKeepsScroll'] =
     parkedAt === 0
       ? 'unmeasurable (scroll is 0, so a jump would be invisible)'
@@ -275,24 +274,24 @@ export async function checkSidebar(report: Report): Promise<void> {
         : `FAIL (dragged from ${String(parkedAt)} to ${String(trackOffset())}px)`
 
   // Alt+S collapses, it does not open a modal.
-  const hiddenBefore = workspace.classList.contains('canvas--sidebar-hidden')
+  const hiddenBefore = collapsed()
   press('KeyS', { altKey: true })
-  await sleep(500)
-  const hiddenAfter = workspace.classList.contains('canvas--sidebar-hidden')
+  await waitFor(() => collapsed() !== hiddenBefore)
+  const hiddenAfter = collapsed()
   report['altSTogglesSidebar'] = hiddenAfter !== hiddenBefore ? 'ok' : 'FAIL'
 
   // The list is a view; collapsing it must not touch the session.
   report['sessionSurvivesCollapse'] = visiblePanes().length > 0 ? 'ok' : 'FAIL'
 
   press('KeyS', { altKey: true })
-  await sleep(500)
+  await waitFor(() => collapsed() === hiddenBefore)
   report['altSRestoresSidebar'] =
     workspace.classList.contains('canvas--sidebar-hidden') === hiddenBefore ? 'ok' : 'FAIL'
 }
 
 export async function checkSettings(report: Report): Promise<void> {
   press('Comma', { ctrlKey: true })
-  await sleep(400)
+  await waitFor(settingsOpen)
 
   const sheet = document.querySelector<HTMLElement>('.settings')
   // The backdrop is what toggles; the inner sheet's hidden is always false.
@@ -310,8 +309,12 @@ export async function checkSettings(report: Report): Promise<void> {
     openMenus.length === 0 ? 'ok' : `FAIL (${String(openMenus.length)} dropdowns still open)`
 
   // By name, not position: a row added above used to point this at another control.
-  const fontSelect = sheet.querySelector<HTMLSelectElement>('[data-setting="fontFamily"]')
-  const fontOptions = [...(fontSelect?.options ?? [])]
+  // The row is redrawn when fc-list answers, so ask the document each time.
+  const fontSelect = (): HTMLSelectElement | null =>
+    sheet.querySelector<HTMLSelectElement>('[data-setting="fontFamily"]')
+  // fc-list is spawned as the screen opens and given three seconds of its own.
+  await waitFor(() => (fontSelect()?.options.length ?? 0) > 1, 6000)
+  const fontOptions = [...(fontSelect()?.options ?? [])]
   report['fontChoices'] = String(fontOptions.length)
   report['fontListLoaded'] =
     fontOptions.length > 1 ? 'ok' : 'FAIL (nothing to choose but the default; fc-list returned nothing)'
@@ -331,17 +334,12 @@ export async function checkSettings(report: Report): Promise<void> {
   report['themeSwatches'] = String(sheet.querySelectorAll('.settings__swatch').length)
 
   // Picking one must actually change the terminal colours.
-  const paneBg = (): string => {
-    const host = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-    const term = (host as unknown as { __term?: { options: { theme?: { background?: string } } } } | null)
-      ?.__term
-    return term?.options.theme?.background ?? '?'
-  }
+  const paneBg = (): string => termOf(focusedHost())?.options.theme?.background ?? '?'
   const bgBefore = paneBg()
   if (themeSelect !== null) {
     themeSelect.value = 'kanagawa-wave'
     themeSelect.dispatchEvent(new Event('change', { bubbles: true }))
-    await sleep(700)
+    await waitFor(() => paneBg() === '#1f1f28')
   }
   report['themeAppliesToTerminal'] =
     paneBg() === '#1f1f28'
@@ -363,7 +361,7 @@ export async function checkSettings(report: Report): Promise<void> {
   if (themeSelect !== null) {
     themeSelect.value = 'termspace'
     themeSelect.dispatchEvent(new Event('change', { bubbles: true }))
-    await sleep(600)
+    await waitFor(() => paneBg() === bgBefore)
   }
 
   /*
@@ -441,7 +439,7 @@ export async function checkSettings(report: Report): Promise<void> {
     scaleSlider.value = '150'
     scaleSlider.dispatchEvent(new Event('input', { bubbles: true }))
     scaleSlider.dispatchEvent(new Event('change', { bubbles: true }))
-    await sleep(500)
+    await waitFor(() => bar.getBoundingClientRect().height > barBefore + 4)
 
     const barAfter = bar.getBoundingClientRect().height
     report['uiScaleGrowsTheBar'] =
@@ -461,7 +459,7 @@ export async function checkSettings(report: Report): Promise<void> {
     scaleSlider.value = '100'
     scaleSlider.dispatchEvent(new Event('input', { bubbles: true }))
     scaleSlider.dispatchEvent(new Event('change', { bubbles: true }))
-    await sleep(500)
+    await waitFor(() => Math.abs(bar.getBoundingClientRect().height - barBefore) < 1)
   }
 
   // Binary settings get a two-segment control, not a slider.
@@ -474,7 +472,7 @@ export async function checkSettings(report: Report): Promise<void> {
     document.querySelector<HTMLElement>('.settings__segment--on')?.textContent ?? null
   const before = litLabel()
   segments.find((s) => !s.classList.contains('settings__segment--on'))?.click()
-  await sleep(500)
+  await waitFor(() => litLabel() !== before)
   const after = litLabel()
   report['settingsToggleFlips'] =
     before !== null && after !== null && before !== after ? 'ok' : `FAIL (${String(before)} → ${String(after)})`
@@ -495,13 +493,12 @@ export async function checkSettings(report: Report): Promise<void> {
   report['sidebarHintShown'] = hoverOnly.some((e) => e.classList.contains('sidebar__hint'))
     ? 'ok'
     : 'FAIL (no Alt+N hint)'
-  await sleep(200)
   await capture(report, 'sidebar-row')
   for (const el of hoverOnly) el.style.removeProperty('opacity')
 
   const sessionButton = document.querySelector<HTMLButtonElement>('.sidebar__open')
   sessionButton?.click()
-  await sleep(900)
+  await waitFor(() => !settingsOpen() && visiblePanes().length > 0, 10_000)
   report['sidebarClosesSettings'] =
     document.querySelector<HTMLElement>('.settings')?.closest<HTMLElement>('.sheet-layer')
       ?.hidden === true
@@ -512,7 +509,7 @@ export async function checkSettings(report: Report): Promise<void> {
 
   // Reopen for the remaining checks.
   press('Comma', { ctrlKey: true })
-  await sleep(500)
+  await waitFor(settingsOpen)
 
   // Restore — the check must not alter the user's settings.
   document
@@ -520,7 +517,7 @@ export async function checkSettings(report: Report): Promise<void> {
     .forEach((s) => {
       if (s.textContent === before && !s.classList.contains('settings__segment--on')) s.click()
     })
-  await sleep(400)
+  await waitFor(() => litLabel() === before)
   report['settingsToggleRestored'] = litLabel() === before ? 'ok' : 'FAIL'
 }
 
@@ -538,7 +535,7 @@ export async function checkKeybindings(report: Report): Promise<void> {
   }
   report['keysTabPresent'] = 'ok'
   tab.click()
-  await sleep(300)
+  await waitFor(() => document.querySelector('.keys__row') !== null)
 
   const rows = [...document.querySelectorAll<HTMLElement>('.keys__row')]
   report['keysRows'] =
@@ -565,7 +562,6 @@ export async function checkKeybindings(report: Report): Promise<void> {
   field?.dispatchEvent(
     new KeyboardEvent('keydown', { code: 'KeyA', key: 'a', bubbles: true, cancelable: true }),
   )
-  await sleep(150)
   report['keysSearchTypable'] =
     reachedField ? 'ok' : 'FAIL (the settings screen swallowed the keystroke)'
 
@@ -579,13 +575,16 @@ export async function checkKeybindings(report: Report): Promise<void> {
     for (const step of ['ㅍ', '포', '폭', '포커']) {
       field.value = step
       field.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }))
+      // The IME's own cadence between syllables; there is nothing to wait for.
       await sleep(30)
     }
     const sameField = document.querySelector<HTMLInputElement>('.keys__search') === field
     field.value = '포커스'
     field.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }))
     field.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
-    await sleep(200)
+    const typedField = (): HTMLInputElement | null =>
+      document.querySelector<HTMLInputElement>('.keys__search')
+    await waitFor(() => typedField()?.value === '포커스', 1000)
     report['keysSearchSurvivesComposition'] =
       sameField ? 'ok' : 'FAIL (the field was replaced mid-composition)'
     report['keysSearchKeepsTypedText'] =
@@ -594,7 +593,7 @@ export async function checkKeybindings(report: Report): Promise<void> {
         : `FAIL (${document.querySelector<HTMLInputElement>('.keys__search')?.value ?? 'gone'})`
     field.value = ''
     field.dispatchEvent(new InputEvent('input', { bubbles: true }))
-    await sleep(200)
+    await waitFor(() => typedField()?.value === '', 1000)
   }
 
   const overviewRow = (): HTMLElement | null =>
@@ -603,7 +602,7 @@ export async function checkKeybindings(report: Report): Promise<void> {
     overviewRow()?.querySelector<HTMLElement>('.keys__chord')?.textContent ?? '?'
 
   overviewRow()?.querySelector<HTMLButtonElement>('.keys__chord')?.click()
-  await sleep(200)
+  await waitFor(() => overviewRow()?.querySelector('.keys__chord--recording') !== null)
   report['keysRecording'] =
     overviewRow()?.querySelector('.keys__chord--recording') !== null
       ? 'ok'
@@ -618,29 +617,28 @@ export async function checkKeybindings(report: Report): Promise<void> {
 
   // The point of the whole tab: the app must obey the new chord straight away.
   press('Escape')
-  await sleep(400)
-  const overlay = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
+  await waitFor(() => !settingsOpen())
   press('Space', { altKey: true })
   await waitFor(() => overlay() !== null)
   report['keysRebindApplies'] = overlay() !== null ? 'ok' : 'FAIL (Alt+Space did not open the map)'
   press('Space', { altKey: true })
   await waitFor(() => overlay() === null)
 
-  // The old chord must have gone back to the terminal.
+  // The old chord must have gone back to the terminal. Nothing positive can be
+  // waited for, so wait for the map that must not open.
   press('KeyM', { altKey: true })
-  await sleep(400)
+  await waitFor(() => overlay() !== null, 400)
   report['keysOldChordReleased'] =
     overlay() === null ? 'ok' : 'FAIL (Alt+M still opens the map)'
   if (overlay() !== null) {
     press('Escape')
-    await sleep(300)
+    await waitFor(() => overlay() === null)
   }
 
   press('Comma', { ctrlKey: true })
-  await sleep(400)
+  await waitFor(settingsOpen)
   document.querySelector<HTMLButtonElement>('.settings__tab[data-tab="keys"]')?.click()
-  await sleep(300)
+  await waitFor(() => document.querySelector('.keys__row') !== null)
   const stock = formatChord(defaultBindingsFor(IS_MAC)['overview'][0] as string, IS_MAC)
   document.querySelector<HTMLButtonElement>('.keys__reset-all')?.click()
   await waitFor(() => chip() === stock)
@@ -648,16 +646,15 @@ export async function checkKeybindings(report: Report): Promise<void> {
 
   // Leave the screen as the next check expects to find it.
   document.querySelector<HTMLButtonElement>('.settings__tab[data-tab="general"]')?.click()
-  await sleep(200)
+  await waitFor(() => document.querySelector('.keys__row') === null)
   press('Escape')
-  await sleep(300)
+  await waitFor(() => !settingsOpen())
 }
 
 /** Scrollback search: count, highlight pixels, and the close rules. */
 export async function checkScrollbackSearch(report: Report): Promise<void> {
-  const host = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const term = (host as unknown as { __term?: { write(d: string, cb?: () => void): void } } | null)
-    ?.__term
+  const host = focusedHost()
+  const term = termOf(host)
   if (host === null || term === undefined) {
     report['searchSetup'] = 'FAIL (no focused terminal)'
     return
@@ -725,5 +722,5 @@ export async function checkScrollbackSearch(report: Report): Promise<void> {
   // Put focus back where the check found it.
   const start = startPane === undefined ? null : document.querySelector(`[data-pane-id="${startPane}"]`)
   start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-  await sleep(200)
+  await waitFor(() => focusedId() === startPane)
 }

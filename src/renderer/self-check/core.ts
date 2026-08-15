@@ -9,15 +9,21 @@ import {
   animationRuns,
   capture,
   focusedId,
+  holdsStill,
+  hoveredLinkOf,
   openSession,
+  overlay,
   panes,
   press,
   type Report,
+  selectedCard,
   SKIPPED,
-  sleep,
+  termOf,
   trackOffset,
+  trackSettles,
   visiblePanes,
   waitFor,
+  wheel,
 } from './harness'
 
 /** App shortcuts with no session open. Must run before any session is opened. */
@@ -31,7 +37,7 @@ export async function checkAppKeysWithoutSession(report: Report): Promise<void> 
 
   const hiddenBefore = workspace.classList.contains('canvas--sidebar-hidden')
   press('KeyS', { altKey: true })
-  await sleep(400)
+  await waitFor(() => workspace.classList.contains('canvas--sidebar-hidden') !== hiddenBefore)
   report['altSWithoutSession'] =
     workspace.classList.contains('canvas--sidebar-hidden') !== hiddenBefore
       ? 'ok'
@@ -39,7 +45,7 @@ export async function checkAppKeysWithoutSession(report: Report): Promise<void> 
 
   // Reopen the list — later checks pick a session from it.
   press('KeyS', { altKey: true })
-  await sleep(400)
+  await waitFor(() => workspace.classList.contains('canvas--sidebar-hidden') === hiddenBefore)
 }
 
 export async function checkSessionAndPty(report: Report, bytes: Map<string, number>): Promise<void> {
@@ -68,18 +74,15 @@ export async function checkSessionAndPty(report: Report, bytes: Map<string, numb
 export async function checkNavigation(report: Report): Promise<void> {
   const start = focusedId()
   press('ArrowRight', { altKey: true })
-  await sleep(80)
+  await waitFor(() => focusedId() !== start)
   const moved = focusedId()
   report['focusMovesRight'] = moved !== start ? 'ok' : 'FAIL'
 
   press('ArrowRight', { altKey: true })
-  let offset = 0
-  for (let i = 0; i < 40; i++) {
-    await sleep(100)
-    const now = trackOffset()
-    if (now !== 0 && now === offset) break
-    offset = now
-  }
+  const rightmost = focusedId()
+  // The move is a glide: wait for it to start, then for where it comes to rest.
+  await waitFor(() => trackOffset() !== 0, 2000)
+  const offset = await trackSettles()
   report['canvasScrolled'] = !(await animationRuns())
     ? SKIPPED
     : offset < 0
@@ -87,16 +90,16 @@ export async function checkNavigation(report: Report): Promise<void> {
       : `FAIL (${offset})`
 
   press('ArrowLeft', { altKey: true })
-  await sleep(80)
+  await waitFor(() => focusedId() !== rightmost)
   press('ArrowLeft', { altKey: true })
-  await sleep(80)
+  await waitFor(() => focusedId() === start)
   report['roundTripReturns'] = focusedId() === start ? 'ok' : `MISMATCH (${start} → ${focusedId()})`
 
   press('ArrowDown', { altKey: true })
-  await sleep(80)
+  await waitFor(() => focusedId() !== start)
   report['verticalMove'] = focusedId() !== start ? 'ok' : 'FAIL'
   press('ArrowUp', { altKey: true })
-  await sleep(80)
+  await waitFor(() => focusedId() === start)
 }
 
 /*
@@ -124,14 +127,8 @@ async function checkEdgeAutoScroll(report: Report, host: HTMLElement): Promise<v
    * to the border instead would widen the column by that jump in one step and
    * could park it at the cap, where nothing more can happen.
    */
-  host.dispatchEvent(new WheelEvent('wheel', { deltaY: 100_000, bubbles: true, cancelable: true }))
-  let settled = trackOffset()
-  for (let i = 0; i < 40; i++) {
-    await sleep(80)
-    const now = trackOffset()
-    if (now === settled) break
-    settled = now
-  }
+  wheel(host, 0, 100_000)
+  await trackSettles()
 
   const border = host.getBoundingClientRect().right
   /** The last column's handle, which max scroll has left against the border. */
@@ -171,7 +168,8 @@ async function checkEdgeAutoScroll(report: Report, host: HTMLElement): Promise<v
     grip.dispatchEvent(new PointerEvent('pointerdown', { ...at, clientX: from }))
     track.dispatchEvent(new PointerEvent('pointermove', { ...at, clientX: x }))
     track.dispatchEvent(new PointerEvent('pointerup', { ...at, clientX: x }))
-    await sleep(300)
+    // The column reflows on the release; wait for the width to come to rest.
+    await holdsStill(() => Math.round(owner.getBoundingClientRect().width), 2000)
   }
 
   /*
@@ -244,7 +242,7 @@ async function checkEdgeAutoScroll(report: Report, host: HTMLElement): Promise<v
     await dragTo(grip2.getBoundingClientRect().left + 1 - (widthOf() - startWidth))
   }
   press('KeyG', { altKey: true })
-  await sleep(500)
+  await trackSettles()
 }
 
 export async function checkLayoutEditing(report: Report): Promise<void> {
@@ -265,14 +263,15 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
   const focusedBox = (): DOMRect | null =>
     document.querySelector<HTMLElement>('.pane--focused')?.getBoundingClientRect() ?? null
 
+  const belowFirst = focusedId()
   press('ArrowUp', { altKey: true })
-  await sleep(400)
+  await waitFor(() => focusedId() !== belowFirst)
   const heightBefore = focusedBox()?.height ?? 0
   press('KeyI', { altKey: true })
-  await sleep(500)
+  await waitFor(() => (focusedBox()?.height ?? 0) > heightBefore + 1)
   const taller = focusedBox()?.height ?? 0
   press('KeyO', { altKey: true })
-  await sleep(500)
+  await waitFor(() => (focusedBox()?.height ?? 0) < taller - 1)
   const shorter = focusedBox()?.height ?? 0
   report['resizeKeysHeight'] =
     taller > heightBefore && shorter < taller
@@ -283,8 +282,9 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
    * The bottom of a column has no seam below it and was a dead key. It borrows
    * the seam above instead, so Alt+I reads as "taller" wherever focus sits.
    */
+  const topPane = focusedId()
   press('ArrowDown', { altKey: true })
-  await sleep(400)
+  await waitFor(() => focusedId() !== topPane)
   const bottomBefore = focusedBox()?.height ?? 0
   press('KeyI', { altKey: true })
   const bottomGrew = await waitFor(() => (focusedBox()?.height ?? 0) > bottomBefore + 1)
@@ -295,9 +295,9 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
 
   // Put it back and return focus to the top pane; the move checks expect it there.
   press('KeyO', { altKey: true })
-  await sleep(400)
+  await waitFor(() => (focusedBox()?.height ?? 0) < bottomAfter - 1)
   press('ArrowUp', { altKey: true })
-  await sleep(400)
+  await waitFor(() => focusedId() === topPane)
 
   const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
   const cap = host === null ? 0 : maxColumnWidth(host.clientWidth)
@@ -311,16 +311,18 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
    */
   const midpoint = (MIN_COLUMN_WIDTH + cap) / 2
   for (let i = 0; i < 30 && (focusedBox()?.width ?? 0) > midpoint; i++) {
+    const wide = focusedBox()?.width ?? 0
     press('KeyU', { altKey: true })
-    await sleep(80)
+    // A column already at the minimum cannot answer, so cap the wait short.
+    await waitFor(() => (focusedBox()?.width ?? 0) !== wide, 300)
   }
 
   const widthBefore = focusedBox()?.width ?? 0
   press('KeyP', { altKey: true })
-  await sleep(500)
+  await waitFor(() => (focusedBox()?.width ?? 0) > widthBefore + 1)
   const widened = focusedBox()?.width ?? 0
   press('KeyU', { altKey: true })
-  await sleep(500)
+  await waitFor(() => (focusedBox()?.width ?? 0) < widened - 1)
   const narrowed = focusedBox()?.width ?? 0
   const widthTrace = `${String(Math.round(widthBefore))} → ${String(Math.round(widened))} → ${String(Math.round(narrowed))}px`
   report['resizeKeysWidth'] =
@@ -473,7 +475,7 @@ export async function checkGridFillsPane(report: Report): Promise<void> {
     worstCells = 0
     for (const host of awake()) {
       const screen = host.querySelector<HTMLElement>('.xterm-screen')
-      const term = (host as unknown as { __term?: { cols: number } }).__term
+      const term = termOf(host)
       if (screen === null || term === undefined) continue
       const drawn = screen.getBoundingClientRect().width
       if (drawn === 0) continue // occluded or mid-swap; unmeasurable, not broken
@@ -678,10 +680,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
 
 /** The overview: one card per pane, selection moves, Enter jumps, Esc doesn't. */
 export async function checkOverview(report: Report): Promise<void> {
-  const overlay = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
-  const selected = (): string | undefined =>
-    overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+  const selected = selectedCard
 
   const startFocus = focusedId()
   press('KeyM', { altKey: true })
@@ -810,9 +809,7 @@ export async function checkOverview(report: Report): Promise<void> {
     const markerLeftBefore = Number.parseFloat(markerEl.style.left)
     // Wheel toward whichever end has room, or a maxed-out scroll absorbs it.
     const delta = markerLeftBefore > 1 ? -600 : 600
-    overlay()!.dispatchEvent(
-      new WheelEvent('wheel', { deltaY: delta, deltaMode: 0, bubbles: true, cancelable: true }),
-    )
+    wheel(overlay(), 0, delta)
     await waitFor(() => Number.parseFloat(markerEl.style.left) !== markerLeftBefore)
     const markerLeftAfter = Number.parseFloat(markerEl.style.left)
     report['overviewMarkerFollowsWheel'] =
@@ -878,10 +875,7 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
     report['overviewFloor'] = 'skipped: no session on screen'
     return
   }
-  const overlay = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
-  const selected = (): string | undefined =>
-    overlay()?.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']
+  const selected = selectedCard
 
   /** The canvas scroll, read off the track's own transform — real pixels. */
   const canvasScroll = (): number => {
@@ -1085,9 +1079,7 @@ export async function checkOverviewScaleFloor(report: Report): Promise<void> {
     const beforeWheel = map.getBoundingClientRect().left
     const lensBeforeWheel = lensCentre()
     const canvasBeforeWheel = canvasScroll()
-    overlay()!.dispatchEvent(
-      new WheelEvent('wheel', { deltaY: -400, deltaMode: 0, bubbles: true, cancelable: true }),
-    )
+    wheel(overlay(), 0, -400)
     const afterWheel = map.getBoundingClientRect().left
     const lensDrift = Math.abs(lensCentre() - lensBeforeWheel)
     report['overviewWheelPans'] =
@@ -1234,8 +1226,6 @@ export async function checkTerminalSignals(report: Report): Promise<void> {
 
   // The card for that pane must stand out from the panes that stayed quiet.
   press('KeyM', { altKey: true })
-  const overlay = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('.session-host:not([hidden]) .overview')
   await waitFor(() => overlay() !== null)
   const card = (id: string): HTMLElement | null =>
     overlay()?.querySelector<HTMLElement>(`.overview__card[data-pane-id="${id}"]`) ?? null
@@ -1309,18 +1299,9 @@ export async function checkTerminalSignals(report: Report): Promise<void> {
 export async function checkClickableLinks(report: Report): Promise<void> {
   const pane = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')
   const host = pane?.querySelector<HTMLElement>('.terminal-host') ?? null
-  const seam = host as unknown as {
-    __term?: {
-      write(data: string, cb?: () => void): void
-      cols: number
-      rows: number
-      buffer: { active: { cursorY: number } }
-    }
-    __hoveredLink?: { text: string; range: { start: { x: number }; end: { x: number } } } | null
-  } | null
-  const term = seam?.__term
+  const term = termOf(host)
   const screen = host?.querySelector<HTMLElement>('.xterm-screen') ?? null
-  if (pane === null || term === undefined || seam == null || screen === null) {
+  if (pane === null || term === undefined || host === null || screen === null) {
     report['linkHover'] = 'FAIL (no focused terminal)'
     return
   }
@@ -1350,8 +1331,7 @@ export async function checkClickableLinks(report: Report): Promise<void> {
       }),
     )
   }
-  const link = (): { text: string; range: { start: { x: number }; end: { x: number } } } | null =>
-    seam.__hoveredLink ?? null
+  const link = (): ReturnType<typeof hoveredLinkOf> => hoveredLinkOf(host)
   // Re-point each round: the linkifier only asks when the cell under it moves.
   await waitFor(() => {
     hoverAt(link() === null ? 2 : 3)

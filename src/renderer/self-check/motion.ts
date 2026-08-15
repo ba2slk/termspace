@@ -2,14 +2,20 @@ import { api } from '../api'
 import { CANVAS_EDGE } from '../layout-geometry'
 import {
   animationRuns,
+  focusedHost,
   focusedId,
+  holdsStill,
   panes,
   press,
   type Report,
   SKIPPED,
   sleep,
+  termOf,
   trackOffset,
+  trackSettles,
   waitFor,
+  waitForAsync,
+  wheel,
 } from './harness'
 
 export async function checkWheelScroll(report: Report): Promise<void> {
@@ -23,39 +29,19 @@ export async function checkWheelScroll(report: Report): Promise<void> {
     report['wheelScroll'] = 'FAIL (no session host)'
     return
   }
-  const wheel = (deltaY: number): void => {
-    host.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }))
+  const roll = (deltaY: number): void => {
+    wheel(host, 0, deltaY)
   }
-  /**
-   * Wait for the glide to settle, then measure the distance.
-   *
-   * One unchanged reading isn't enough — a throttled rAF holds the value
-   * still for a while. Require several consecutive quiet reads.
-   */
-  const settle = async (): Promise<number> => {
-    let last = trackOffset()
-    let quiet = 0
-    for (let i = 0; i < 50; i++) {
-      await sleep(80)
-      const now = trackOffset()
-      if (now === last) {
-        quiet += 1
-        if (quiet >= 4) break
-      } else {
-        quiet = 0
-        last = now
-      }
-    }
-    return Math.abs(last)
-  }
+  /** Wait for the glide to settle, then measure the distance. */
+  const settle = async (): Promise<number> => Math.abs(await trackSettles())
 
   // Earlier checks may have parked at the right edge, where nothing can move.
-  wheel(-100_000)
+  roll(-100_000)
   await settle()
 
   // Distance per notch. Without boost this would be the raw 100px.
   const before = Math.abs(trackOffset())
-  wheel(100)
+  roll(100)
   const single = (await settle()) - before
   report['wheelSingleNotch'] =
     single > 250 ? `ok (${Math.round(single)}px)` : `TOO SLOW (${Math.round(single)}px)`
@@ -63,7 +49,8 @@ export async function checkWheelScroll(report: Report): Promise<void> {
   // Rolling fast must cover more per notch.
   const burstStart = Math.abs(trackOffset())
   for (let i = 0; i < 5; i++) {
-    wheel(100)
+    roll(100)
+    // Input pacing, not a wait: the boost is read off the gap between notches.
     await sleep(40)
   }
   const burst = (await settle()) - burstStart
@@ -72,7 +59,7 @@ export async function checkWheelScroll(report: Report): Promise<void> {
     perNotch > single ? `ok (${Math.round(perNotch)}px vs ${Math.round(single)}px single)` : `NO ACCEL (${Math.round(perNotch)}px)`
 
   // Reverse must work too.
-  wheel(-100)
+  roll(-100)
   await settle()
   report['wheelReverses'] = Math.abs(trackOffset()) < burstStart + burst ? 'ok' : 'FAIL'
 
@@ -83,8 +70,9 @@ export async function checkWheelScroll(report: Report): Promise<void> {
     return
   }
   const beforeVertical = trackOffset()
-  body.dispatchEvent(new WheelEvent('wheel', { deltaY: 400, bubbles: true, cancelable: true }))
-  await sleep(400)
+  wheel(body, 0, 400)
+  // Give a canvas that should not move every chance to move.
+  await trackSettles()
   report['verticalWheelStaysInTerminal'] =
     trackOffset() === beforeVertical
       ? 'ok (canvas stayed put)'
@@ -94,16 +82,13 @@ export async function checkWheelScroll(report: Report): Promise<void> {
    * Vertical wheel must actually move the scrollback, and accelerate.
    * "The canvas didn't move" alone also passes when nothing moved at all.
    */
-  const termHost = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const scrolled = (): number => {
-    const term = (termHost as unknown as { __term?: { buffer: { active: { viewportY: number } } } } | null)
-      ?.__term
-    return term?.buffer.active.viewportY ?? -1
-  }
+  const termHost = focusedHost()
+  const scrolled = (): number => termOf(termHost)?.buffer.active.viewportY ?? -1
 
   // Produce more output than fits, so there is something to scroll.
   api.write(focusedId() ?? '', 'seq 1 400\n')
-  await sleep(1500)
+  // Scrollback exists once the viewport has been pushed off the top of it.
+  await waitFor(() => scrolled() > 0, 8000)
 
   /*
    * Dispatch inside the terminal. The listener sits on a descendant, and an
@@ -111,12 +96,12 @@ export async function checkWheelScroll(report: Report): Promise<void> {
    */
   const wheelTarget = termHost?.querySelector<HTMLElement>('.xterm-screen') ?? termHost
   const wheelOverTerminal = (deltaY: number): void => {
-    wheelTarget?.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }))
+    wheel(wheelTarget, 0, deltaY)
   }
 
   const bottom = scrolled()
   wheelOverTerminal(-120) // upwards
-  await sleep(500)
+  await waitFor(() => scrolled() < bottom, 2000)
   const afterOne = scrolled()
   report['terminalWheelScrolls'] =
     afterOne < bottom ? `ok (${String(bottom)} → ${String(afterOne)} lines)` : `FAIL (unchanged at ${String(bottom)})`
@@ -126,9 +111,10 @@ export async function checkWheelScroll(report: Report): Promise<void> {
   const burstStartLine = scrolled()
   for (let i = 0; i < 5; i++) {
     wheelOverTerminal(-120)
+    // Input pacing again: rolling is only continuous if the notches are.
     await sleep(30)
   }
-  await sleep(700)
+  await holdsStill(scrolled, 3000)
   const perNotchLine = (burstStartLine - scrolled()) / 5
   report['terminalWheelAccelerates'] =
     perNotchLine > singleStep
@@ -151,10 +137,10 @@ export async function checkWheelScroll(report: Report): Promise<void> {
 
   // Start from the left edge; at the right limit nothing can move and the
   // check would read "the strip does nothing".
-  wheel(-100_000)
+  roll(-100_000)
   await settle()
   const beforeBar = trackOffset()
-  panStrip?.dispatchEvent(new WheelEvent('wheel', { deltaY: 300, bubbles: true, cancelable: true }))
+  wheel(panStrip, 0, 300)
   await settle()
   report['titleBarPans'] =
     trackOffset() !== beforeBar
@@ -166,7 +152,7 @@ export async function checkWheelScroll(report: Report): Promise<void> {
    * scrolling. It is the only thing saying more exists off screen.
    */
   // At the left limit, so the inset below is the rail's own and not the thumb's.
-  wheel(-100_000)
+  roll(-100_000)
   await settle()
   const bar = document.querySelector<HTMLElement>('.scroll-indicator')
   const barBox = bar?.getBoundingClientRect()
@@ -230,12 +216,12 @@ export async function checkWheelScroll(report: Report): Promise<void> {
     bar.dispatchEvent(new PointerEvent('pointerdown', { ...at, clientX: barBox.left + 2 }))
     bar.dispatchEvent(new PointerEvent('pointermove', { ...at, clientX: barBox.left + 60 }))
     bar.dispatchEvent(new PointerEvent('pointerup', { ...at, clientX: barBox.left + 60 }))
-    await sleep(200)
+    await trackSettles()
     // The track slides the opposite way to the content it carries.
     const moved = before - trackOffset()
     report['scrollBarDrags'] =
       moved > 0 ? `ok (${String(Math.round(moved))}px right)` : `FAIL (canvas moved ${String(moved)}px)`
-    wheel(-100_000)
+    roll(-100_000)
     await settle()
   }
 
@@ -254,16 +240,12 @@ export async function checkWheelScroll(report: Report): Promise<void> {
       : 'skipped (no pane on screen)'
 
   // A horizontal component hands the wheel to the canvas.
-  wheel(-100_000)
+  roll(-100_000)
   await settle()
   const beforeHorizontal = trackOffset()
-  body.dispatchEvent(new WheelEvent('wheel', { deltaX: 300, bubbles: true, cancelable: true }))
-  // Wait for movement itself; settle() would return before anything started.
-  let moved = false
-  for (let i = 0; i < 30 && !moved; i++) {
-    await sleep(80)
-    moved = trackOffset() !== beforeHorizontal
-  }
+  wheel(body, 300, 0)
+  // Wait for movement itself; settling would return before anything started.
+  const moved = await waitFor(() => trackOffset() !== beforeHorizontal, 2400)
   report['horizontalWheelMovesCanvas'] = moved ? 'ok' : 'FAIL (the canvas did not move)'
 
   // Frames may have stopped mid-check, which invalidates everything above.
@@ -280,35 +262,38 @@ export async function checkWheelScroll(report: Report): Promise<void> {
   }
 
   // The focused pane must stay awake even when scrolled out of view.
-  wheel(100_000)
+  roll(100_000)
   await settle()
   report['focusedPaneNeverFreezes'] =
     document.querySelector('.pane--focused.pane--frozen') === null
       ? 'ok'
       : 'FAIL (the focused pane froze)'
   // Scroll away and back: a thawed pane has to repaint.
-  wheel(100_000)
+  roll(100_000)
   await settle()
-  wheel(-100_000)
+  roll(-100_000)
   await settle()
-  await sleep(400)
 
   /*
    * A frozen pane in view renders as an empty box, which reads as a dead
    * terminal. The active region is three viewports wide, so this must hold.
    */
-  const viewLeft = -trackOffset()
-  const viewRight = viewLeft + host.clientWidth
-  const blankInView = panes().filter((pane) => {
-    if (!pane.classList.contains('pane--frozen')) return false
-    const left = Number.parseInt(pane.style.left || '0')
-    const right = left + Number.parseInt(pane.style.width || '0')
-    return right > viewLeft && left < viewRight
-  })
+  const blankInView = (): HTMLElement[] => {
+    const viewLeft = -trackOffset()
+    const viewRight = viewLeft + host.clientWidth
+    return panes().filter((pane) => {
+      if (!pane.classList.contains('pane--frozen')) return false
+      const left = Number.parseInt(pane.style.left || '0')
+      const right = left + Number.parseInt(pane.style.width || '0')
+      return right > viewLeft && left < viewRight
+    })
+  }
+  // Thawing is a repaint, not an instant: wait for it before counting.
+  await waitFor(() => blankInView().length === 0, 2000)
   report['noFrozenPaneInView'] =
-    blankInView.length === 0
+    blankInView().length === 0
       ? 'ok'
-      : `FAIL (${blankInView.length} frozen panes in view)`
+      : `FAIL (${blankInView().length} frozen panes in view)`
 }
 
 /**
@@ -351,16 +336,9 @@ export async function checkRevealFocus(report: Report): Promise<void> {
    * and a later reading would move on its own with nothing having touched it.
    */
   const scrollAway = async (): Promise<boolean> => {
-    host.dispatchEvent(new WheelEvent('wheel', { deltaY: 100_000, bubbles: true, cancelable: true }))
+    wheel(host, 0, 100_000)
     if (!(await waitFor(() => !inView(), 3000))) return false
-    let last = trackOffset()
-    let quiet = 0
-    for (let i = 0; i < 50 && quiet < 4; i++) {
-      await sleep(80)
-      const now = trackOffset()
-      quiet = now === last ? quiet + 1 : 0
-      last = now
-    }
+    await trackSettles()
     return !inView()
   }
 
@@ -397,7 +375,8 @@ export async function checkRevealFocus(report: Report): Promise<void> {
   const before = trackOffset()
   pane.dispatchEvent(new MouseEvent('mousedown', { ...at, clientX: 200 }))
   pane.dispatchEvent(new MouseEvent('mouseup', { ...at, clientX: 320 }))
-  await sleep(400)
+  // Give a canvas that must not move the time it would need to move.
+  await trackSettles()
   report['dragOnFocusedPaneHoldsStill'] =
     trackOffset() === before ? 'ok' : `FAIL (canvas moved ${trackOffset() - before}px mid-drag)`
 
@@ -409,18 +388,23 @@ export async function checkRevealFocus(report: Report): Promise<void> {
    * next one; two back undo exactly that, which is what leaves the layout as
    * the next check expects to find it.
    */
+  const paneLeft = (): number => focusedPane()?.getBoundingClientRect().left ?? 0
   for (let i = 0; i < 2; i++) {
+    const was = paneLeft()
     press('KeyP', { altKey: true, shiftKey: true })
-    await sleep(300)
+    await waitFor(() => paneLeft() !== was, 2000)
   }
+  // The move lands a frame before the view follows it; the glide is the point.
+  await waitFor(inView, 2000)
   report['movingAPaneBringsTheViewAlong'] = inView()
     ? 'ok'
     : (await animationRuns())
       ? 'FAIL (the moved pane was left off screen)'
       : SKIPPED
   for (let i = 0; i < 2; i++) {
+    const was = paneLeft()
     press('KeyU', { altKey: true, shiftKey: true })
-    await sleep(300)
+    await waitFor(() => paneLeft() !== was, 2000)
   }
 }
 
@@ -441,21 +425,23 @@ export async function checkClipboard(report: Report, focused: boolean): Promise<
   const roundTrip = `ROUNDTRIP_${String(performance.now())}`
   // Shared resource: a clipboard manager or the user can win a race, so retry.
   let echoed = ''
-  for (let attempt = 0; attempt < 4 && echoed !== roundTrip; attempt++) {
-    api.writeClipboard(roundTrip)
-    await sleep(350)
-    echoed = await api.readClipboard()
-  }
+  await waitForAsync(
+    async () => {
+      api.writeClipboard(roundTrip)
+      echoed = await api.readClipboard()
+      return echoed === roundTrip
+    },
+    2000,
+    350,
+  )
   report['clipboardRoundTrip'] = echoed === roundTrip ? 'ok' : 'FAIL'
 
   // Synthetic drags can't select on a canvas, so reach xterm through the dev seam.
   const marker = 'CLIPBOARD_CHECK_MARKER'
   api.write(focusedId() ?? '', `printf '%s\\n' "${marker}"\n`)
 
-  const hostEl = document.querySelector<HTMLElement>('.pane--focused .terminal-host')
-  const term = (hostEl as unknown as
-    | { __term?: { selectAll(): void; getSelection(): string } }
-    | null)?.__term
+  const hostEl = focusedHost()
+  const term = termOf(hostEl)
   if (term === undefined) {
     report['clipboardCopy'] = 'FAIL (could not reach the terminal instance)'
     api.writeClipboard(original)
@@ -463,33 +449,37 @@ export async function checkClipboard(report: Report, focused: boolean): Promise<
   }
 
   // Wait for the marker to appear rather than a fixed delay — shell startup varies.
-  let printed = false
-  for (let attempt = 0; attempt < 30 && !printed; attempt++) {
-    await sleep(200)
+  const selection = (): string => {
     term.selectAll()
-    printed = term.getSelection().includes(marker)
+    return term.getSelection()
   }
+  const printed = await waitFor(() => selection().includes(marker), 6000)
   if (!printed) {
     report['clipboardCopy'] = 'FAIL (marker never appeared; the shell did not start)'
     api.writeClipboard(original)
     return
   }
-  await sleep(200)
+  // Copy what the shell has finished writing, not half a line of it.
+  await holdsStill(() => selection().length, 2000)
 
   press('KeyC', { ctrlKey: true, shiftKey: true })
-  await sleep(400)
-  const clip = await api.readClipboard()
+  let clip = ''
+  await waitForAsync(async () => (clip = await api.readClipboard()).includes(marker), 2000, 150)
   report['clipboardCopy'] = clip.includes(marker)
     ? 'ok'
     : `FAIL (marker not in clipboard: ${JSON.stringify(clip.slice(0, 40))})`
 
   // Copy-on-select: releasing the button alone must reach the clipboard.
   api.writeClipboard('COPY_ON_SELECT_NOT_YET')
-  await sleep(250)
+  await waitForAsync(async () => (await api.readClipboard()).startsWith('COPY_ON_SELECT'), 2000, 150)
   term.selectAll()
   hostEl?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  await sleep(400)
-  const afterSelect = await api.readClipboard()
+  let afterSelect = ''
+  await waitForAsync(
+    async () => (afterSelect = await api.readClipboard()).includes(marker),
+    2000,
+    150,
+  )
   report['copyOnSelect'] = afterSelect.includes(marker)
     ? 'ok'
     : `FAIL (clipboard unchanged after selecting: ${JSON.stringify(afterSelect.slice(0, 40))})`
