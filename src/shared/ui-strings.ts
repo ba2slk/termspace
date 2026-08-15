@@ -65,6 +65,8 @@ const en = {
   appBar: {
     brand: 'Termspace',
     menu: 'Menu',
+    /* The strip: the session, then the focused pane when it has a title. */
+    titleWithPane: (session: string, pane: string) => `${session} · ${pane}`,
     toggleSessionList: (chord: string) => `Hide/show session list (${chord})`,
     splitDirection: 'Split direction',
     save: (chord: string) => `Save this layout (${chord})`,
@@ -365,6 +367,7 @@ const ko: Catalog = {
   appBar: {
     brand: 'Termspace',
     menu: '메뉴',
+    titleWithPane: (session: string, pane: string) => `${session} · ${pane}`,
     toggleSessionList: (chord: string) => `세션 목록 접기/펴기 (${chord})`,
     splitDirection: '분할 방향',
     save: (chord: string) => `현재 배치 저장 (${chord})`,

@@ -93,6 +93,8 @@ export interface SessionRuntime {
   rename(name: string): void
   /** Whether this session takes keyboard input; hidden ones must not. */
   setActive(active: boolean): void
+  /** The focused pane's title, for the title bar. Null with nothing focused. */
+  focusedPaneTitle(): string | null
   /** Reapply settings to every live terminal. */
   applySettings(settings: AppSettings): void
   /**
@@ -154,8 +156,11 @@ export interface StartSessionOptions {
    * Current palette. The shell resolves the name, since it holds the user list.
    */
   readonly theme: () => TerminalTheme
-  /** Title changed; the app bar draws it. */
-  readonly onTitle: (title: string) => void
+  /**
+   * Title changed; the app bar draws it. The pane title is the focused pane's,
+   * or null when nothing is focused.
+   */
+  readonly onTitle: (title: string, paneTitle: string | null) => void
   /** Something reached the clipboard — invisible, so it needs announcing. */
   readonly onCopied: (chars: number) => void
   /** A pane was added or removed; the session list shows the count. */
@@ -253,6 +258,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     },
     onRename: (paneId, title) => {
       setLayout(renamePane(layout, paneId, title))
+      publishTitle()
       options.onPaneRenamed()
     },
     onScrub: (scrollX) => {
@@ -373,8 +379,14 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── State ────────────────────────────────────────────
 
+  function focusedPaneTitle(): string | null {
+    return findPane(layout, layout.focusedPaneId)?.pane.title ?? null
+  }
+
   function publishTitle(): void {
-    options.onTitle(spec.name)
+    // Only the visible session owns the bar; a background one would overwrite it.
+    if (!active) return
+    options.onTitle(spec.name, focusedPaneTitle())
   }
 
   function columnHeight(): number {
@@ -442,6 +454,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       record?.terminal.setFocused(true)
       record?.terminal.focus()
       canvas.scrollToPane(layout.focusedPaneId, layout)
+      publishTitle()
     }
     updateBudget()
     if (allPanes(layout).length !== paneCountBefore) options.onPanesChanged()
@@ -818,6 +831,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       for (const record of records.values()) record.terminal.applyAppearance(appearance)
     },
+    focusedPaneTitle,
     setActive(next) {
       active = next
       options.onWatchedPaneChanged()

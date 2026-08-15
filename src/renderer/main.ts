@@ -8,6 +8,7 @@ import { shorten } from '../shared/home-path'
 import { api } from './api'
 import { createAppBar } from './app-bar'
 import { createEmptyCanvas } from './empty-canvas'
+import { barTitle } from './pane-title'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
@@ -286,7 +287,9 @@ async function renameSession(id: string, newName: string): Promise<void> {
     renamedIds.set(id, newId)
   }
   runtimes.get(newId)?.rename(newName)
-  if (newId === currentName) setTitle(newName)
+  if (newId === currentName) {
+    setTitle(newName, runtimes.get(newId)?.focusedPaneTitle() ?? null)
+  }
   await refreshSidebar()
 }
 
@@ -716,9 +719,11 @@ function stepToSession(delta: 1 | -1): void {
  * nothing you don't already know. It stays in the window title, which is what
  * the taskbar reads.
  */
-function setTitle(session: string | null): void {
+function setTitle(session: string | null, paneTitle: string | null = null): void {
+  // The taskbar keeps naming the session alone: a pane title changes with every
+  // focus move, and a window entry that renames itself that often is noise.
   document.title = session === null ? t.firstRun.appName : t.firstRun.windowTitle(session)
-  appBar.setTitle(session ?? '')
+  appBar.setTitle(session === null ? '' : barTitle(session, paneTitle, t.appBar.titleWithPane))
 }
 
 function showOnly(name: string | null): void {
@@ -759,7 +764,6 @@ function endSession(from: string): void {
     const runtime = current()
     if (runtime !== undefined) {
       runtime.refresh()
-      setTitle(runtime.spec.name)
     }
   }
   void refreshSidebar()
@@ -783,8 +787,8 @@ async function openSession(id: string): Promise<void> {
   const existing = runtimes.get(id)
   if (existing !== undefined) {
     showOnly(id)
+    // refresh publishes the title, pane part included.
     existing.refresh()
-    setTitle(existing.spec.name)
     void refreshSidebar()
     return
   }
