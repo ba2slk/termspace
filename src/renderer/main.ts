@@ -333,8 +333,6 @@ async function renameSession(id: string, newName: string): Promise<void> {
     }
     if (currentName === id) currentName = newId
     if (previousName === id) previousName = newId
-    for (const [was, now] of renamedIds) if (now === id) renamedIds.set(was, newId)
-    renamedIds.set(id, newId)
   }
   runtimes.get(newId)?.rename(newName)
   if (newId === currentName) {
@@ -412,8 +410,16 @@ let knownSessions: readonly SessionSummary[] = []
  */
 let previousName: string | null = null
 
-/** Where a renamed session went, for the ids closures captured before it. */
-const renamedIds = new Map<string, string>()
+/**
+ * The key a runtime is filed under right now.
+ *
+ * A rename moves a session to a new id, so a runtime's own closures cannot
+ * carry the id they were made with; they ask by identity instead.
+ */
+function idOf(runtime: SessionRuntime): string | null {
+  for (const [id, candidate] of runtimes) if (candidate === runtime) return id
+  return null
+}
 
 /** How many panes a runtime holds right now, splits and closes included. */
 function livePaneCount(runtime: SessionRuntime): number {
@@ -831,10 +837,7 @@ function showOnly(name: string | null): void {
   if (name === null) setTitle(null)
 }
 
-function endSession(from: string): void {
-  // A rename moves a session to a new id, and the runtime's own onEnd closure
-  // was made before that; follow the trail rather than leaking a dead session.
-  const id = renamedIds.get(from) ?? from
+function endSession(id: string): void {
   // Ending a session from the list also means returning to the canvas.
   dismissOverlays()
   runtimes.get(id)?.destroy()
@@ -842,7 +845,6 @@ function endSession(from: string): void {
   hosts.get(id)?.remove()
   hosts.delete(id)
   if (previousName === id) previousName = null
-  for (const [was, now] of renamedIds) if (now === id) renamedIds.delete(was)
 
   if (currentName === id) {
     // If it was the visible one, move to whatever remains.
@@ -891,26 +893,29 @@ async function openSession(id: string): Promise<void> {
   canvasHost.append(element)
   hosts.set(id, element)
 
-  runtimes.set(
-    id,
-    startSession({
-      spec: loaded.spec,
-      file: loaded.file,
-      host: element,
-      settings: () => settings,
-      bindings: () => bindings,
-      theme: currentTheme,
-      onTitle: setTitle,
-      onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
-      onPanesChanged: renderSidebar,
-      // The same write as Alt+Shift+S: a title lives in the layout, so the
-      // whole layout is what there is to save.
-      onPaneRenamed: () => void saveCurrentLayout(),
-      onAttentionChanged: renderSidebar,
-      onWatchedPaneChanged: reportWatchedPane,
-      onEnd: () => endSession(id),
-    }),
-  )
+  const runtime = startSession({
+    spec: loaded.spec,
+    file: loaded.file,
+    host: element,
+    settings: () => settings,
+    bindings: () => bindings,
+    theme: currentTheme,
+    onTitle: setTitle,
+    onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
+    onPanesChanged: renderSidebar,
+    // The same write as Alt+Shift+S: a title lives in the layout, so the
+    // whole layout is what there is to save.
+    onPaneRenamed: () => void saveCurrentLayout(),
+    onAttentionChanged: renderSidebar,
+    onWatchedPaneChanged: reportWatchedPane,
+    // By identity, not by the id captured here: a rename moves the session to a
+    // new key and this closure outlives that.
+    onEnd: () => {
+      const at = idOf(runtime)
+      if (at !== null) endSession(at)
+    },
+  })
+  runtimes.set(id, runtime)
   showOnly(id)
   void refreshSidebar()
 }
