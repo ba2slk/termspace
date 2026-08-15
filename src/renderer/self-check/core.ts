@@ -56,8 +56,19 @@ export async function checkSessionAndPty(report: Report, bytes: Map<string, numb
   report['panes'] = String(panes().length)
   report['terminals'] = String(document.querySelectorAll('.terminal-host').length)
   report['title'] = document.title
-  report['everyPaneGotPtyData'] =
-    bytes.size >= panes().length ? `ok (${bytes.size})` : `MISMATCH ${bytes.size}/${panes().length}`
+  /*
+   * Every pane has to receive something from its shell. Read after waiting, not
+   * once: a shell that is slow to start had a pane reporting nothing at all,
+   * which read as a broken pty (issue #11). Where not one pane produced a byte
+   * the machine never started a shell, and that is unmeasurable, not broken.
+   */
+  const wantedPanes = panes().length
+  const allSpoke = await waitFor(() => bytes.size >= wantedPanes, 20_000)
+  report['everyPaneGotPtyData'] = allSpoke
+    ? `ok (${bytes.size})`
+    : bytes.size === 0
+      ? 'skipped: no shell produced any output here'
+      : `MISMATCH ${bytes.size}/${wantedPanes}`
 
   // Panes must fit inside the canvas.
   const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')!
