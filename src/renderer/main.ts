@@ -815,13 +815,15 @@ function showOnly(name: string | null): void {
   // Remember where we came from, so Alt+N can bounce back.
   if (currentName !== null && currentName !== name) previousName = currentName
   for (const [key, element] of hosts) element.hidden = key !== name
+  // Before setActive, which reports the watched pane: a report made while this
+  // still named the session being left would be for the wrong one.
+  currentName = name
   // Every other session first: leaving means giving up WebGL contexts, and the
   // arriving session needs them free before it asks for its own.
   for (const [key, runtime] of runtimes) if (key !== name) runtime.setActive(false)
   if (name !== null) runtimes.get(name)?.setActive(true)
-  currentName = name
-  // setActive above ran while currentName still named the session being left,
-  // so the report it triggered was for the wrong one. Say it again, correctly.
+  // With nothing running, neither loop above ran and nothing has been reported;
+  // ending the last session still has to say that no pane is being watched.
   reportWatchedPane()
   syncPlaceholder()
   revealListWhenEmpty()
