@@ -32,6 +32,10 @@ The layout is a file. Shape a workspace by hand, save it as YAML, and it comes
 back exactly the same tomorrow — same columns, same widths, same commands
 running in the same directories.
 
+Everything is one key away. `Alt` + arrows moves focus, `Alt` + `M` shows the whole
+canvas, and holding `Alt` names every pane on screen. No prefix key, no mouse
+required.
+
 **Useful when** you work on a laptop screen that a real layout doesn't fit,
 keep several projects open at once, or run long jobs and agents that finish
 while you're looking somewhere else.
