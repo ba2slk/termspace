@@ -752,19 +752,22 @@ body {
  */
 .pane__label {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 4px;
+  right: 6px;
   /* Above the search bar, which sits at 3 inside the same pane. */
   z-index: 4;
   display: none;
-  max-width: calc(100% - 16px);
+  max-width: calc(100% - 12px);
   overflow: hidden;
-  padding: 3px 9px;
+  padding: 1px 6px;
   background: var(--bg-raised);
-  border: 1px solid var(--border);
+  /* The overview card's border, one step above the seams between panes. */
+  border: 1px solid var(--border-focus);
   border-radius: var(--radius-sm);
-  color: var(--fg-dim);
-  font-size: var(--fs-ui);
+  color: var(--fg);
+  font-size: var(--fs-ui-sm);
+  /* Bolder than the terminal text it sits over, or it reads as one more line of it. */
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
   /* Never in the way of a selection drag or a click into the pane. */
@@ -776,9 +779,10 @@ body {
   display: block;
 }
 
-/* The pane taking keys reads at full strength, like its border does. */
+/* The pane taking keys: filled like the overview's selected card. */
 .pane--focused .pane__label {
-  color: var(--fg);
+  background: var(--overview-selected-fill);
+  border-color: var(--border-active);
 }
 
 /* Outside the active region: the browser skips layout and paint for this subtree. */
