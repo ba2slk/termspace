@@ -18,8 +18,8 @@
     "xterm",
     "tiling",
     "scrolling-tiling",
-    "tmux-alternative",
-    "linux"
+    "linux",
+    "macos"
   ],
   "engines": {
     "node": ">=22"
