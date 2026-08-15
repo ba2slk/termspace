@@ -32,6 +32,10 @@ The layout is a file. Shape a workspace by hand, save it as YAML, and it comes
 back exactly the same tomorrow — same columns, same widths, same commands
 running in the same directories.
 
+Everything is one key away. `Alt` + arrows moves focus, `Alt` + `M` shows the whole
+canvas, and holding `Alt` names every pane on screen. No prefix key, no mouse
+required.
+
 **Useful when** you work on a laptop screen that a real layout doesn't fit,
 keep several projects open at once, or run long jobs and agents that finish
 while you're looking somewhere else.
@@ -154,6 +158,7 @@ tmux itself.
 | `Alt+Shift` + `W` | `Cmd+Shift` + `W` | Close pane |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
+| Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title (can be turned off in settings) |
 | `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |
 | `F2` | `F2` | Rename the selected pane, in the overview |
 | `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |

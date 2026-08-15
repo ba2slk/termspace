@@ -27,5 +27,13 @@ describe('normalizeSettings', () => {
     expect(old.fontSize).toBe(15)
     expect(old.uiScale).toBe(DEFAULT_SETTINGS.uiScale)
     expect(old.locale).toBe(DEFAULT_SETTINGS.locale)
+    expect(old.paneLabels).toBe(DEFAULT_SETTINGS.paneLabels)
+  })
+
+  it('reads the on/off settings as 0 or 1, whatever the file says', () => {
+    expect(normalizeSettings({ paneLabels: 0 }).paneLabels).toBe(0)
+    expect(normalizeSettings({ paneLabels: 7 }).paneLabels).toBe(1)
+    expect(normalizeSettings({ paneLabels: 0.4 }).paneLabels).toBe(0)
+    expect(normalizeSettings({ paneLabels: 'off' }).paneLabels).toBe(DEFAULT_SETTINGS.paneLabels)
   })
 })

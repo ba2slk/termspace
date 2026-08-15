@@ -8,6 +8,8 @@ import { shorten } from '../shared/home-path'
 import { api } from './api'
 import { createAppBar } from './app-bar'
 import { createEmptyCanvas } from './empty-canvas'
+import { barTitle } from './pane-title'
+import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
@@ -286,7 +288,9 @@ async function renameSession(id: string, newName: string): Promise<void> {
     renamedIds.set(id, newId)
   }
   runtimes.get(newId)?.rename(newName)
-  if (newId === currentName) setTitle(newName)
+  if (newId === currentName) {
+    setTitle(newName, runtimes.get(newId)?.focusedPaneTitle() ?? null)
+  }
   await refreshSidebar()
 }
 
@@ -473,6 +477,7 @@ async function refreshSidebar(): Promise<void> {
 async function saveSettings(next: AppSettings): Promise<void> {
   settings = await api.saveSettings(next)
   applyIdleDim(settings.idleDim)
+  syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
   appBar.syncControls()
@@ -483,6 +488,7 @@ const settingsView = createSettingsView(canvasHost, {
   onChange: (next) => {
     settings = next
     applyIdleDim(next.idleDim)
+    syncPeek()
     applyUiScale(next.uiScale)
     applyTerminalBackground(currentTheme())
     appBar.syncControls()
@@ -636,6 +642,35 @@ function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
   confirmView.ask(request, onConfirm)
 }
 
+/*
+ * Peek: while the move modifier is held, every pane on screen says its title.
+ *
+ * Held state is tracked rather than read off each event, so an Alt+Arrow chord
+ * keeps the labels up for as long as the key is down. Blur ends it: a keyup
+ * delivered to another window would otherwise leave them on screen forever.
+ */
+let peeking = false
+
+/*
+ * The key state and the labels are kept apart so that turning the setting off
+ * mid-hold clears them at once, and turning it back on brings them straight
+ * back without waiting for the modifier to be pressed again.
+ */
+function syncPeek(): void {
+  canvasHost.classList.toggle('canvas--peek', peeking && settings.paneLabels === 1)
+}
+
+function applyPeek(event: PeekEvent): void {
+  const next = nextPeek(peeking, event, IS_MAC)
+  if (next === peeking) return
+  peeking = next
+  syncPeek()
+}
+
+window.addEventListener('keydown', (event) => applyPeek({ t: 'keydown', code: event.code }), true)
+window.addEventListener('keyup', (event) => applyPeek({ t: 'keyup', code: event.code }), true)
+window.addEventListener('blur', () => applyPeek({ t: 'blur' }))
+
 // ── App shortcuts ───────────────────────────────────────
 
 /*
@@ -716,9 +751,11 @@ function stepToSession(delta: 1 | -1): void {
  * nothing you don't already know. It stays in the window title, which is what
  * the taskbar reads.
  */
-function setTitle(session: string | null): void {
+function setTitle(session: string | null, paneTitle: string | null = null): void {
+  // The taskbar keeps naming the session alone: a pane title changes with every
+  // focus move, and a window entry that renames itself that often is noise.
   document.title = session === null ? t.firstRun.appName : t.firstRun.windowTitle(session)
-  appBar.setTitle(session ?? '')
+  appBar.setTitle(session === null ? '' : barTitle(session, paneTitle, t.appBar.titleWithPane))
 }
 
 function showOnly(name: string | null): void {
@@ -759,7 +796,6 @@ function endSession(from: string): void {
     const runtime = current()
     if (runtime !== undefined) {
       runtime.refresh()
-      setTitle(runtime.spec.name)
     }
   }
   void refreshSidebar()
@@ -783,8 +819,8 @@ async function openSession(id: string): Promise<void> {
   const existing = runtimes.get(id)
   if (existing !== undefined) {
     showOnly(id)
+    // refresh publishes the title, pane part included.
     existing.refresh()
-    setTitle(existing.spec.name)
     void refreshSidebar()
     return
   }
@@ -834,6 +870,7 @@ async function boot(): Promise<void> {
   // Before any session, or the first pane flashes the default palette.
   userThemes = await api.listUserThemes()
   applyIdleDim(settings.idleDim)
+  syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
   sidebar.setWidth(settings.sidebarWidth)

@@ -191,4 +191,43 @@ describe('createCanvasView', () => {
     expect(handle.style.left).toBe('703px')
     expect(handle.dataset['targetId']).toBe('c1')
   })
+
+  /*
+   * The peek labels. CSS decides when they show; what the view owes is one per
+   * named pane, with the pane's own title in it.
+   */
+  it('labels every pane that has a title of its own', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const labels = [...host.querySelectorAll<HTMLElement>('.pane__label')]
+    expect(labels).toHaveLength(3)
+    expect(labels.filter((l) => !l.hidden).map((l) => l.textContent)).toEqual(['editor', 'server'])
+  })
+
+  it('leaves the default title unlabelled: it says nothing', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const label = host.querySelector<HTMLElement>('[data-pane-id="a2"] .pane__label')!
+    expect(label.hidden).toBe(true)
+    expect(label.textContent).toBe('')
+  })
+
+  it('follows a rename', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.render(
+      createLayout([
+        { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'notes' }, { id: 'a2', title: 'shell' }] },
+      ]),
+    )
+    expect(host.querySelector('[data-pane-id="a1"] .pane__label')!.textContent).toBe('notes')
+  })
+
+  it('keeps the label inside the pane, so it changes no geometry', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    expect(pane.querySelector('.pane__label')!.parentElement).toBe(pane)
+    expect(pane.style.width).toBe('700px')
+  })
 })

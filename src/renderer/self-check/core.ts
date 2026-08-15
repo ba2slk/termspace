@@ -1,4 +1,5 @@
 import { api } from '../api'
+import { IS_MAC } from '../platform'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
 import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
@@ -534,6 +535,113 @@ export function checkFocusVisibility(report: Report): void {
     focusedScrim === 'rgba(0, 0, 0, 0)' || focusedScrim === ''
       ? 'ok'
       : `FAIL (the focused pane has a scrim too: ${focusedScrim})`
+}
+
+/**
+ * Peek: holding the move modifier labels every pane, releasing it clears them.
+ *
+ * Measured in pixels rather than by class: the label is an overlay on a pane
+ * that must not spill past its own rectangle onto the neighbour beside it.
+ */
+export async function checkPaneTitlePeek(report: Report): Promise<void> {
+  const canvas = document.getElementById('canvas')
+  if (canvas === null) {
+    report['peekLabels'] = 'FAIL (no canvas)'
+    return
+  }
+  // The same key that prefixes the focus moves: Alt off mac, Cmd on it.
+  const code = IS_MAC ? 'MetaLeft' : 'AltLeft'
+  const hold = (type: 'keydown' | 'keyup'): void => {
+    window.dispatchEvent(
+      new KeyboardEvent(type, {
+        code,
+        key: IS_MAC ? 'Meta' : 'Alt',
+        bubbles: true,
+        cancelable: true,
+        altKey: !IS_MAC && type === 'keydown',
+        metaKey: IS_MAC && type === 'keydown',
+      }),
+    )
+  }
+
+  const shown = (): HTMLElement[] =>
+    visiblePanes()
+      .flatMap((pane) => [...pane.querySelectorAll<HTMLElement>('.pane__label')])
+      .filter((label) => getComputedStyle(label).display !== 'none')
+
+  hold('keydown')
+  await waitFor(() => shown().length > 0)
+  const labels = shown()
+  if (labels.length === 0) {
+    hold('keyup')
+    report['peekLabels'] = 'FAIL (holding the modifier showed none)'
+    return
+  }
+  report['peekLabels'] = `ok (${String(labels.length)} of ${String(visiblePanes().length)} panes)`
+
+  // Every pane in this session is named, so every unfrozen one is labelled.
+  const named = visiblePanes().filter(
+    (pane) => !pane.classList.contains('pane--frozen') && (pane.querySelector('.pane__label')?.textContent ?? '') !== '',
+  )
+  report['peekLabelsEveryNamedPane'] =
+    labels.length === named.length
+      ? 'ok'
+      : `FAIL (${String(labels.length)} labels for ${String(named.length)} named panes)`
+
+  /*
+   * Inside its own pane, and clear of the pane to its right. A label wider than
+   * the pane would sit over a neighbour's terminal, which is what the ellipsis
+   * is there to prevent.
+   */
+  const sorted = [...visiblePanes()].sort(
+    (a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left,
+  )
+  let contained = 0
+  let spilled = ''
+  for (const pane of sorted) {
+    const label = pane.querySelector<HTMLElement>('.pane__label')
+    if (label === null || getComputedStyle(label).display === 'none') continue
+    const paneRect = pane.getBoundingClientRect()
+    const rect = label.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) {
+      spilled = `label in ${String(pane.dataset['paneId'])} measures zero`
+      break
+    }
+    const inside =
+      rect.left >= paneRect.left - 1 &&
+      rect.right <= paneRect.right + 1 &&
+      rect.top >= paneRect.top - 1 &&
+      rect.bottom <= paneRect.bottom + 1
+    if (!inside) {
+      spilled = `label of ${String(pane.dataset['paneId'])} leaves its pane`
+      break
+    }
+    const right = sorted.find((other) => other.getBoundingClientRect().left > paneRect.right)
+    if (right !== undefined && rect.right > right.getBoundingClientRect().left) {
+      spilled = `label of ${String(pane.dataset['paneId'])} reaches the pane to its right`
+      break
+    }
+    contained++
+  }
+  report['peekLabelsStayInsideTheirPane'] =
+    spilled === '' ? `ok (${String(contained)} measured)` : `FAIL (${spilled})`
+
+  // The strip names the focused pane while the label says the same title.
+  const focusedLabel = document
+    .querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused .pane__label')
+    ?.textContent
+  const bar = document.querySelector<HTMLElement>('.app-bar__title')?.textContent ?? ''
+  report['barNamesTheFocusedPane'] =
+    focusedLabel === undefined || focusedLabel === null || focusedLabel === ''
+      ? 'skipped: the focused pane has no title of its own'
+      : bar.endsWith(focusedLabel) && bar !== focusedLabel
+        ? `ok (${bar})`
+        : `FAIL (bar reads "${bar}", pane is "${focusedLabel}")`
+
+  hold('keyup')
+  await waitFor(() => shown().length === 0)
+  report['peekLabelsGoOnRelease'] =
+    shown().length === 0 ? 'ok' : `FAIL (${String(shown().length)} left on screen)`
 }
 
 /** The overview: one card per pane, selection moves, Enter jumps, Esc doesn't. */

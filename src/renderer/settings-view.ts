@@ -121,6 +121,15 @@ const TOGGLES: readonly ToggleSpec[] = [
   },
 ]
 
+/** Held-key behaviour: its own section, since it is not about the mouse. */
+const KEYBOARD: readonly ToggleSpec[] = [
+  {
+    key: 'paneLabels',
+    label: t.settings.paneLabelsLabel,
+    description: t.settings.paneLabelsDesc,
+  },
+]
+
 export interface SettingsHooks {
   /** Apply to live sessions immediately. */
   readonly onChange: (settings: AppSettings) => void
@@ -587,6 +596,9 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     const toggles = document.createElement('div')
     for (const spec of TOGGLES) toggles.append(toggleRow(spec, settings[spec.key]))
 
+    const keyboard = document.createElement('div')
+    for (const spec of KEYBOARD) keyboard.append(toggleRow(spec, settings[spec.key]))
+
     const files = document.createElement('div')
     for (const [label, description, run] of [
       [t.settings.openSettingsFile, t.settings.settingsFilePath, () => api.openSettingsFile()],
@@ -622,6 +634,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
       bar,
       section(t.settings.sectionAppearance, appearance),
       section(t.settings.sectionTerminal, values),
+      section(t.settings.sectionKeyboard, keyboard),
       section(t.settings.sectionMouse, toggles),
       section(t.settings.sectionFiles, files),
       ...(shellIntegration === null

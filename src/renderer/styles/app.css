@@ -738,6 +738,44 @@ body {
   pointer-events: none;
 }
 
+/*
+ * Peek: the pane's title, top right, while the move modifier is held.
+ *
+ * Laid over the terminal instead of taking a row from it, so holding the key
+ * changes nothing about the grid. The whole set is switched by one class on the
+ * canvas, so N panes cost one classList call rather than N.
+ */
+.pane__label {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  /* Above the search bar, which sits at 3 inside the same pane. */
+  z-index: 4;
+  display: none;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 3px 9px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Never in the way of a selection drag or a click into the pane. */
+  pointer-events: none;
+}
+
+/* A frozen pane is off screen; there is nothing there to label. */
+.canvas--peek .pane:not(.pane--frozen) .pane__label:not([hidden]) {
+  display: block;
+}
+
+/* The pane taking keys reads at full strength, like its border does. */
+.pane--focused .pane__label {
+  color: var(--fg);
+}
+
 /* Outside the active region: the browser skips layout and paint for this subtree. */
 .pane--frozen .pane__body {
   content-visibility: hidden;

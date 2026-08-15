@@ -8,6 +8,11 @@ export interface PaneView {
   readonly element: HTMLElement
   readonly body: HTMLElement
   setFocused(focused: boolean): void
+  /**
+   * The title shown while the peek modifier is held. Empty means no label:
+   * a pane nobody named has nothing to say.
+   */
+  setTitle(title: string): void
   setFrozen(frozen: boolean): void
   setRect(rect: Rect): void
 }
@@ -20,15 +25,31 @@ export function createPaneView(paneId: string): PaneView {
   // Body only — no title row, no badges.
   const body = document.createElement('div')
   body.className = 'pane__body'
-  element.append(body)
+
+  /*
+   * The peek label. An overlay rather than a row: a header would take rows off
+   * the terminal for something that is on screen only while a key is held.
+   */
+  const label = document.createElement('div')
+  label.className = 'pane__label'
+  label.hidden = true
+
+  element.append(body, label)
 
   let last: Rect | null = null
+  let lastTitle: string | null = null
 
   return {
     element,
     body,
     setFocused(focused) {
       element.classList.toggle('pane--focused', focused)
+    },
+    setTitle(title) {
+      if (title === lastTitle) return
+      lastTitle = title
+      label.textContent = title
+      label.hidden = title === ''
     },
     setFrozen(frozen) {
       element.classList.toggle('pane--frozen', frozen)
