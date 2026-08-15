@@ -309,10 +309,29 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     markDrop(drag.dropIndex)
   })
 
+  /*
+   * A drop that reorders keeps the preview on screen: the new order arrives with
+   * the next render, after main has written it, and clearing the transforms
+   * before then would flash the old order for a few frames. The render replaces
+   * the rows, transforms and all.
+   */
+  function settleIntoSlot(): void {
+    if (drag === null) return
+    const { boxes, fromIndex, dropIndex, row } = drag
+    const dragged = boxes[fromIndex]
+    if (dragged === undefined) return
+    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
+    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    row.style.transform = `translateY(${String((dropIndex - fromIndex) * slot)}px)`
+    row.classList.remove('sidebar__row--dragging')
+    list.classList.remove('sidebar__list--dragging')
+  }
+
   const finishDrag = (event: PointerEvent): void => {
     if (drag === null || event.pointerId !== drag.pointerId) return
     const { id, fromIndex, dropIndex, moved } = drag
-    endDragVisuals()
+    if (moved && dropIndex !== fromIndex) settleIntoSlot()
+    else endDragVisuals()
     drag = null
     releaseDragPointer(event.pointerId)
     if (!moved) return
