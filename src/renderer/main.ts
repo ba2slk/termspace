@@ -12,10 +12,14 @@ import { resolveFocusBorder } from './focus-border'
 import { barTitle } from './pane-title'
 import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
+import {
+  commandItems as buildCommandItems,
+  sidebarMenuItems as buildSidebarMenuItems,
+} from './menu-model'
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
-import { stepSession } from './session-ring'
+import { gotoTarget, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
@@ -65,8 +69,18 @@ function applyUiScale(percent: number): void {
 
 /**
  * User palettes, added to the bundled ones.
+ *
+ * One list, here: the settings screen shows it and the terminals resolve
+ * against it, and a second copy would let the picker offer a palette that the
+ * panes cannot find.
  */
 let userThemes: readonly TerminalTheme[] = []
+
+/** Re-read the themes folder. The user may have added a file since boot. */
+async function refreshUserThemes(): Promise<readonly TerminalTheme[]> {
+  userThemes = await api.listUserThemes()
+  return userThemes
+}
 
 /** Resolve the configured name to colours, falling back to the default. */
 const currentTheme = (): TerminalTheme => themeById(settings.theme, userThemes)
@@ -109,6 +123,25 @@ const toast = createToast(workspace)
 const current = (): SessionRuntime | undefined =>
   currentName === null ? undefined : runtimes.get(currentName)
 
+/** No session takes keys while a dialog or a sheet is in front. */
+function silenceSessions(): void {
+  for (const runtime of runtimes.values()) runtime.setActive(false)
+}
+
+/**
+ * Hand the canvas back once whatever was in front is gone.
+ *
+ * Those screens only covered it, so the session takes keys again and remeasures
+ * — without the view moving, which is what makes closing feel like nothing
+ * happened.
+ */
+function restoreCanvas(): void {
+  const runtime = current()
+  if (runtime === undefined) return
+  runtime.setActive(true)
+  runtime.relayout()
+}
+
 // ── Empty canvas ────────────────────────────────────────
 
 const placeholder = createEmptyCanvas()
@@ -132,10 +165,6 @@ function revealListWhenEmpty(): void {
 // ── Command menu ────────────────────────────────────────
 
 /**
- * The ☰ menu. Splitting has its own control, leaving occasional app-level
- * commands here.
- */
-/**
  * The chord to print beside a menu item. Empty when the action has been
  * unbound, which the menu reads as "no shortcut" and leaves the hint off.
  */
@@ -144,52 +173,32 @@ function hintFor(id: ActionId): string {
   return chord === undefined ? '' : formatChord(chord, IS_MAC)
 }
 
+/** The ☰ menu: menu-model decides the rows, main says what they do. */
 function commandItems(): readonly CommandItem[] {
   const session = current()
-
-  return [
+  return buildCommandItems(
     {
-      label: t.firstRun.closePane,
-      hint: hintFor('close-pane'),
-      disabled: session === undefined,
-      run: () => session?.closeFocusedPane(),
-    },
-    { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
-    {
-      label: t.firstRun.saveLayout,
-      hint: hintFor('save-layout'),
-      disabled: session === undefined,
-      run: () => void saveCurrentLayout(),
+      hasSession: session !== undefined,
+      hasSessionId: currentName !== null,
+      sidebarVisible: sidebar.visible,
+      hint: hintFor,
     },
     {
-      label: t.firstRun.saveLayoutAs,
-      disabled: session === undefined,
-      run: () => void openSaveSession(),
-    },
-    {
-      label: t.firstRun.editSessionFile,
-      disabled: currentName === null,
-      run: () => {
+      closePane: () => session?.closeFocusedPane(),
+      newSession: openNewSession,
+      saveLayout: () => void saveCurrentLayout(),
+      saveLayoutAs: () => void openSaveSession(),
+      editSessionFile: () => {
         if (currentName !== null) void editSessionFile(currentName)
       },
+      toggleSidebar,
+      settings: openSettings,
+      openSessionsDir: () => api.openSessionsDir(),
+      fullscreen: () => void api.window.toggleFullScreen(),
+      devTools: () => api.window.toggleDevTools(),
+      quit: () => api.window.close(),
     },
-    {
-      label: sidebar.visible ? t.firstRun.hideSessionList : t.firstRun.showSessionList,
-      hint: hintFor('toggle-sidebar'),
-      separatorBefore: true,
-      run: toggleSidebar,
-    },
-    { label: t.firstRun.settings, hint: hintFor('settings'), run: openSettings },
-    { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    {
-      label: t.firstRun.fullscreen,
-      hint: hintFor('fullscreen'),
-      separatorBefore: true,
-      run: () => void api.window.toggleFullScreen(),
-    },
-    { label: t.firstRun.devTools, run: () => api.window.toggleDevTools() },
-    { label: t.firstRun.quit, separatorBefore: true, run: () => api.window.close() },
-  ]
+  )
 }
 
 const appBar = createAppBar(shell, {
@@ -240,46 +249,38 @@ const sidebar = createSessionSidebar(workspace, {
   },
 })
 
-/**
- * Sidebar context menu: session commands over a row, list commands over empty
- * space.
- */
+/** The sidebar's right-click menu; menu-model decides what is in it. */
 const sidebarMenu = createCommandMenu()
 
 function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
-  if (sessionId === null) {
-    return [
-      { label: t.firstRun.newSession, run: openNewSession },
-      { label: t.firstRun.refreshList, separatorBefore: true, run: () => void refreshSidebar() },
-      { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    ]
-  }
-
-  const running = runtimes.has(sessionId)
-  return [
-    { label: running && sessionId === currentName ? t.firstRun.viewing : t.firstRun.open, disabled: running && sessionId === currentName, run: () => void openSession(sessionId) },
+  return buildSidebarMenuItems(
     {
-      label: t.firstRun.endSession,
-      disabled: !running,
-      run: () => endSession(sessionId),
+      sessionId,
+      running: sessionId !== null && runtimes.has(sessionId),
+      isCurrent: sessionId === currentName,
     },
-    /*
-     * Only over the row that is actually on screen. Anywhere else it would read
-     * as "write my layout into that session", which is a different command and
-     * one nobody asked for. Shown disabled rather than hidden, so the rule —
-     * this belongs to the session you are looking at — is visible.
-     */
     {
-      label: t.firstRun.saveLayout,
-      disabled: sessionId !== currentName,
-      run: () => void saveCurrentLayout(),
+      open: () => {
+        if (sessionId !== null) void openSession(sessionId)
+      },
+      endSession: () => {
+        if (sessionId !== null) endSession(sessionId)
+      },
+      saveLayout: () => void saveCurrentLayout(),
+      editSessionFile: () => {
+        if (sessionId !== null) void editSessionFile(sessionId)
+      },
+      renameSession: () => {
+        if (sessionId !== null) sidebar.startRename(sessionId)
+      },
+      newSession: openNewSession,
+      refreshList: () => void refreshSidebar(),
+      openSessionsDir: () => api.openSessionsDir(),
+      deleteSession: () => {
+        if (sessionId !== null) confirmDelete(sessionId)
+      },
     },
-    { label: t.firstRun.editSessionFile, run: () => void editSessionFile(sessionId) },
-    { label: t.firstRun.renameSession, run: () => sidebar.startRename(sessionId) },
-    { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
-    { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    { label: t.firstRun.deleteSession, separatorBefore: true, danger: true, run: () => confirmDelete(sessionId) },
-  ]
+  )
 }
 
 /** Rename a session. The file follows the name, so the id can change under us. */
@@ -304,8 +305,6 @@ async function renameSession(id: string, newName: string): Promise<void> {
     }
     if (currentName === id) currentName = newId
     if (previousName === id) previousName = newId
-    for (const [was, now] of renamedIds) if (now === id) renamedIds.set(was, newId)
-    renamedIds.set(id, newId)
   }
   runtimes.get(newId)?.rename(newName)
   if (newId === currentName) {
@@ -357,7 +356,7 @@ async function editSessionFile(id: string): Promise<void> {
 }
 
 function openNewSession(): void {
-  for (const r of runtimes.values()) r.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
   saveSessionView.openBlank()
@@ -383,8 +382,16 @@ let knownSessions: readonly SessionSummary[] = []
  */
 let previousName: string | null = null
 
-/** Where a renamed session went, for the ids closures captured before it. */
-const renamedIds = new Map<string, string>()
+/**
+ * The key a runtime is filed under right now.
+ *
+ * A rename moves a session to a new id, so a runtime's own closures cannot
+ * carry the id they were made with; they ask by identity instead.
+ */
+function idOf(runtime: SessionRuntime): string | null {
+  for (const [id, candidate] of runtimes) if (candidate === runtime) return id
+  return null
+}
 
 /** How many panes a runtime holds right now, splits and closes included. */
 function livePaneCount(runtime: SessionRuntime): number {
@@ -494,41 +501,49 @@ async function refreshSidebar(): Promise<void> {
 
 // ── Settings ────────────────────────────────────────────
 
-async function saveSettings(next: AppSettings): Promise<void> {
-  settings = await api.saveSettings(next)
-  applyIdleDim(settings.idleDim)
+/**
+ * Put a whole settings object into effect. Writing it is saveSettings' job.
+ *
+ * `settings` is assigned first because currentTheme() reads it.
+ */
+function applySettings(next: AppSettings): void {
+  settings = next
+  applyIdleDim(next.idleDim)
   syncPeek()
-  applyUiScale(settings.uiScale)
+  applyUiScale(next.uiScale)
   applyTerminalBackground(currentTheme())
-  applyFocusBorder(settings, currentTheme())
+  applyFocusBorder(next, currentTheme())
   appBar.syncControls()
-  for (const runtime of runtimes.values()) runtime.applySettings(settings)
+  for (const runtime of runtimes.values()) runtime.applySettings(next)
+}
+
+/** Write, then apply what was actually stored — main may clamp a value. */
+async function saveSettings(next: AppSettings): Promise<void> {
+  applySettings(await api.saveSettings(next))
+}
+
+function applyBindings(next: Bindings): void {
+  bindings = next
+  // The ☰ menu prints the chords, so it is now showing the old ones.
+  appBar.syncControls()
+  placeholder.setBindings(next)
 }
 
 const settingsView = createSettingsView(canvasHost, {
-  onChange: (next) => {
-    settings = next
-    applyIdleDim(next.idleDim)
-    syncPeek()
-    applyUiScale(next.uiScale)
-    applyTerminalBackground(currentTheme())
-    applyFocusBorder(next, currentTheme())
-    appBar.syncControls()
-    for (const runtime of runtimes.values()) runtime.applySettings(next)
+  settings: () => settings,
+  bindings: () => bindings,
+  onPreview: applySettings,
+  onChange: saveSettings,
+  onBindingsChange: async (next) => {
+    applyBindings(next)
+    // Chords may come back dropped, so keep what was actually stored.
+    applyBindings(await api.saveKeybindings(next))
   },
-  onBindingsChange: (next) => {
-    bindings = next
-    // The ☰ menu prints the chords, so it is now showing the old ones.
-    appBar.syncControls()
-    placeholder.setBindings(next)
-  },
+  userThemes: () => userThemes,
+  refreshUserThemes,
   onDismiss: () => {
     settingsView.close()
-    if (currentName !== null) {
-      runtimes.get(currentName)?.setActive(true)
-      // Settings merely covered the canvas; closing must not move the view.
-      runtimes.get(currentName)?.relayout()
-    }
+    restoreCanvas()
   },
 })
 
@@ -590,7 +605,7 @@ async function openSaveSession(): Promise<void> {
   const runtime = current()
   if (runtime === undefined) return
   // No session takes keys while this is open.
-  for (const r of runtimes.values()) r.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   /*
    * A file that named a root keeps it; a root of ~ names nothing, so suggest
@@ -606,18 +621,15 @@ async function openSaveSession(): Promise<void> {
 
 function closeSaveSession(): void {
   saveSessionView.close()
-  if (currentName !== null) {
-    runtimes.get(currentName)?.setActive(true)
-    runtimes.get(currentName)?.relayout()
-  }
+  restoreCanvas()
 }
 
 function openSettings(): void {
   // No session takes keys while this is open.
-  for (const runtime of runtimes.values()) runtime.setActive(false)
+  silenceSessions()
   // No dropdown may remain above the settings.
   appBar.closeMenus()
-  settingsView.open(settings, bindings)
+  settingsView.open()
 }
 
 // ── Close confirmation ──────────────────────────────────
@@ -629,10 +641,7 @@ function openSettings(): void {
 const confirmView = createConfirmCloseView(canvasHost, {
   onCancel: () => {
     confirmView.close()
-    if (currentName !== null) {
-      runtimes.get(currentName)?.setActive(true)
-      runtimes.get(currentName)?.relayout()
-    }
+    restoreCanvas()
   },
 })
 
@@ -658,7 +667,7 @@ api.window.onCloseRequested(() => {
 
 /** No session takes keys while a dialog is up. */
 function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
-  for (const runtime of runtimes.values()) runtime.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
   confirmView.ask(request, onConfirm)
@@ -744,14 +753,9 @@ window.addEventListener('keydown', onAppKeyDown, true)
  * sees. Beyond the ninth there is no shortcut — the list is right there.
  */
 function gotoSession(index: number): void {
-  const target = knownSessions[index]
-  if (target === undefined) return
-  if (target.id === currentName) {
-    if (previousName !== null) void openSession(previousName)
-    return
-  }
-  if (target.error !== null) return
-  void openSession(target.id)
+  const rows = knownSessions.map((s) => ({ id: s.id, broken: s.error !== null }))
+  const target = gotoTarget(rows, index, currentName, previousName)
+  if (target !== null) void openSession(target)
 }
 
 /**
@@ -784,13 +788,15 @@ function showOnly(name: string | null): void {
   // Remember where we came from, so Alt+N can bounce back.
   if (currentName !== null && currentName !== name) previousName = currentName
   for (const [key, element] of hosts) element.hidden = key !== name
+  // Before setActive, which reports the watched pane: a report made while this
+  // still named the session being left would be for the wrong one.
+  currentName = name
   // Every other session first: leaving means giving up WebGL contexts, and the
   // arriving session needs them free before it asks for its own.
   for (const [key, runtime] of runtimes) if (key !== name) runtime.setActive(false)
   if (name !== null) runtimes.get(name)?.setActive(true)
-  currentName = name
-  // setActive above ran while currentName still named the session being left,
-  // so the report it triggered was for the wrong one. Say it again, correctly.
+  // With nothing running, neither loop above ran and nothing has been reported;
+  // ending the last session still has to say that no pane is being watched.
   reportWatchedPane()
   syncPlaceholder()
   revealListWhenEmpty()
@@ -798,10 +804,7 @@ function showOnly(name: string | null): void {
   if (name === null) setTitle(null)
 }
 
-function endSession(from: string): void {
-  // A rename moves a session to a new id, and the runtime's own onEnd closure
-  // was made before that; follow the trail rather than leaking a dead session.
-  const id = renamedIds.get(from) ?? from
+function endSession(id: string): void {
   // Ending a session from the list also means returning to the canvas.
   dismissOverlays()
   runtimes.get(id)?.destroy()
@@ -809,7 +812,6 @@ function endSession(from: string): void {
   hosts.get(id)?.remove()
   hosts.delete(id)
   if (previousName === id) previousName = null
-  for (const [was, now] of renamedIds) if (now === id) renamedIds.delete(was)
 
   if (currentName === id) {
     // If it was the visible one, move to whatever remains.
@@ -858,26 +860,29 @@ async function openSession(id: string): Promise<void> {
   canvasHost.append(element)
   hosts.set(id, element)
 
-  runtimes.set(
-    id,
-    startSession({
-      spec: loaded.spec,
-      file: loaded.file,
-      host: element,
-      settings: () => settings,
-      bindings: () => bindings,
-      theme: currentTheme,
-      onTitle: setTitle,
-      onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
-      onPanesChanged: renderSidebar,
-      // The same write as Alt+Shift+S: a title lives in the layout, so the
-      // whole layout is what there is to save.
-      onPaneRenamed: () => void saveCurrentLayout(),
-      onAttentionChanged: renderSidebar,
-      onWatchedPaneChanged: reportWatchedPane,
-      onEnd: () => endSession(id),
-    }),
-  )
+  const runtime = startSession({
+    spec: loaded.spec,
+    file: loaded.file,
+    host: element,
+    settings: () => settings,
+    bindings: () => bindings,
+    theme: currentTheme,
+    onTitle: setTitle,
+    onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
+    onPanesChanged: renderSidebar,
+    // The same write as Alt+Shift+S: a title lives in the layout, so the
+    // whole layout is what there is to save.
+    onPaneRenamed: () => void saveCurrentLayout(),
+    onAttentionChanged: renderSidebar,
+    onWatchedPaneChanged: reportWatchedPane,
+    // By identity, not by the id captured here: a rename moves the session to a
+    // new key and this closure outlives that.
+    onEnd: () => {
+      const at = idOf(runtime)
+      if (at !== null) endSession(at)
+    },
+  })
+  runtimes.set(id, runtime)
   showOnly(id)
   void refreshSidebar()
 }
@@ -886,16 +891,11 @@ async function openSession(id: string): Promise<void> {
 
 async function boot(): Promise<void> {
   settings = await api.getSettings()
-  bindings = await api.getKeybindings()
-  placeholder.setBindings(bindings)
+  applyBindings(await api.getKeybindings())
   home = await api.userHome()
   // Before any session, or the first pane flashes the default palette.
-  userThemes = await api.listUserThemes()
-  applyIdleDim(settings.idleDim)
-  syncPeek()
-  applyUiScale(settings.uiScale)
-  applyTerminalBackground(currentTheme())
-  applyFocusBorder(settings, currentTheme())
+  await refreshUserThemes()
+  applySettings(settings)
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)

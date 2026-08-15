@@ -6,12 +6,10 @@
  * hand for anyone keeping it in dotfiles.
  */
 import type { AppSettings, Bindings, ShellIntegrationStatus, TerminalTheme } from '../shared/protocol'
-import { defaultBindingsFor } from '../shared/keybindings'
 import { DEFAULT_SETTINGS, isDefaultSetting } from '../shared/settings-defaults'
 import { BUILT_IN_THEMES } from '../shared/terminal-themes'
 import { api } from './api'
 import { normalizeHex } from './focus-border'
-import { IS_MAC } from './platform'
 import { createKeybindingsPanel, type KeybindingsPanel } from './keybindings-view'
 import { t } from './i18n'
 
@@ -132,15 +130,34 @@ const KEYBOARD: readonly ToggleSpec[] = [
 ]
 
 export interface SettingsHooks {
-  /** Apply to live sessions immediately. */
-  readonly onChange: (settings: AppSettings) => void
+  /**
+   * What is in force right now, owned by the caller.
+   *
+   * This screen edits settings it does not hold: one copy, so a value written
+   * here and a value the rest of the app reads can never drift apart.
+   */
+  readonly settings: () => AppSettings
+  readonly bindings: () => Bindings
+  /** Show a half-made change — a slider mid-drag — without writing it. */
+  readonly onPreview: (settings: AppSettings) => void
+  /** Apply and persist. Resolves once the stored values are in force. */
+  readonly onChange: (settings: AppSettings) => Promise<void>
   /** Likewise: a rebound key takes effect before it is written to disk. */
-  readonly onBindingsChange: (bindings: Bindings) => void
+  readonly onBindingsChange: (bindings: Bindings) => Promise<void>
   readonly onDismiss: () => void
+  /**
+   * The user's palettes, owned by the caller.
+   *
+   * The picker and the terminals have to resolve a palette name against the
+   * same list, so this screen reads the one list rather than keeping a second.
+   */
+  readonly userThemes: () => readonly TerminalTheme[]
+  /** Re-read the themes folder into that one list. */
+  readonly refreshUserThemes: () => Promise<unknown>
 }
 
 export interface SettingsView {
-  open(settings: AppSettings, bindings: Bindings): void
+  open(): void
   close(): void
   readonly visible: boolean
   destroy(): void
@@ -163,14 +180,10 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
   layer.append(sheet)
   host.append(layer)
 
-  let settings: AppSettings | null = null
   /** Installed monospace fonts, fetched once on first open. */
   let monoFonts: readonly string[] = []
   let shellIntegration: ShellIntegrationStatus | null = null
-  /** User palettes, appended after the bundled ones. */
-  let userThemes: readonly TerminalTheme[] = []
 
-  let bindings: Bindings = defaultBindingsFor(IS_MAC)
   let tab: 'general' | 'keys' = 'general'
 
   /*
@@ -178,27 +191,14 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
    * it on every redraw of the sheet would drop that mid-keystroke.
    */
   const keysPanel: KeybindingsPanel = createKeybindingsPanel({
-    bindings: () => bindings,
-    onChange: (next) => {
-      bindings = next
-      hooks.onBindingsChange(next)
-      // Chords may come back dropped, so keep what was actually stored.
-      void api.saveKeybindings(next).then((saved) => {
-        bindings = saved
-        hooks.onBindingsChange(saved)
-      })
-    },
+    bindings: hooks.bindings,
+    onChange: (next) => void hooks.onBindingsChange(next),
   })
 
   function commit(next: AppSettings): void {
-    settings = next
-    hooks.onChange(next)
-    // Values may come back clamped, so redraw from what was stored.
-    void api.saveSettings(next).then((saved) => {
-      settings = saved
-      hooks.onChange(saved)
-      render()
-    })
+    // Show it at once; the write follows and may clamp what it stores.
+    hooks.onPreview(next)
+    void hooks.onChange(next).then(render)
   }
 
   /**
@@ -212,19 +212,18 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     ...also: readonly (keyof AppSettings)[]
   ): HTMLButtonElement {
     const keys = [key, ...also]
+    const settings = hooks.settings()
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'settings__reset'
     button.textContent = '↺'
     button.title = t.settings.resetRow
     button.dataset['reset'] = key
-    const snapshot = settings
-    const stock = snapshot === null || keys.every((k) => isDefaultSetting(snapshot, k))
+    const stock = keys.every((k) => isDefaultSetting(settings, k))
     button.disabled = stock
     button.setAttribute('aria-hidden', String(stock))
     button.addEventListener('click', () => {
-      if (settings === null) return
-      const next = { ...settings }
+      const next = { ...hooks.settings() }
       for (const k of keys) Object.assign(next, { [k]: DEFAULT_SETTINGS[k] })
       commit(next)
     })
@@ -261,13 +260,11 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     slider.addEventListener('input', () => {
       const next = Number(slider.value)
       readout.textContent = format(next, field)
-      if (settings !== null) {
-        settings = { ...settings, [field.key]: next }
-        hooks.onChange(settings) // show the change live while dragging
-      }
+      // Show the change live while dragging; the write waits for the release.
+      hooks.onPreview({ ...hooks.settings(), [field.key]: next })
     })
     slider.addEventListener('change', () => {
-      if (settings !== null) commit({ ...settings, [field.key]: Number(slider.value) })
+      commit({ ...hooks.settings(), [field.key]: Number(slider.value) })
     })
 
     control.append(slider, readout, resetButton(field.key))
@@ -305,7 +302,8 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
       segment.textContent = text_
       segment.setAttribute('aria-pressed', String(value === on))
       segment.addEventListener('click', () => {
-        if (settings !== null && settings[spec.key] !== on) commit({ ...settings, [spec.key]: on })
+        const settings = hooks.settings()
+        if (settings[spec.key] !== on) commit({ ...settings, [spec.key]: on })
       })
       group.append(segment)
     }
@@ -438,7 +436,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
 
     select.value = value
     select.addEventListener('change', () => {
-      if (settings !== null) commit({ ...settings, fontFamily: select.value })
+      commit({ ...hooks.settings(), fontFamily: select.value })
     })
 
     control.append(select, resetButton('fontFamily'))
@@ -458,7 +456,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     const label = document.createElement('span')
     label.textContent = t.settings.paletteLabel
     const description = document.createElement('small')
-    const all = [...BUILT_IN_THEMES, ...userThemes]
+    const all = [...BUILT_IN_THEMES, ...hooks.userThemes()]
     const chosen = all.find((t) => t.id === value) ?? all[0]!
     description.textContent = chosen.credit
     text.append(label, description)
@@ -493,7 +491,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     }
     select.value = chosen.id
     select.addEventListener('change', () => {
-      if (settings !== null) commit({ ...settings, theme: select.value })
+      commit({ ...hooks.settings(), theme: select.value })
     })
 
     control.append(swatches, select, resetButton('theme'))
@@ -535,7 +533,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     }
     select.value = mode
     select.addEventListener('change', () => {
-      if (settings !== null) commit({ ...settings, focusBorder: select.value })
+      commit({ ...hooks.settings(), focusBorder: select.value })
     })
 
     const hex = document.createElement('input')
@@ -553,18 +551,18 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     hex.addEventListener('input', () => {
       // Half-typed is not a colour yet, so nothing is applied until it is one.
       const typed = normalizeHex(hex.value)
-      if (typed === null || settings === null) return
-      settings = { ...settings, focusBorderColor: typed }
-      hooks.onChange(settings) // show it live, like a slider being dragged
+      if (typed === null) return
+      // Show it live, like a slider being dragged.
+      hooks.onPreview({ ...hooks.settings(), focusBorderColor: typed })
     })
     hex.addEventListener('change', () => {
-      if (settings === null) return
+      const settings = hooks.settings()
       const typed = normalizeHex(hex.value)
       if (typed === null) hex.value = settings.focusBorderColor
       else commit({ ...settings, focusBorderColor: typed })
     })
     hex.addEventListener('blur', () => {
-      if (settings !== null) hex.value = settings.focusBorderColor
+      hex.value = hooks.settings().focusBorderColor
     })
 
     control.append(select, hex, resetButton('focusBorder', 'focusBorderColor'))
@@ -606,7 +604,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     }
     select.value = value
     select.addEventListener('change', () => {
-      if (settings !== null) commit({ ...settings, locale: select.value })
+      commit({ ...hooks.settings(), locale: select.value })
     })
 
     control.append(select, resetButton('locale'))
@@ -615,7 +613,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
   }
 
   function render(): void {
-    if (settings === null) return
+    const settings = hooks.settings()
     const body = document.createElement('div')
     body.className = 'settings__body'
 
@@ -757,9 +755,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     get visible() {
       return !layer.hidden
     },
-    open(next, nextBindings) {
-      settings = next
-      bindings = nextBindings
+    open() {
       render()
       layer.hidden = false
       sheet.scrollTop = 0
@@ -771,8 +767,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
         })
       }
       // The folder can change between opens, so re-read each time.
-      void api.listUserThemes().then((themes) => {
-        userThemes = themes
+      void hooks.refreshUserThemes().then(() => {
         if (!layer.hidden) render()
       })
       // Panes come and go, so whether the hook is live is only true right now.
