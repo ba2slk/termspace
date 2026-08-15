@@ -4,7 +4,7 @@
  * node-pty is native, so it is required lazily to keep the bundler out of it.
  */
 import { execFile } from 'node:child_process'
-import { readFileSync, readlinkSync } from 'node:fs'
+import { readFileSync, readlinkSync, statSync } from 'node:fs'
 import { promisify } from 'node:util'
 import type { PaneAttention, PtyExit, SpawnRequest, SpawnResult } from '../shared/protocol'
 import {
@@ -139,6 +139,15 @@ export function createPtyHost(): PtyHost {
     spawn(request, handlers) {
       if (entries.has(request.paneId)) {
         return { ok: false, message: `Pane already exists: ${request.paneId}` }
+      }
+
+      try {
+        const stats = statSync(request.cwd)
+        if (!stats.isDirectory()) {
+          return { ok: false, message: `Not a directory: ${request.cwd}` }
+        }
+      } catch {
+        return { ok: false, message: `Directory does not exist: ${request.cwd}` }
       }
 
       let child: import('node-pty').IPty
