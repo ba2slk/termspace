@@ -1,6 +1,6 @@
 {
   "name": "termspace",
-  "version": "1.1.0-beta.1",
+  "version": "1.1.0-beta.3",
   "description": "A scrolling-tiling terminal for small screens — panes on a horizontal canvas wider than the window",
   "author": "ba2slk",
   "license": "MIT",
