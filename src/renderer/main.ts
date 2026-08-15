@@ -65,8 +65,18 @@ function applyUiScale(percent: number): void {
 
 /**
  * User palettes, added to the bundled ones.
+ *
+ * One list, here: the settings screen shows it and the terminals resolve
+ * against it, and a second copy would let the picker offer a palette that the
+ * panes cannot find.
  */
 let userThemes: readonly TerminalTheme[] = []
+
+/** Re-read the themes folder. The user may have added a file since boot. */
+async function refreshUserThemes(): Promise<readonly TerminalTheme[]> {
+  userThemes = await api.listUserThemes()
+  return userThemes
+}
 
 /** Resolve the configured name to colours, falling back to the default. */
 const currentTheme = (): TerminalTheme => themeById(settings.theme, userThemes)
@@ -522,6 +532,8 @@ const settingsView = createSettingsView(canvasHost, {
     appBar.syncControls()
     placeholder.setBindings(next)
   },
+  userThemes: () => userThemes,
+  refreshUserThemes,
   onDismiss: () => {
     settingsView.close()
     if (currentName !== null) {
@@ -890,7 +902,7 @@ async function boot(): Promise<void> {
   placeholder.setBindings(bindings)
   home = await api.userHome()
   // Before any session, or the first pane flashes the default palette.
-  userThemes = await api.listUserThemes()
+  await refreshUserThemes()
   applyIdleDim(settings.idleDim)
   syncPeek()
   applyUiScale(settings.uiScale)

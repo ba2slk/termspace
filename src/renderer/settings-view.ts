@@ -137,6 +137,15 @@ export interface SettingsHooks {
   /** Likewise: a rebound key takes effect before it is written to disk. */
   readonly onBindingsChange: (bindings: Bindings) => void
   readonly onDismiss: () => void
+  /**
+   * The user's palettes, owned by the caller.
+   *
+   * The picker and the terminals have to resolve a palette name against the
+   * same list, so this screen reads the one list rather than keeping a second.
+   */
+  readonly userThemes: () => readonly TerminalTheme[]
+  /** Re-read the themes folder into that one list. */
+  readonly refreshUserThemes: () => Promise<unknown>
 }
 
 export interface SettingsView {
@@ -167,8 +176,6 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
   /** Installed monospace fonts, fetched once on first open. */
   let monoFonts: readonly string[] = []
   let shellIntegration: ShellIntegrationStatus | null = null
-  /** User palettes, appended after the bundled ones. */
-  let userThemes: readonly TerminalTheme[] = []
 
   let bindings: Bindings = defaultBindingsFor(IS_MAC)
   let tab: 'general' | 'keys' = 'general'
@@ -458,7 +465,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     const label = document.createElement('span')
     label.textContent = t.settings.paletteLabel
     const description = document.createElement('small')
-    const all = [...BUILT_IN_THEMES, ...userThemes]
+    const all = [...BUILT_IN_THEMES, ...hooks.userThemes()]
     const chosen = all.find((t) => t.id === value) ?? all[0]!
     description.textContent = chosen.credit
     text.append(label, description)
@@ -771,8 +778,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
         })
       }
       // The folder can change between opens, so re-read each time.
-      void api.listUserThemes().then((themes) => {
-        userThemes = themes
+      void hooks.refreshUserThemes().then(() => {
         if (!layer.hidden) render()
       })
       // Panes come and go, so whether the hook is live is only true right now.

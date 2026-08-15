@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_BINDINGS } from '../shared/keybindings'
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults'
-import type { AppSettings } from '../shared/protocol'
+import { DEFAULT_THEME, themeById } from '../shared/terminal-themes'
+import type { AppSettings, TerminalTheme } from '../shared/protocol'
 import type { SettingsView } from './settings-view'
 
 /*
@@ -10,11 +11,14 @@ import type { SettingsView } from './settings-view'
  */
 const saveSettings = vi.fn<(next: AppSettings) => Promise<AppSettings>>(async (next) => next)
 
+/** What the themes folder holds right now; a test may add to it mid-run. */
+let onDisk: readonly TerminalTheme[] = []
+
 vi.stubGlobal('termspace', {
   saveSettings,
   saveKeybindings: async (next: unknown) => next,
   listMonoFonts: async () => [],
-  listUserThemes: async () => [],
+  listUserThemes: async () => onDisk,
   shellIntegrationStatus: async () => null,
 })
 
@@ -31,15 +35,26 @@ function open(settings: Partial<AppSettings>): void {
 const reset = (key: keyof AppSettings): HTMLButtonElement =>
   document.body.querySelector<HTMLButtonElement>(`button[data-reset="${key}"]`)!
 
+/** Stands in for main: it owns the palettes and reads them back the same way. */
+let owned: readonly TerminalTheme[] = []
+
 beforeEach(() => {
   document.body.innerHTML = ''
   saveSettings.mockClear()
+  onDisk = []
+  owned = []
   view = createSettingsView(document.body, {
     onChange: (next) => {
       latest = next
     },
     onBindingsChange: () => {},
     onDismiss: () => {},
+    userThemes: () => owned,
+    // Main's job: one fetch, into the one list both sides read.
+    refreshUserThemes: async () => {
+      owned = await Promise.resolve(onDisk)
+      return owned
+    },
   })
 })
 
@@ -140,5 +155,44 @@ describe('the focused pane border', () => {
     reset('focusBorder').click()
     expect(latest.focusBorder).toBe(DEFAULT_SETTINGS.focusBorder)
     expect(latest.focusBorderColor).toBe(DEFAULT_SETTINGS.focusBorderColor)
+  })
+})
+
+describe('user palettes', () => {
+  /** A palette that is not bundled, so only the folder can supply it. */
+  const mine: TerminalTheme = {
+    ...DEFAULT_THEME,
+    id: 'mine',
+    label: 'Mine',
+    credit: 'me',
+    background: '#0b0b0b',
+  }
+
+  const themeSelect = (): HTMLSelectElement =>
+    document.body.querySelector<HTMLSelectElement>('select[data-setting="theme"]')!
+
+  it('offers a palette dropped into the folder while the app was running', async () => {
+    onDisk = [mine]
+    open({})
+    await vi.waitFor(() => {
+      expect([...themeSelect().options].map((o) => o.value)).toContain('mine')
+    })
+  })
+
+  /*
+   * The bug this pins: the screen used to fetch the folder into a copy of its
+   * own, so a palette picked here resolved to nothing for the panes and they
+   * fell back to the default.
+   */
+  it('leaves the picked palette resolvable by the panes', async () => {
+    onDisk = [mine]
+    open({})
+    await vi.waitFor(() => {
+      expect([...themeSelect().options].map((o) => o.value)).toContain('mine')
+    })
+    themeSelect().value = 'mine'
+    themeSelect().dispatchEvent(new Event('change', { bubbles: true }))
+    expect(latest.theme).toBe('mine')
+    expect(themeById(latest.theme, owned).background).toBe('#0b0b0b')
   })
 })
