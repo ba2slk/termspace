@@ -16,6 +16,7 @@ import {
   type Viewport,
 } from './layout-geometry'
 import { PANE_GAP, type Layout } from './layout-model'
+import { isDefaultPaneTitle } from './pane-title'
 import { createPaneView, type PaneView } from './pane-view'
 import { indicatorMetrics, scrollForThumbDelta } from './scroll-indicator'
 import { FRAME_MS, glideFactor, nextBurst, wheelPixels } from './wheel-physics'
@@ -382,6 +383,11 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       rects = paneRects(layout, host.clientHeight)
       syncIndicator()
 
+      const titles = new Map<string, string>()
+      for (const column of layout.columns) {
+        for (const pane of column.panes) titles.set(pane.id, pane.title)
+      }
+
       const alive = new Set<string>()
       for (const rect of rects) {
         alive.add(rect.paneId)
@@ -394,6 +400,8 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         }
         view.setRect(rect)
         view.setFocused(rect.paneId === layout.focusedPaneId)
+        const title = titles.get(rect.paneId) ?? ''
+        view.setTitle(isDefaultPaneTitle(title) ? '' : title)
       }
 
       for (const [paneId, view] of views) {

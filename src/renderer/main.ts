@@ -9,6 +9,7 @@ import { api } from './api'
 import { createAppBar } from './app-bar'
 import { createEmptyCanvas } from './empty-canvas'
 import { barTitle } from './pane-title'
+import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
@@ -638,6 +639,26 @@ function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
   sidebarMenu.close()
   confirmView.ask(request, onConfirm)
 }
+
+/*
+ * Peek: while the move modifier is held, every pane on screen says its title.
+ *
+ * Held state is tracked rather than read off each event, so an Alt+Arrow chord
+ * keeps the labels up for as long as the key is down. Blur ends it: a keyup
+ * delivered to another window would otherwise leave them on screen forever.
+ */
+let peeking = false
+
+function applyPeek(event: PeekEvent): void {
+  const next = nextPeek(peeking, event, IS_MAC)
+  if (next === peeking) return
+  peeking = next
+  canvasHost.classList.toggle('canvas--peek', next)
+}
+
+window.addEventListener('keydown', (event) => applyPeek({ t: 'keydown', code: event.code }), true)
+window.addEventListener('keyup', (event) => applyPeek({ t: 'keyup', code: event.code }), true)
+window.addEventListener('blur', () => applyPeek({ t: 'blur' }))
 
 // ── App shortcuts ───────────────────────────────────────
 
