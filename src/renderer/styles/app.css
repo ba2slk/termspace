@@ -204,7 +204,9 @@ body {
 
 .command-menu {
   position: fixed;
-  z-index: 50;
+  /* Top of the ladder: a menu taking clicks may not be drawn across, and it
+     opens over the bar, a sheet, the overview and a toast alike. */
+  z-index: 7;
   min-width: 250px;
   padding: 4px;
   background: var(--bg-raised);
