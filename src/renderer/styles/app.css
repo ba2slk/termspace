@@ -747,19 +747,19 @@ body {
  */
 .pane__label {
   position: absolute;
-  top: 4px;
-  right: 6px;
+  top: 6px;
+  right: 8px;
   /* Above the search bar, which sits at 3 inside the same pane. */
   z-index: 4;
   display: none;
-  max-width: calc(100% - 12px);
+  max-width: calc(100% - 16px);
   overflow: hidden;
-  padding: 1px 6px;
+  padding: 3px 9px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--fg-dim);
-  font-size: var(--fs-ui-sm);
+  font-size: var(--fs-ui);
   white-space: nowrap;
   text-overflow: ellipsis;
   /* Never in the way of a selection drag or a click into the pane. */
