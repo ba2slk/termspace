@@ -207,41 +207,61 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     readonly pointerId: number
     moved: boolean
     dropIndex: number
+    /** Row positions taken before any row was pushed; a pushed row measures wrong. */
+    boxes: readonly RowBox[]
+    ghost: HTMLElement | null
   } | null = null
   let swallowClick = false
 
   function rowBoxes(): RowBox[] {
     return shownRows.map((row) => {
       const box = row.getBoundingClientRect()
-      return { top: box.top, height: box.height }
+      return { top: box.top, height: box.height, left: box.left, width: box.width }
     })
   }
 
   /*
-   * The other rows step aside as the pointer moves, so the list already looks
-   * the way it will after the drop. Only transforms change: the DOM order stays
-   * until the drop commits, which is what lets a cancel snap everything back.
+   * A preview of the drop: the other rows step aside at once and a faint copy
+   * of the dragged row sits in the slot it would take. Transforms only; the DOM
+   * order changes when the drop commits, so a cancel leaves nothing to undo.
    */
   function markDrop(index: number): void {
     if (drag === null) return
-    const boxes = rowBoxes()
-    const dragged = boxes[drag.fromIndex]
+    const { boxes, fromIndex } = drag
+    const dragged = boxes[fromIndex]
     if (dragged === undefined) return
-    // The slot is the row plus whatever the list puts between rows.
-    const next = boxes[drag.fromIndex + 1] ?? boxes[drag.fromIndex - 1]
-    const slot =
-      next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
+    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
     shownRows.forEach((row, i) => {
-      if (i === drag!.fromIndex) return
-      const shift = rowShift(i, drag!.fromIndex, index)
+      if (i === fromIndex) return
+      const shift = rowShift(i, fromIndex, index)
       row.style.transform = shift === 0 ? '' : `translateY(${String(shift * slot)}px)`
     })
+    // The slot the row would take: its own when nothing moved, else where the
+    // shifted rows left the hole.
+    const hole = index === fromIndex ? fromIndex : index < fromIndex ? index : index + 1
+    const holeTop = boxes[hole]?.top ?? dragged.top + slot * (hole - fromIndex)
+    if (drag.ghost === null) {
+      const ghost = drag.row.cloneNode(true) as HTMLElement
+      ghost.classList.remove('sidebar__row--dragging')
+      ghost.classList.add('sidebar__row--ghost')
+      ghost.style.transform = ''
+      list.append(ghost)
+      drag.ghost = ghost
+    }
+    // Placed within the list, which scrolls: viewport y → list content y.
+    const listBox = list.getBoundingClientRect()
+    drag.ghost.style.top = `${String(holeTop - listBox.top + list.scrollTop)}px`
+    drag.ghost.style.left = `${String((dragged.left ?? listBox.left) - listBox.left)}px`
+    drag.ghost.style.width = `${String(dragged.width ?? listBox.width)}px`
   }
 
   function endDragVisuals(): void {
     if (drag !== null) {
       drag.row.classList.remove('sidebar__row--dragging')
       drag.row.style.transform = ''
+      drag.ghost?.remove()
+      drag.ghost = null
     }
     for (const row of shownRows) row.style.transform = ''
     list.classList.remove('sidebar__list--dragging')
@@ -288,6 +308,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       pointerId: event.pointerId,
       moved: false,
       dropIndex: index,
+      boxes: [],
+      ghost: null,
     }
   })
 
@@ -298,12 +320,13 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.moved = true
       // The wheel dial rebuilds rows; it cannot run under a live drag.
       clearPreview()
+      drag.boxes = rowBoxes()
       drag.row.classList.add('sidebar__row--dragging')
       list.classList.add('sidebar__list--dragging')
       list.setPointerCapture(event.pointerId)
     }
     drag.row.style.transform = `translateY(${String(event.clientY - drag.startY)}px)`
-    drag.dropIndex = dropIndexAt(event.clientY, rowBoxes(), drag.fromIndex)
+    drag.dropIndex = dropIndexAt(event.clientY, drag.boxes, drag.fromIndex)
     markDrop(drag.dropIndex)
   })
 
