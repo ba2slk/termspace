@@ -374,6 +374,32 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     width = next
     // Passed as a CSS variable so sidebar and canvas read the same value.
     host.style.setProperty('--sidebar-w', `${String(next)}px`)
+    fitHints()
+  }
+
+  // ── Shortcut hints ───────────────────────────────────
+
+  /** Clear space the chord wants beside the count before it is worth printing. */
+  const HINT_ROOM = 10
+
+  /**
+   * The chord sits out of flow, so it cannot squeeze the name; what it can do
+   * is land on top of it. Rows without room for both drop the chord.
+   */
+  function fitHints(): void {
+    for (const item of shownRows) {
+      const open = item.querySelector<HTMLElement>('.sidebar__open')
+      const meta = item.querySelector<HTMLElement>('.sidebar__meta')
+      const hint = item.querySelector<HTMLElement>('.sidebar__hint')
+      if (open === null || meta === null || hint === null) continue
+      const box = open.getBoundingClientRect()
+      // Nothing has been laid out yet (hidden sidebar, headless test): leave it.
+      if (box.width === 0) continue
+      const pad = Number.parseFloat(getComputedStyle(open).paddingRight)
+      const free = box.right - pad - meta.getBoundingClientRect().right
+      const needed = hint.getBoundingClientRect().width + HINT_ROOM
+      item.classList.toggle('sidebar__row--tight', free < needed)
+    }
   }
 
   // ── Rendering ────────────────────────────────────────
@@ -528,11 +554,13 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       const rows = sessions.map((s, i) => row(s, live.get(s.id), s.id === current, i))
       shownRows = rows
       list.replaceChildren(...rows)
+      fitHints()
     },
 
     setVisible(next) {
       visible = next
       host.classList.toggle('canvas--sidebar-hidden', !next)
+      if (next) fitHints()
     },
 
     setWidth(next) {

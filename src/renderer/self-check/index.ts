@@ -52,6 +52,7 @@ import {
   checkSaveSession,
   checkSessionStepShortcut,
   checkShellIntegration,
+  checkSidebarNarrowName,
   checkSidebarReorder,
   checkWheelSessionSwitch,
 } from './sessions'
@@ -140,6 +141,7 @@ const GROUPS: Readonly<
     await checkSessionStepShortcut(report)
     await checkAttentionClearsOnReturn(report)
     await checkSidebarReorder(report)
+    await checkSidebarNarrowName(report)
     await checkErrorRowStaysDraggable(report)
   },
 }

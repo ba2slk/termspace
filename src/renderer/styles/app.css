@@ -407,6 +407,7 @@ body {
 }
 
 .sidebar__open {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1795,9 +1796,14 @@ button.keys__chord:hover {
   background: var(--fill-danger);
 }
 
-/* The shortcut is a shortcut, not a label — it appears when the mouse is there. */
+/* The shortcut is a shortcut, not a label — it appears when the mouse is there.
+   Out of flow: in flow it reserved its width even while invisible, and the name
+   ellipsised against a gap holding nothing. */
 .sidebar__hint {
-  flex: 0 0 auto;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: var(--fs-ui-sm);
   color: var(--fg-faint);
   opacity: 0;
@@ -1806,6 +1812,11 @@ button.keys__chord:hover {
 
 .sidebar__row:hover .sidebar__hint {
   opacity: 1;
+}
+
+/* Too narrow to print the chord beside the name: the name is worth more. */
+.sidebar__row--tight:hover .sidebar__hint {
+  opacity: 0;
 }
 
 /* Pointing at the strip lights up the bar it moves. */

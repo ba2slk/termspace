@@ -215,6 +215,9 @@ English copy.
   claims to know a session's shape without showing it
 - **Dragging a session row changes the list order**, a plain click still opens a session,
   and the order survives pressing refresh and restarting the app
+- **Narrowing the list spends the width on names, not on the `Alt+N` chord**: the chord
+  is hover-only, and it used to hold its column even while invisible, so names ellipsised
+  against a gap showing nothing. A row with no room left drops the chord instead
 
 **Copy notification**
 - Selecting by drag shows the "Copied · N chars" toast, which disappears shortly after
