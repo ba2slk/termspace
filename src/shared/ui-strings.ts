@@ -143,6 +143,7 @@ const en = {
     close: 'Close (Esc)',
     sectionAppearance: 'Appearance',
     sectionTerminal: 'Terminal',
+    sectionKeyboard: 'Keyboard',
     sectionMouse: 'Mouse',
     sectionFiles: 'Files',
     uiScaleLabel: 'Interface size',
@@ -182,7 +183,7 @@ const en = {
     shiftPanningLabel: 'Shift + wheel horizontal scroll',
     shiftPanningDesc: 'Shift-rolling over a terminal pans the canvas too',
     paneLabelsLabel: 'Show pane titles while holding the move key',
-    paneLabelsDesc: 'Alt on Linux, Cmd on macOS',
+    paneLabelsDesc: 'Every pane on screen shows its title while Alt (Cmd on macOS) is down',
 
     fontLabel: 'Font',
     fontListFailed: 'Could not read the font list. Put the name in the settings file yourself',
@@ -438,6 +439,7 @@ const ko: Catalog = {
     close: '닫기 (Esc)',
     sectionAppearance: '화면',
     sectionTerminal: '터미널',
+    sectionKeyboard: '키보드',
     sectionMouse: '마우스',
     sectionFiles: '파일',
     uiScaleLabel: '화면 배율',
@@ -477,7 +479,7 @@ const ko: Catalog = {
     shiftPanningLabel: 'Shift + 휠로 가로 스크롤',
     shiftPanningDesc: '터미널 위에서도 Shift를 누르고 굴리면 캔버스가 움직입니다',
     paneLabelsLabel: '이동 키를 누르는 동안 pane 제목 표시',
-    paneLabelsDesc: 'Linux는 Alt, macOS는 Cmd',
+    paneLabelsDesc: 'Alt(macOS는 Cmd)를 누르고 있는 동안 화면의 모든 pane에 제목이 보입니다',
 
     fontLabel: '글꼴',
     fontListFailed: '글꼴 목록을 읽지 못했습니다. 설정 파일에 이름을 직접 적어 주세요',
