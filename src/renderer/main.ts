@@ -19,7 +19,7 @@ import {
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
-import { stepSession } from './session-ring'
+import { gotoTarget, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
@@ -753,14 +753,9 @@ window.addEventListener('keydown', onAppKeyDown, true)
  * sees. Beyond the ninth there is no shortcut — the list is right there.
  */
 function gotoSession(index: number): void {
-  const target = knownSessions[index]
-  if (target === undefined) return
-  if (target.id === currentName) {
-    if (previousName !== null) void openSession(previousName)
-    return
-  }
-  if (target.error !== null) return
-  void openSession(target.id)
+  const rows = knownSessions.map((s) => ({ id: s.id, broken: s.error !== null }))
+  const target = gotoTarget(rows, index, currentName, previousName)
+  if (target !== null) void openSession(target)
 }
 
 /**
