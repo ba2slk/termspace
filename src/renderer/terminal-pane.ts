@@ -5,12 +5,15 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { WebLinksAddon, type ILinkProviderOptions } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import type { TerminalTheme } from '../shared/terminal-themes'
 import { api } from './api'
 import { guardImeDoubleCommit } from './ime-double-commit'
 import { ImeTrace } from './ime-trace'
+import { isLinkActivation } from './link-activation'
+import { IS_MAC } from './platform'
 import { shellQuote } from '../shared/shell-quote'
 import { FRAME_MS, glideFactor, nextBurst, wheelPixels } from './wheel-physics'
 
@@ -50,6 +53,17 @@ function toXtermTheme(theme: TerminalTheme): ITheme {
     scrollbarSliderHoverBackground: 'rgba(255,255,255,0.20)',
     scrollbarSliderActiveBackground: 'rgba(255,255,255,0.28)',
   }
+}
+
+/**
+ * Open a link a program printed, on the modifier click alone.
+ *
+ * Main decides which schemes may leave the app; the URL is never opened in the
+ * page, which would turn the renderer into an arbitrary web page.
+ */
+function openLink(event: MouseEvent, uri: string): void {
+  if (!isLinkActivation(event, IS_MAC)) return
+  api.openExternal(uri)
 }
 
 export interface TerminalPane {
@@ -155,6 +169,9 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     // Only the focused pane blinks; twenty blinking cursors is noise.
     cursorBlink: false,
     scrollback: options.appearance.scrollback,
+    // OSC 8 hyperlinks. Without a handler xterm asks through confirm() and
+    // opens the page itself; these take the same route as a plain URL.
+    linkHandler: { activate: openLink },
     theme: toXtermTheme(options.appearance.theme),
   })
 
@@ -167,6 +184,26 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
 
   const search = new SearchAddon()
   term.loadAddon(search)
+
+  const linkOptions: ILinkProviderOptions = {}
+  /*
+   * Test seam, like __term below: which cells a link covers is decided inside
+   * the addon and drawn on a canvas, so the self-check cannot read it back.
+   */
+  if (import.meta.env.VITE_SELFCHECK === '1') {
+    type Cell = { x: number; y: number }
+    const seam = element as unknown as {
+      __hoveredLink?: { text: string; range: { start: Cell; end: Cell } } | null
+    }
+    linkOptions.hover = (_event, text, range) => {
+      seam.__hoveredLink = { text, range }
+    }
+    linkOptions.leave = () => {
+      seam.__hoveredLink = null
+    }
+  }
+  // Plain URLs in output. The addon's own opener is window.open; ours is main.
+  term.loadAddon(new WebLinksAddon(openLink, linkOptions))
 
   /*
    * Decoration colours must be opaque #RRGGBB, so they can't ride the theme;
