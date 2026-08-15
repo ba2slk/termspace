@@ -12,6 +12,10 @@ import { resolveFocusBorder } from './focus-border'
 import { barTitle } from './pane-title'
 import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
+import {
+  commandItems as buildCommandItems,
+  sidebarMenuItems as buildSidebarMenuItems,
+} from './menu-model'
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
@@ -161,10 +165,6 @@ function revealListWhenEmpty(): void {
 // ── Command menu ────────────────────────────────────────
 
 /**
- * The ☰ menu. Splitting has its own control, leaving occasional app-level
- * commands here.
- */
-/**
  * The chord to print beside a menu item. Empty when the action has been
  * unbound, which the menu reads as "no shortcut" and leaves the hint off.
  */
@@ -173,52 +173,32 @@ function hintFor(id: ActionId): string {
   return chord === undefined ? '' : formatChord(chord, IS_MAC)
 }
 
+/** The ☰ menu: menu-model decides the rows, main says what they do. */
 function commandItems(): readonly CommandItem[] {
   const session = current()
-
-  return [
+  return buildCommandItems(
     {
-      label: t.firstRun.closePane,
-      hint: hintFor('close-pane'),
-      disabled: session === undefined,
-      run: () => session?.closeFocusedPane(),
-    },
-    { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
-    {
-      label: t.firstRun.saveLayout,
-      hint: hintFor('save-layout'),
-      disabled: session === undefined,
-      run: () => void saveCurrentLayout(),
+      hasSession: session !== undefined,
+      hasSessionId: currentName !== null,
+      sidebarVisible: sidebar.visible,
+      hint: hintFor,
     },
     {
-      label: t.firstRun.saveLayoutAs,
-      disabled: session === undefined,
-      run: () => void openSaveSession(),
-    },
-    {
-      label: t.firstRun.editSessionFile,
-      disabled: currentName === null,
-      run: () => {
+      closePane: () => session?.closeFocusedPane(),
+      newSession: openNewSession,
+      saveLayout: () => void saveCurrentLayout(),
+      saveLayoutAs: () => void openSaveSession(),
+      editSessionFile: () => {
         if (currentName !== null) void editSessionFile(currentName)
       },
+      toggleSidebar,
+      settings: openSettings,
+      openSessionsDir: () => api.openSessionsDir(),
+      fullscreen: () => void api.window.toggleFullScreen(),
+      devTools: () => api.window.toggleDevTools(),
+      quit: () => api.window.close(),
     },
-    {
-      label: sidebar.visible ? t.firstRun.hideSessionList : t.firstRun.showSessionList,
-      hint: hintFor('toggle-sidebar'),
-      separatorBefore: true,
-      run: toggleSidebar,
-    },
-    { label: t.firstRun.settings, hint: hintFor('settings'), run: openSettings },
-    { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    {
-      label: t.firstRun.fullscreen,
-      hint: hintFor('fullscreen'),
-      separatorBefore: true,
-      run: () => void api.window.toggleFullScreen(),
-    },
-    { label: t.firstRun.devTools, run: () => api.window.toggleDevTools() },
-    { label: t.firstRun.quit, separatorBefore: true, run: () => api.window.close() },
-  ]
+  )
 }
 
 const appBar = createAppBar(shell, {
@@ -269,46 +249,38 @@ const sidebar = createSessionSidebar(workspace, {
   },
 })
 
-/**
- * Sidebar context menu: session commands over a row, list commands over empty
- * space.
- */
+/** The sidebar's right-click menu; menu-model decides what is in it. */
 const sidebarMenu = createCommandMenu()
 
 function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
-  if (sessionId === null) {
-    return [
-      { label: t.firstRun.newSession, run: openNewSession },
-      { label: t.firstRun.refreshList, separatorBefore: true, run: () => void refreshSidebar() },
-      { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    ]
-  }
-
-  const running = runtimes.has(sessionId)
-  return [
-    { label: running && sessionId === currentName ? t.firstRun.viewing : t.firstRun.open, disabled: running && sessionId === currentName, run: () => void openSession(sessionId) },
+  return buildSidebarMenuItems(
     {
-      label: t.firstRun.endSession,
-      disabled: !running,
-      run: () => endSession(sessionId),
+      sessionId,
+      running: sessionId !== null && runtimes.has(sessionId),
+      isCurrent: sessionId === currentName,
     },
-    /*
-     * Only over the row that is actually on screen. Anywhere else it would read
-     * as "write my layout into that session", which is a different command and
-     * one nobody asked for. Shown disabled rather than hidden, so the rule —
-     * this belongs to the session you are looking at — is visible.
-     */
     {
-      label: t.firstRun.saveLayout,
-      disabled: sessionId !== currentName,
-      run: () => void saveCurrentLayout(),
+      open: () => {
+        if (sessionId !== null) void openSession(sessionId)
+      },
+      endSession: () => {
+        if (sessionId !== null) endSession(sessionId)
+      },
+      saveLayout: () => void saveCurrentLayout(),
+      editSessionFile: () => {
+        if (sessionId !== null) void editSessionFile(sessionId)
+      },
+      renameSession: () => {
+        if (sessionId !== null) sidebar.startRename(sessionId)
+      },
+      newSession: openNewSession,
+      refreshList: () => void refreshSidebar(),
+      openSessionsDir: () => api.openSessionsDir(),
+      deleteSession: () => {
+        if (sessionId !== null) confirmDelete(sessionId)
+      },
     },
-    { label: t.firstRun.editSessionFile, run: () => void editSessionFile(sessionId) },
-    { label: t.firstRun.renameSession, run: () => sidebar.startRename(sessionId) },
-    { label: t.firstRun.newSession, separatorBefore: true, run: openNewSession },
-    { label: t.firstRun.openSessionsDir, run: () => api.openSessionsDir() },
-    { label: t.firstRun.deleteSession, separatorBefore: true, danger: true, run: () => confirmDelete(sessionId) },
-  ]
+  )
 }
 
 /** Rename a session. The file follows the name, so the id can change under us. */
