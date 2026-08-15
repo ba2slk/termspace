@@ -10,7 +10,7 @@
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
-import { dropIndexAt, REORDER_THRESHOLD, type RowBox } from './sidebar-reorder'
+import { dropIndexAt, REORDER_THRESHOLD, rowShift, type RowBox } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
@@ -217,14 +217,25 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     })
   }
 
+  /*
+   * The other rows step aside as the pointer moves, so the list already looks
+   * the way it will after the drop. Only transforms change: the DOM order stays
+   * until the drop commits, which is what lets a cancel snap everything back.
+   */
   function markDrop(index: number): void {
-    for (const row of shownRows) {
-      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
-    }
-    const others = shownRows.filter((_, i) => i !== drag?.fromIndex)
-    const before = others[index]
-    if (before !== undefined) before.classList.add('sidebar__row--drop-before')
-    else others[others.length - 1]?.classList.add('sidebar__row--drop-after')
+    if (drag === null) return
+    const boxes = rowBoxes()
+    const dragged = boxes[drag.fromIndex]
+    if (dragged === undefined) return
+    // The slot is the row plus whatever the list puts between rows.
+    const next = boxes[drag.fromIndex + 1] ?? boxes[drag.fromIndex - 1]
+    const slot =
+      next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    shownRows.forEach((row, i) => {
+      if (i === drag!.fromIndex) return
+      const shift = rowShift(i, drag!.fromIndex, index)
+      row.style.transform = shift === 0 ? '' : `translateY(${String(shift * slot)}px)`
+    })
   }
 
   function endDragVisuals(): void {
@@ -232,9 +243,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.row.classList.remove('sidebar__row--dragging')
       drag.row.style.transform = ''
     }
-    for (const row of shownRows) {
-      row.classList.remove('sidebar__row--drop-before', 'sidebar__row--drop-after')
-    }
+    for (const row of shownRows) row.style.transform = ''
     list.classList.remove('sidebar__list--dragging')
   }
 

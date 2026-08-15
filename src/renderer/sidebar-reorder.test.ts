@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropIndexAt, type RowBox } from './sidebar-reorder'
+import { dropIndexAt, rowShift, type RowBox } from './sidebar-reorder'
 
 // Three 40px rows stacked from y=100.
 const rows: RowBox[] = [
@@ -31,5 +31,21 @@ describe('dropIndexAt', () => {
 
   it('handles an empty list', () => {
     expect(dropIndexAt(10, [], 0)).toBe(0)
+  })
+})
+
+describe('rowShift', () => {
+  it('nothing moves while the row is over its own slot', () => {
+    expect([0, 1, 2, 3].map((i) => rowShift(i, 1, 1))).toEqual([0, 0, 0, 0])
+  })
+  it('dragging down: the rows it passes step up one slot', () => {
+    expect([0, 1, 2, 3].map((i) => rowShift(i, 0, 2))).toEqual([0, -1, -1, 0])
+  })
+  it('dragging up: the rows it passes step down one slot', () => {
+    expect([0, 1, 2, 3].map((i) => rowShift(i, 3, 1))).toEqual([0, 1, 1, 0])
+  })
+  it('to the very top and the very bottom', () => {
+    expect([0, 1, 2].map((i) => rowShift(i, 2, 0))).toEqual([1, 1, 0])
+    expect([0, 1, 2].map((i) => rowShift(i, 0, 2))).toEqual([0, -1, -1])
   })
 })

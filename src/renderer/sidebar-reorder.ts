@@ -28,3 +28,16 @@ export function dropIndexAt(
   }
   return index
 }
+
+/**
+ * How far a row that is not being dragged has to move, in slots, for the list
+ * to look as it will after the drop: rows between the origin and the target
+ * step one slot toward the hole the dragged row left. Post-removal `dropIndex`,
+ * like `dropIndexAt` returns.
+ */
+export function rowShift(index: number, fromIndex: number, dropIndex: number): -1 | 0 | 1 {
+  if (index === fromIndex) return 0
+  if (dropIndex > fromIndex && index > fromIndex && index <= dropIndex) return -1
+  if (dropIndex < fromIndex && index >= dropIndex && index < fromIndex) return 1
+  return 0
+}
