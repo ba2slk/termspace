@@ -9,14 +9,17 @@ import type { SettingsView } from './settings-view'
  * `api` is captured when the module loads, so the stub has to be on window
  * before the import — hence the dynamic import below.
  */
+
+/**
+ * The write the owner does on the view's behalf. The view never persists
+ * anything itself, so this stands in for main's saveSettings.
+ */
 const saveSettings = vi.fn<(next: AppSettings) => Promise<AppSettings>>(async (next) => next)
 
 /** What the themes folder holds right now; a test may add to it mid-run. */
 let onDisk: readonly TerminalTheme[] = []
 
 vi.stubGlobal('termspace', {
-  saveSettings,
-  saveKeybindings: async (next: unknown) => next,
   listMonoFonts: async () => [],
   listUserThemes: async () => onDisk,
   shellIntegrationStatus: async () => null,
@@ -29,7 +32,7 @@ let latest: AppSettings
 
 function open(settings: Partial<AppSettings>): void {
   latest = { ...DEFAULT_SETTINGS, ...settings }
-  view.open(latest, DEFAULT_BINDINGS)
+  view.open()
 }
 
 const reset = (key: keyof AppSettings): HTMLButtonElement =>
@@ -43,11 +46,19 @@ beforeEach(() => {
   saveSettings.mockClear()
   onDisk = []
   owned = []
+  latest = DEFAULT_SETTINGS
   view = createSettingsView(document.body, {
-    onChange: (next) => {
+    settings: () => latest,
+    bindings: () => DEFAULT_BINDINGS,
+    onPreview: (next) => {
       latest = next
     },
-    onBindingsChange: () => {},
+    // What main does: apply at once, write, then apply what came back.
+    onChange: async (next) => {
+      latest = next
+      latest = await saveSettings(next)
+    },
+    onBindingsChange: async () => {},
     onDismiss: () => {},
     userThemes: () => owned,
     // Main's job: one fetch, into the one list both sides read.

@@ -504,33 +504,43 @@ async function refreshSidebar(): Promise<void> {
 
 // ── Settings ────────────────────────────────────────────
 
-async function saveSettings(next: AppSettings): Promise<void> {
-  settings = await api.saveSettings(next)
-  applyIdleDim(settings.idleDim)
+/**
+ * Put a whole settings object into effect. Writing it is saveSettings' job.
+ *
+ * `settings` is assigned first because currentTheme() reads it.
+ */
+function applySettings(next: AppSettings): void {
+  settings = next
+  applyIdleDim(next.idleDim)
   syncPeek()
-  applyUiScale(settings.uiScale)
+  applyUiScale(next.uiScale)
   applyTerminalBackground(currentTheme())
-  applyFocusBorder(settings, currentTheme())
+  applyFocusBorder(next, currentTheme())
   appBar.syncControls()
-  for (const runtime of runtimes.values()) runtime.applySettings(settings)
+  for (const runtime of runtimes.values()) runtime.applySettings(next)
+}
+
+/** Write, then apply what was actually stored — main may clamp a value. */
+async function saveSettings(next: AppSettings): Promise<void> {
+  applySettings(await api.saveSettings(next))
+}
+
+function applyBindings(next: Bindings): void {
+  bindings = next
+  // The ☰ menu prints the chords, so it is now showing the old ones.
+  appBar.syncControls()
+  placeholder.setBindings(next)
 }
 
 const settingsView = createSettingsView(canvasHost, {
-  onChange: (next) => {
-    settings = next
-    applyIdleDim(next.idleDim)
-    syncPeek()
-    applyUiScale(next.uiScale)
-    applyTerminalBackground(currentTheme())
-    applyFocusBorder(next, currentTheme())
-    appBar.syncControls()
-    for (const runtime of runtimes.values()) runtime.applySettings(next)
-  },
-  onBindingsChange: (next) => {
-    bindings = next
-    // The ☰ menu prints the chords, so it is now showing the old ones.
-    appBar.syncControls()
-    placeholder.setBindings(next)
+  settings: () => settings,
+  bindings: () => bindings,
+  onPreview: applySettings,
+  onChange: saveSettings,
+  onBindingsChange: async (next) => {
+    applyBindings(next)
+    // Chords may come back dropped, so keep what was actually stored.
+    applyBindings(await api.saveKeybindings(next))
   },
   userThemes: () => userThemes,
   refreshUserThemes,
@@ -629,7 +639,7 @@ function openSettings(): void {
   for (const runtime of runtimes.values()) runtime.setActive(false)
   // No dropdown may remain above the settings.
   appBar.closeMenus()
-  settingsView.open(settings, bindings)
+  settingsView.open()
 }
 
 // ── Close confirmation ──────────────────────────────────
@@ -898,16 +908,11 @@ async function openSession(id: string): Promise<void> {
 
 async function boot(): Promise<void> {
   settings = await api.getSettings()
-  bindings = await api.getKeybindings()
-  placeholder.setBindings(bindings)
+  applyBindings(await api.getKeybindings())
   home = await api.userHome()
   // Before any session, or the first pane flashes the default palette.
   await refreshUserThemes()
-  applyIdleDim(settings.idleDim)
-  syncPeek()
-  applyUiScale(settings.uiScale)
-  applyTerminalBackground(currentTheme())
-  applyFocusBorder(settings, currentTheme())
+  applySettings(settings)
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)
