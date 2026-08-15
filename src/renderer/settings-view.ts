@@ -119,6 +119,11 @@ const TOGGLES: readonly ToggleSpec[] = [
     label: t.settings.shiftPanningLabel,
     description: t.settings.shiftPanningDesc,
   },
+  {
+    key: 'paneLabels',
+    label: t.settings.paneLabelsLabel,
+    description: t.settings.paneLabelsDesc,
+  },
 ]
 
 export interface SettingsHooks {

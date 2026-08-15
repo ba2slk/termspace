@@ -477,6 +477,7 @@ async function refreshSidebar(): Promise<void> {
 async function saveSettings(next: AppSettings): Promise<void> {
   settings = await api.saveSettings(next)
   applyIdleDim(settings.idleDim)
+  syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
   appBar.syncControls()
@@ -487,6 +488,7 @@ const settingsView = createSettingsView(canvasHost, {
   onChange: (next) => {
     settings = next
     applyIdleDim(next.idleDim)
+    syncPeek()
     applyUiScale(next.uiScale)
     applyTerminalBackground(currentTheme())
     appBar.syncControls()
@@ -649,11 +651,20 @@ function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
  */
 let peeking = false
 
+/*
+ * The key state and the labels are kept apart so that turning the setting off
+ * mid-hold clears them at once, and turning it back on brings them straight
+ * back without waiting for the modifier to be pressed again.
+ */
+function syncPeek(): void {
+  canvasHost.classList.toggle('canvas--peek', peeking && settings.paneLabels === 1)
+}
+
 function applyPeek(event: PeekEvent): void {
   const next = nextPeek(peeking, event, IS_MAC)
   if (next === peeking) return
   peeking = next
-  canvasHost.classList.toggle('canvas--peek', next)
+  syncPeek()
 }
 
 window.addEventListener('keydown', (event) => applyPeek({ t: 'keydown', code: event.code }), true)
@@ -859,6 +870,7 @@ async function boot(): Promise<void> {
   // Before any session, or the first pane flashes the default palette.
   userThemes = await api.listUserThemes()
   applyIdleDim(settings.idleDim)
+  syncPeek()
   applyUiScale(settings.uiScale)
   applyTerminalBackground(currentTheme())
   sidebar.setWidth(settings.sidebarWidth)

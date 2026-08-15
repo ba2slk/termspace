@@ -70,6 +70,8 @@ export interface AppSettings {
    * to aim at, so the bar stands in as a target that is always there.
    */
   readonly barPanning: number
+  /** 1 shows every pane's title while the move modifier is held. */
+  readonly paneLabels: number
   /**
    * How far to dim unfocused panes, in percent.
    *

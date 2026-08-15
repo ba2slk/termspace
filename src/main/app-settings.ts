@@ -28,6 +28,7 @@ export const SETTING_LIMITS = {
   copyOnSelect: { min: 0, max: 1, step: 1 },
   shiftPanning: { min: 0, max: 1, step: 1 },
   barPanning: { min: 0, max: 1, step: 1 },
+  paneLabels: { min: 0, max: 1, step: 1 },
   idleDim: { min: 0, max: 60, step: 5 },
   notifications: { min: 0, max: 1, step: 1 },
   // Below 80 the chrome stops being readable; above 160 it crowds out the canvas.
@@ -82,6 +83,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     copyOnSelect: Math.round(clampNumber(input['copyOnSelect'], 'copyOnSelect')),
     shiftPanning: Math.round(clampNumber(input['shiftPanning'], 'shiftPanning')),
     barPanning: Math.round(clampNumber(input['barPanning'], 'barPanning')),
+    paneLabels: Math.round(clampNumber(input['paneLabels'], 'paneLabels')),
     idleDim: clampNumber(input['idleDim'], 'idleDim'),
     notifications: Math.round(clampNumber(input['notifications'], 'notifications')),
     fontFamily: cleanFontFamily(input['fontFamily']),
@@ -106,6 +108,7 @@ const HEADER = `# Termspace settings
 # copyOnSelect        1 copies as soon as a mouse selection is made
 # shiftPanning        1 pans the canvas horizontally with Shift+wheel
 # barPanning          1 pans the canvas by wheeling over the centre title
+# paneLabels          1 shows every pane's title while the move key is held (Alt, Cmd on macOS)
 # idleDim             how much unfocused panes are dimmed (%)
 # notifications       1 lets a program's OSC 9 / OSC 777 reach the desktop, unless you are watching that pane
 # fontFamily          terminal font. Empty uses the default stack

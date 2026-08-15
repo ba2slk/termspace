@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   copyOnSelect: 1,
   shiftPanning: 1,
   barPanning: 1,
+  paneLabels: 1,
   idleDim: 15,
   // A program asking to be noticed reaches the desktop by default; the bell
   // never does.

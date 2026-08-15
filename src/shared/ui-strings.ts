@@ -181,6 +181,8 @@ const en = {
     barPanningDesc: 'Rolling the wheel over the centre title pans the canvas',
     shiftPanningLabel: 'Shift + wheel horizontal scroll',
     shiftPanningDesc: 'Shift-rolling over a terminal pans the canvas too',
+    paneLabelsLabel: 'Show pane titles while holding the move key',
+    paneLabelsDesc: 'Alt on Linux, Cmd on macOS',
 
     fontLabel: 'Font',
     fontListFailed: 'Could not read the font list. Put the name in the settings file yourself',
@@ -474,6 +476,8 @@ const ko: Catalog = {
     barPanningDesc: '가운데 제목 위에서 휠을 굴리면 캔버스가 좌우로 움직입니다',
     shiftPanningLabel: 'Shift + 휠로 가로 스크롤',
     shiftPanningDesc: '터미널 위에서도 Shift를 누르고 굴리면 캔버스가 움직입니다',
+    paneLabelsLabel: '이동 키를 누르는 동안 pane 제목 표시',
+    paneLabelsDesc: 'Linux는 Alt, macOS는 Cmd',
 
     fontLabel: '글꼴',
     fontListFailed: '글꼴 목록을 읽지 못했습니다. 설정 파일에 이름을 직접 적어 주세요',

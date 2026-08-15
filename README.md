@@ -154,7 +154,7 @@ tmux itself.
 | `Alt+Shift` + `W` | `Cmd+Shift` + `W` | Close pane |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
-| Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title |
+| Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title (can be turned off in settings) |
 | `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |
 | `F2` | `F2` | Rename the selected pane, in the overview |
 | `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |
