@@ -147,7 +147,7 @@ export function loadSettingsSync(env: NodeJS.ProcessEnv): AppSettings {
   try {
     return normalizeSettings(parseYaml(readFileSync(settingsFile(env), 'utf8')))
   } catch {
-    return { ...DEFAULT_SETTINGS }
+    return { ...DEFAULT_SETTINGS } // Missing or malformed — use defaults
   }
 }
 
