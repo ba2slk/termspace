@@ -119,6 +119,25 @@ const toast = createToast(workspace)
 const current = (): SessionRuntime | undefined =>
   currentName === null ? undefined : runtimes.get(currentName)
 
+/** No session takes keys while a dialog or a sheet is in front. */
+function silenceSessions(): void {
+  for (const runtime of runtimes.values()) runtime.setActive(false)
+}
+
+/**
+ * Hand the canvas back once whatever was in front is gone.
+ *
+ * Those screens only covered it, so the session takes keys again and remeasures
+ * — without the view moving, which is what makes closing feel like nothing
+ * happened.
+ */
+function restoreCanvas(): void {
+  const runtime = current()
+  if (runtime === undefined) return
+  runtime.setActive(true)
+  runtime.relayout()
+}
+
 // ── Empty canvas ────────────────────────────────────────
 
 const placeholder = createEmptyCanvas()
@@ -367,7 +386,7 @@ async function editSessionFile(id: string): Promise<void> {
 }
 
 function openNewSession(): void {
-  for (const r of runtimes.values()) r.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
   saveSessionView.openBlank()
@@ -546,11 +565,7 @@ const settingsView = createSettingsView(canvasHost, {
   refreshUserThemes,
   onDismiss: () => {
     settingsView.close()
-    if (currentName !== null) {
-      runtimes.get(currentName)?.setActive(true)
-      // Settings merely covered the canvas; closing must not move the view.
-      runtimes.get(currentName)?.relayout()
-    }
+    restoreCanvas()
   },
 })
 
@@ -612,7 +627,7 @@ async function openSaveSession(): Promise<void> {
   const runtime = current()
   if (runtime === undefined) return
   // No session takes keys while this is open.
-  for (const r of runtimes.values()) r.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   /*
    * A file that named a root keeps it; a root of ~ names nothing, so suggest
@@ -628,15 +643,12 @@ async function openSaveSession(): Promise<void> {
 
 function closeSaveSession(): void {
   saveSessionView.close()
-  if (currentName !== null) {
-    runtimes.get(currentName)?.setActive(true)
-    runtimes.get(currentName)?.relayout()
-  }
+  restoreCanvas()
 }
 
 function openSettings(): void {
   // No session takes keys while this is open.
-  for (const runtime of runtimes.values()) runtime.setActive(false)
+  silenceSessions()
   // No dropdown may remain above the settings.
   appBar.closeMenus()
   settingsView.open()
@@ -651,10 +663,7 @@ function openSettings(): void {
 const confirmView = createConfirmCloseView(canvasHost, {
   onCancel: () => {
     confirmView.close()
-    if (currentName !== null) {
-      runtimes.get(currentName)?.setActive(true)
-      runtimes.get(currentName)?.relayout()
-    }
+    restoreCanvas()
   },
 })
 
@@ -680,7 +689,7 @@ api.window.onCloseRequested(() => {
 
 /** No session takes keys while a dialog is up. */
 function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
-  for (const runtime of runtimes.values()) runtime.setActive(false)
+  silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
   confirmView.ask(request, onConfirm)
