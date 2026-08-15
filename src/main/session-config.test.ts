@@ -169,6 +169,18 @@ describe('createExampleSession', () => {
     expect(result.spec!.columns.flatMap((c) => c.panes).every((p) => p.kind === 'pane')).toBe(true)
   })
 
+  it('the example depends on nothing but the home directory (#29)', async () => {
+    await createExampleSession(dir)
+    const result = await loadSession(dir, 'example', env)
+    const panes = result.spec!.columns.flatMap((c) => c.panes).filter((p) => p.kind === 'pane')
+    // Every pane starts in the home; ~/dev is nobody's default directory.
+    for (const pane of panes) expect(pane.cwd).toBe(env.HOME)
+    // Commands must exist on Linux and mac alike; journalctl is Linux only.
+    const commands = panes.map((p) => p.command ?? p.prefill).filter((c) => c !== null)
+    expect(commands.length).toBeGreaterThan(0)
+    for (const command of commands) expect(command).toMatch(/^(echo|ls)\b/)
+  })
+
   it('returns the existing path without overwriting', async () => {
     const file = await createExampleSession(dir)
     await writeFile(file, 'name: mine\ncolumns:\n  - panes:\n      - {}\n')
