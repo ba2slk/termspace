@@ -41,6 +41,15 @@ describe('BUILT_IN_THEMES', () => {
     }
   })
 
+  it("every palette's accent is one of its own colours", () => {
+    // The point of the accent is to belong to the palette; a new value invented
+    // here would clash with the very colours it sits among.
+    for (const theme of BUILT_IN_THEMES) {
+      const own = COLOR_KEYS.map((key) => String(theme[key]))
+      expect(own, theme.id).toContain(theme.accent)
+    }
+  })
+
   it('ids are unique', () => {
     const ids = BUILT_IN_THEMES.map((t) => t.id)
     expect(new Set(ids).size).toBe(ids.length)

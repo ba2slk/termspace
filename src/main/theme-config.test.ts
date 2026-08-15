@@ -37,6 +37,22 @@ describe('parseTheme', () => {
     expect(parseTheme('mine', { ...full(), selection: 'rgba(255,255,255,0.2)' })).not.toBeNull()
   })
 
+  it('takes the accent from the file when it names one', () => {
+    expect(parseTheme('mine', { ...full(), accent: '#ff0000' })?.accent).toBe('#ff0000')
+  })
+
+  it('reads a palette with no accent as meaning its blue', () => {
+    const noAccent = full()
+    delete noAccent['accent']
+    expect(parseTheme('mine', noAccent)?.accent).toBe(DEFAULT_THEME.blue)
+  })
+
+  it('rejects an accent that is not a colour', () => {
+    expect(parseTheme('mine', { ...full(), accent: 'blue; position: fixed' })?.accent).toBe(
+      DEFAULT_THEME.blue,
+    )
+  })
+
   it('rejects non-objects', () => {
     expect(parseTheme('mine', null)).toBeNull()
     expect(parseTheme('mine', '색')).toBeNull()

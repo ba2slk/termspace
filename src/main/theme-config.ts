@@ -56,6 +56,10 @@ export function parseTheme(id: string, raw: unknown): TerminalTheme | null {
     colors[key] = value.trim()
   }
 
+  // The signature colour is optional: files written before it existed, and
+  // most hand-made ones, simply mean "the blue".
+  const accent = isColor(input['accent']) ? input['accent'].trim() : colors['blue']!
+
   const label = typeof input['label'] === 'string' && input['label'].trim() !== ''
     ? input['label'].trim().slice(0, 40)
     : id
@@ -65,6 +69,7 @@ export function parseTheme(id: string, raw: unknown): TerminalTheme | null {
     label,
     credit: 'User-supplied palette',
     ...colors,
+    accent,
   } as TerminalTheme
 }
 
@@ -103,6 +108,9 @@ export const EXAMPLE_THEME = `# Termspace terminal palette
 # selection   drag highlight. Translucent, so the text stays readable
 # black…white the eight ANSI colours programs ask for by name
 # bright…     their bold variants
+# accent      the colour this palette is known by, used for the focused pane
+#             border when that setting follows the palette. Optional: the blue
+#             is used when it is missing
 #
 # All twenty colours are required. Miss one and the whole file is skipped —
 # a palette that is half yours and half the default helps nobody.
