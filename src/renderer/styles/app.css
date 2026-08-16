@@ -1118,7 +1118,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--danger);
-  z-index: 1;
+  z-index: 4;
 }
 
 /* ── Settings ─────────────────────────────────────────── */
