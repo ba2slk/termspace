@@ -90,6 +90,8 @@ export interface AppSettings {
    * with. It is shown inside the app instead.
    */
   readonly notifications: number
+  /** 1 opens new panes in the focused pane's current directory instead of the session root. */
+  readonly inheritWorkingDir: number
   /**
    * Terminal font. Empty means the app's default stack.
    *
@@ -299,6 +301,7 @@ export interface TermspaceApi {
   /** Open the palettes folder, creating it with an example if needed. */
   openThemesDir(): void
   spawn(request: SpawnRequest): Promise<SpawnResult>
+  cwdOf(paneId: string): Promise<string | null>
   /**
    * Foreground command per pane, null when idle. A snapshot for the overview;
    * only main holds the ptys and can read /proc.

@@ -93,6 +93,12 @@ const NOTIFICATIONS: ToggleSpec = {
   description: t.settings.notificationsDesc,
 }
 
+const INHERIT_WORKING_DIR: ToggleSpec = {
+  key: 'inheritWorkingDir',
+  label: t.settings.inheritWorkingDirLabel,
+  description: t.settings.inheritWorkingDirDesc,
+}
+
 /** The app's own size, kept away from the terminal's fields on purpose. */
 const APPEARANCE: FieldSpec = {
   key: 'uiScale',
@@ -666,6 +672,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     values.append(fontRow(settings.fontFamily))
     for (const field of FIELDS) values.append(fieldRow(field, settings[field.key]))
     values.append(toggleRow(NOTIFICATIONS, settings.notifications))
+    values.append(toggleRow(INHERIT_WORKING_DIR, settings.inheritWorkingDir))
 
     const appearance = document.createElement('div')
     appearance.append(fieldRow(APPEARANCE, settings.uiScale))

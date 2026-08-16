@@ -35,6 +35,7 @@ const api: TermspaceApi = {
   listUserThemes: () => ipcRenderer.invoke('themes:list'),
   openThemesDir: () => ipcRenderer.send('themes:reveal'),
   spawn: (request: SpawnRequest) => ipcRenderer.invoke('pty:spawn', request),
+  cwdOf: (paneId) => ipcRenderer.invoke('pty:cwd', paneId),
   foregroundCommands: (paneIds) => ipcRenderer.invoke('pty:foreground-commands', paneIds),
   paneTitles: (paneIds) => ipcRenderer.invoke('pty:titles', paneIds),
   setVisiblePane: (paneId) => ipcRenderer.send('app:visible-pane', paneId),

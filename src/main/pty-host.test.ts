@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { spawn } from 'node-pty'
 import { describe, expect, it } from 'vitest'
-import { createPtyHost, foregroundCommandViaPs } from './pty-host'
+import { createPtyHost, cwdViaLsof, foregroundCommandViaPs } from './pty-host'
 
 /*
  * The ps path is what mac uses instead of /proc, and no mac runs this suite
@@ -22,6 +22,17 @@ const hasPs = ((): boolean => {
 const hasBash = ((): boolean => {
   try {
     execFileSync('sh', ['-c', 'command -v bash'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+const hasLsof = ((): boolean => {
+  try {
+    execFileSync('lsof', ['-a', '-d', 'cwd', '-p', String(process.pid), '-Fn'], {
+      stdio: 'ignore',
+    })
     return true
   } catch {
     return false
@@ -85,5 +96,35 @@ describe('createPtyHost spawn', () => {
     expect(result.ok).toBe(false)
     expect(result.message).toContain('Directory does not exist')
     expect(result.message).toContain('/path/does/not/exist/surely/12345')
+  })
+
+  it('reads cwd of spawned process', async () => {
+    const host = createPtyHost()
+    const result = host.spawn(
+      {
+        paneId: 'test-cwd-pane',
+        cwd: process.cwd(),
+        shell: '/bin/sh',
+        command: null,
+        prefill: null,
+        cols: 80,
+        rows: 24,
+      },
+      {
+        onData: () => {},
+        onExit: () => {},
+        onAttention: () => {},
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(host.cwdOf('test-cwd-pane')).toBe(process.cwd())
+    host.kill('test-cwd-pane')
+  })
+})
+
+describe.skipIf(!hasLsof)('cwdViaLsof', () => {
+  it('reads process cwd', () => {
+    expect(cwdViaLsof(process.pid)).toBe(process.cwd())
   })
 })

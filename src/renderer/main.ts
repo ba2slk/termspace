@@ -863,6 +863,7 @@ async function openSession(id: string): Promise<void> {
   const runtime = startSession({
     spec: loaded.spec,
     file: loaded.file,
+    home,
     host: element,
     settings: () => settings,
     bindings: () => bindings,
