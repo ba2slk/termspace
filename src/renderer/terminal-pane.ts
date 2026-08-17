@@ -49,12 +49,11 @@ function toXtermTheme(theme: TerminalTheme): ITheme {
     brightWhite: theme.brightWhite,
     // The ruler is on for its width alone; its 1px border must not show.
     overviewRulerBorder: theme.background,
-    // Scrollbar: only there while scrolling and 3px thin, so it can be brighter
-    // than a resting bar. Literal values because xterm's ITheme cannot take
-    // var(); the resting value is --thumb-lit, the others step up from it.
-    scrollbarSliderBackground: 'rgba(255,255,255,0.40)',
-    scrollbarSliderHoverBackground: 'rgba(255,255,255,0.50)',
-    scrollbarSliderActiveBackground: 'rgba(255,255,255,0.60)',
+    // Scrollbar. Literal values because xterm's ITheme cannot take var();
+    // they mirror --thumb, --thumb-hover and --thumb-active in tokens.css.
+    scrollbarSliderBackground: 'rgba(255,255,255,0.4)',
+    scrollbarSliderHoverBackground: 'rgba(255,255,255,0.5)',
+    scrollbarSliderActiveBackground: 'rgba(255,255,255,0.6)',
   }
 }
 
@@ -173,7 +172,7 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     cursorBlink: false,
     scrollback: options.appearance.scrollback,
     // xterm sizes the scrollbar from this. The fit addon would also reserve it,
-    // which is why applySize counts the columns itself. Mirrors --term-scroll-w
+    // which is why applySize counts the columns itself. Mirrors --scroll-w
     // in tokens.css.
     overviewRuler: { width: 3 },
     // OSC 8 hyperlinks. Without a handler xterm asks through confirm() and

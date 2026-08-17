@@ -280,7 +280,7 @@ English copy.
 - **The pane background follows the palette too** (checking only the terminal colors
   misses the inner padding staying a different color, looking like a black border inside
   the rounded corners)
-- The terminal scrollbar is as thick as `--term-scroll-w` (xterm 6 draws its own
+- The terminal scrollbar is as thick as `--scroll-w` (xterm 6 draws its own
   scrollbar from the overviewRuler option, so the ::-webkit-scrollbar rules were being
   ignored wholesale — you have to measure the drawn width, not check that the rule
   exists)

@@ -58,13 +58,14 @@
   /* The danger fill is --danger at 10%; color-mix keeps them in sync. */
   --fill-danger: color-mix(in srgb, var(--danger) 10%, transparent);
 
-  /* Scrollbar thumbs: page chrome at rest/hover, terminal at rest/hover,
-     and the canvas indicator when the title-bar strip lights it up. */
+  /* Scrollbar thumbs. Page chrome (settings, lists) at rest/hover; the canvas
+     indicator and the terminal bar share the other ramp: rest, hover (the
+     title-bar strip lighting the canvas bar), and dragging. */
   --thumb-faint: rgba(255, 255, 255, 0.12);
-  --thumb: rgba(255, 255, 255, 0.18);
-  --thumb-hover: rgba(255, 255, 255, 0.2);
   --thumb-hover-strong: rgba(255, 255, 255, 0.24);
-  --thumb-lit: rgba(255, 255, 255, 0.4);
+  --thumb: rgba(255, 255, 255, 0.4);
+  --thumb-hover: rgba(255, 255, 255, 0.5);
+  --thumb-active: rgba(255, 255, 255, 0.6);
 
   /* Overlay backdrops, by weight of what they interrupt: saving shows the
      canvas through; confirming a close is heavier on purpose. */
@@ -84,15 +85,13 @@
   --ctl-h: calc(26px * var(--ui-scale));
   /* That control plus 4px of air above it; the bar is bottom aligned. */
   --bar-h: calc(var(--ctl-h) + 4px);
-  /* Every scrollbar in the app, sideways or down, is this thick. */
-  --scroll-w: 5px;
-  /* The terminal's own bar, thinner than the canvas indicator because it
-     overlays text rather than sitting beside it. */
-  --term-scroll-w: 3px;
+  /* Every scrollbar in the app, sideways or down, is this thick. Thin, because
+     the terminal's bar overlays text; the canvas bar matches it. */
+  --scroll-w: 3px;
   /* How long that bar stays after the last scroll tick. Long enough to grab,
      short enough that it is gone by the time you read what you scrolled to. */
   --scroll-linger: 2000ms;
-  /* Grown above and below the canvas thumb: 5px is not something to aim at. */
+  /* Grown above and below the canvas thumb: 3px is not something to aim at. */
   --scroll-hit: 6px;
   --dur: 180ms;
 

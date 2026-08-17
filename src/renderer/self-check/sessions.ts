@@ -1032,7 +1032,7 @@ export async function checkResizeSync(report: Report): Promise<void> {
   )
   const sliderWidth = slider === null ? -1 : Math.round(slider.getBoundingClientRect().width)
   const wanted = Math.round(
-    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--term-scroll-w')),
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scroll-w')),
   )
   report['terminalScrollbarWidth'] = slider === null ? 'none' : `${String(sliderWidth)}px`
   report['terminalScrollbarIsThin'] =
@@ -1040,7 +1040,7 @@ export async function checkResizeSync(report: Report): Promise<void> {
       ? 'FAIL (no scrollbar)'
       : sliderWidth === wanted
         ? 'ok'
-        : `FAIL (${String(sliderWidth)}px — --term-scroll-w is ${String(wanted)}px)`
+        : `FAIL (${String(sliderWidth)}px — --scroll-w is ${String(wanted)}px)`
 
   const before = await askPty()
   report['ptySizeBeforeResize'] = before
