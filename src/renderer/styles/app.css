@@ -554,7 +554,9 @@ body {
   top: 0;
   bottom: 0;
   left: 0;
-  width: var(--edge);
+  /* One px short of the inset: at either end of the scroll range the outermost
+     pane's edge sits exactly at the inset, and its focus ring lives in that px. */
+  width: calc(var(--edge) - 1px);
   background: var(--bg-canvas);
   pointer-events: none;
   z-index: 3;
