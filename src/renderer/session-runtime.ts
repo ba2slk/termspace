@@ -148,6 +148,7 @@ export interface StartSessionOptions {
   readonly spec: SessionSpec
   /** Absolute path of the session YAML, shown on config error cards. */
   readonly file: string
+  readonly home: string
   readonly host: HTMLElement
   /** Settings as a function, since they change while the app runs. */
   readonly settings: () => AppSettings
@@ -207,6 +208,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   let layout = createLayout(seeds)
   const records = new Map<string, PaneRecord>()
   const searchBar = createSearchBar()
+  const failedPanes = new Set<string>()
 
   // ── Renderer budget ──────────────────────────────────
   let frozen: string[] = []
@@ -463,27 +465,30 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── Pane creation ────────────────────────────────────
 
-  function spawnPane(paneId: string, paneSpec: PaneSpec, terminal: TerminalPane): void {
-    void api
-      .spawn({
+  function spawnPane(paneId: string, paneSpec: PaneSpec, terminal: TerminalPane, cwdOverride?: string | Promise<string>): void {
+    void (async () => {
+      const cwd = cwdOverride !== undefined ? await cwdOverride : paneSpec.cwd
+      paneSpecs.set(paneId, { ...paneSpec, cwd })
+      return api.spawn({
         paneId,
-        cwd: paneSpec.cwd,
+        cwd,
         shell: spec.shell,
         command: paneSpec.command,
         prefill: paneSpec.prefill,
         cols: terminal.cols,
         rows: terminal.rows,
       })
-      .then((result) => {
-        if (result.ok) return
-        // Keep the pane and write the reason into it.
-        terminal.write(
-          `\r\n\x1b[38;2;207;122;106m${result.message ?? t.runtime.spawnFailed}\x1b[0m\r\n`,
-        )
-      })
+    })().then((result) => {
+      if (result.ok) return
+      failedPanes.add(paneId)
+      // Keep the pane and write the reason into it.
+      terminal.write(
+        `\r\n\x1b[38;2;207;122;106m${result.message ?? t.runtime.spawnFailed}\x1b[0m\r\n`,
+      )
+    })
   }
 
-  function mountPane(paneId: string): void {
+  function mountPane(paneId: string, cwdOverride?: string | Promise<string>): void {
     const body = canvas.paneBody(paneId)
     if (body === null) return
 
@@ -531,12 +536,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     body.append(terminal.element)
     records.set(paneId, { terminal, resizeTimer: null })
     terminal.setSize()
-    spawnPane(paneId, paneSpec, terminal)
+    spawnPane(paneId, paneSpec, terminal, cwdOverride)
   }
 
   function unmountPane(paneId: string): void {
     const record = records.get(paneId)
     if (record === undefined) return
+    failedPanes.delete(paneId)
     if (record.resizeTimer !== null) window.clearTimeout(record.resizeTimer)
     record.terminal.dispose()
     records.delete(paneId)
@@ -594,21 +600,31 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     }
   }
 
-  function focusedCwd(): string {
-    return paneSpecs.get(layout.focusedPaneId)?.cwd ?? spec.cwd
+  async function focusedCwd(focusedPaneId = layout.focusedPaneId): Promise<string> {
+    if (options.settings().inheritWorkingDir === 0) return spec.cwd
+
+    if (failedPanes.has(focusedPaneId)) {
+      const failedPaneCwd = paneSpecs.get(focusedPaneId)?.cwd
+      return failedPaneCwd !== spec.cwd ? spec.cwd : options.home
+    }
+
+    const liveCwd = await api.cwdOf(focusedPaneId)
+    if (liveCwd !== null && liveCwd !== '') return liveCwd
+
+    return paneSpecs.get(focusedPaneId)?.cwd ?? spec.cwd
   }
 
-  function addPane(id: string, cwd: string, command: string | null = null): void {
+  function addPane(id: string, cwd: string | Promise<string>, command: string | null = null): void {
     paneSpecs.set(id, {
       kind: 'pane',
       // Follow parsePane: the command's first word names the pane.
       title: command?.trim().split(/\s+/)[0] ?? 'shell',
       command,
       prefill: null,
-      cwd,
+      cwd: spec.cwd,
       heightRatio: 0,
     })
-    mountPane(id)
+    mountPane(id, cwd)
     syncSizes()
     updateBudget()
     // setLayout ran before this record existed, so focus has to be applied here.

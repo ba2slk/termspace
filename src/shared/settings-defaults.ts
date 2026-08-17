@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // A program asking to be noticed reaches the desktop by default; the bell
   // never does.
   notifications: 1,
+  inheritWorkingDir: 1,
   // Empty means the app's default stack — naming a font that may not exist
   // would fail silently on other machines.
   fontFamily: '',

@@ -34,6 +34,7 @@ export const SETTING_LIMITS = {
   paneLabels: { min: 0, max: 1, step: 1 },
   idleDim: { min: 0, max: 60, step: 5 },
   notifications: { min: 0, max: 1, step: 1 },
+  inheritWorkingDir: { min: 0, max: 1, step: 1 },
   // Below 80 the chrome stops being readable; above 160 it crowds out the canvas.
   uiScale: { min: 80, max: 160, step: 5 },
 } as const
@@ -102,6 +103,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     paneLabels: Math.round(clampNumber(input['paneLabels'], 'paneLabels')),
     idleDim: clampNumber(input['idleDim'], 'idleDim'),
     notifications: Math.round(clampNumber(input['notifications'], 'notifications')),
+    inheritWorkingDir: Math.round(clampNumber(input['inheritWorkingDir'], 'inheritWorkingDir')),
     fontFamily: cleanFontFamily(input['fontFamily']),
     theme: cleanId(input['theme']),
     uiScale: clampNumber(input['uiScale'], 'uiScale'),
@@ -129,6 +131,7 @@ const HEADER = `# Termspace settings
 # paneLabels          1 shows every pane's title while the move key is held (Alt, Cmd on macOS)
 # idleDim             how much unfocused panes are dimmed (%)
 # notifications       1 lets a program's OSC 9 / OSC 777 reach the desktop, unless you are watching that pane
+# inheritWorkingDir   1 opens new panes in the focused pane's current directory instead of the session root
 # fontFamily          terminal font. Empty uses the default stack
 # theme               terminal palette. Empty uses the default colours
 # uiScale             size of the app's own text and title bar (%). Not the terminal's

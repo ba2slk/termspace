@@ -73,6 +73,7 @@ const INVOKE_CHANNELS = [
   'shell-integration:status',
   'pty:foreground-commands',
   'pty:titles',
+  'pty:cwd',
 ]
 const ON_CHANNELS = [
   'pty:write',
@@ -355,6 +356,8 @@ export function registerIpcHandlers(
     (_e, paneIds: readonly string[]): Record<string, string | null> =>
       Object.fromEntries(paneIds.map((id) => [id, host.titleOf(id)])),
   )
+
+  ipcMain.handle('pty:cwd', (_e, paneId: string): string | null => host.cwdOf(paneId))
 
   ipcMain.on('pty:write', (_e, paneId: string, data: string) => host.write(paneId, data))
   ipcMain.on('pty:resize', (_e, paneId: string, cols: number, rows: number) =>

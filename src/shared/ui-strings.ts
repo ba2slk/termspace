@@ -181,6 +181,8 @@ const en = {
 
     notificationsLabel: 'Desktop notifications',
     notificationsDesc: "A program's own notification reaches the desktop unless you are watching that pane",
+    inheritWorkingDirLabel: 'Inherit working directory',
+    inheritWorkingDirDesc: "Opens new panes in the focused pane's current directory instead of the session root",
 
     copyOnSelectLabel: 'Copy on select',
     copyOnSelectDesc: 'Mouse selections go straight to the clipboard',
@@ -483,6 +485,8 @@ const ko: Catalog = {
 
     notificationsLabel: '데스크톱 알림',
     notificationsDesc: '보고 있지 않은 pane에서 온 알림을 데스크톱에 띄웁니다',
+    inheritWorkingDirLabel: '작업 디렉토리 유지',
+    inheritWorkingDirDesc: '신규 pane을 열 때 세션 기준 디렉토리 대신 현재 활성 pane의 작업 디렉토리에서 시작합니다',
 
     copyOnSelectLabel: '선택하면 바로 복사',
     copyOnSelectDesc: '마우스로 선택한 글자를 클립보드에 복사합니다',

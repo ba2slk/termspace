@@ -3,7 +3,7 @@
  *
  * node-pty is native, so it is required lazily to keep the bundler out of it.
  */
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { readFileSync, readlinkSync, statSync } from 'node:fs'
 import { promisify } from 'node:util'
 import type { PaneAttention, PtyExit, SpawnRequest, SpawnResult } from '../shared/protocol'
@@ -67,6 +67,24 @@ export async function foregroundCommandViaPs(pid: number): Promise<string | null
   if (tpgid === null || tpgid === pid) return null
   const args = await psField('args', tpgid)
   return args === null ? null : commandFromPsArgs(args)
+}
+
+/**
+ * The /proc/<pid>/cwd answer, for a platform without /proc: darwin.
+ */
+export function cwdViaLsof(pid: number): string | null {
+  try {
+    const stdout = execFileSync('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('n/')) return line.slice(1)
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 export interface PtyHandlers {
@@ -270,9 +288,11 @@ export function createPtyHost(): PtyHost {
       const entry = entries.get(paneId)
       if (entry === undefined) return null
       // What the shell itself reported beats what the OS can infer, and it is
-      // the same answer on every platform. /proc is the fallback for shells
-      // with no hook — and the only path that exists before the first prompt.
+      // the same answer on every platform. /proc (or lsof on darwin) is the
+      // fallback for shells with no hook — and the only path that exists before
+      // the first prompt.
       if (entry.reportedCwd !== null) return entry.reportedCwd
+      if (process.platform === 'darwin') return cwdViaLsof(entry.process.pid)
       // Linux only. The link disappears once the shell exits, so failure is normal.
       try {
         return readlinkSync(`/proc/${String(entry.process.pid)}/cwd`)
