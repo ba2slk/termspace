@@ -772,8 +772,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   const offExit = api.onExit(({ paneId, exitCode, signal }) => {
     if (!records.has(paneId)) return
-    // A clean exit closes the pane; a failure leaves it so the reason is readable.
-    if (exitCode === 0 && (signal === null || signal === 0)) {
+    const paneSpec = paneSpecs.get(paneId)
+    // A clean exit (0 or Ctrl+C 130), or any exit from a shell with no command, closes the pane.
+    const isCleanExit = (exitCode === 0 || exitCode === 130) && (signal === null || signal === 0)
+    if (paneSpec?.command === null || isCleanExit) {
       removePane(paneId)
       return
     }
@@ -784,7 +786,6 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       exitCode,
       signal,
       onRestart: () => {
-        const paneSpec = paneSpecs.get(paneId)
         const record = records.get(paneId)
         if (paneSpec === undefined || record === undefined) return
         spawnPane(paneId, paneSpec, record.terminal)
