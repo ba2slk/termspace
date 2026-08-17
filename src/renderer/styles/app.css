@@ -721,8 +721,9 @@ body {
   position: relative;
   height: 100%;
   /* The right side is thinner because nothing is reserved there: the terminal's
-     scrollbar overlays the last cells. The 1px keeps the bar off the focus ring. */
-  padding: 4px 1px 4px 6px;
+     scrollbar overlays the last cells. The 1px keeps the bar off the focus ring.
+     The bottom is thinner than the top: the row remainder already lands there. */
+  padding: 4px 1px 2px 6px;
   user-select: text;
 }
 
