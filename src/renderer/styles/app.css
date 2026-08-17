@@ -720,7 +720,9 @@ body {
 .pane__body {
   position: relative;
   height: 100%;
-  padding: 4px 6px;
+  /* The right side is thinner because nothing is reserved there: the terminal's
+     scrollbar overlays the last cells. The 1px keeps the bar off the focus ring. */
+  padding: 4px 1px 4px 6px;
   user-select: text;
 }
 
@@ -1708,12 +1710,27 @@ button.keys__chord:hover {
  * The terminal's own scrollbar.
  *
  * xterm 6 draws a VS Code derived scrollbar rather than the browser's, so
- * ::-webkit-scrollbar rules are ignored entirely. Its width is inline, hence
- * the !important.
+ * ::-webkit-scrollbar rules are ignored entirely. Its width comes from the
+ * overviewRuler option in terminal-pane.ts (mirroring --term-scroll-w), not
+ * from here. It overlays the last cells; no width is reserved for it.
+ *
+ * It shows only while a scroll is running: terminal-pane.ts puts
+ * .terminal-host--scrolling on the host and takes it off a linger after the
+ * last tick. xterm toggles .visible/.invisible itself and reveals the bar on
+ * mouseover, which no option turns off, so its rules have to be outranked —
+ * that is what these !important declarations are for and all they are for.
+ * Hidden means untouchable, so brushing the strip cannot reveal it; while
+ * shown the pointer can still grab it.
  */
-.xterm-scrollable-element > .scrollbar.vertical,
-.xterm-scrollable-element > .scrollbar.vertical > .slider {
-  width: var(--scroll-w) !important;
+.xterm-scrollable-element > .scrollbar.vertical {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity var(--dur) linear !important;
+}
+
+.terminal-host--scrolling .xterm-scrollable-element > .scrollbar.vertical {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .xterm-scrollable-element > .scrollbar.vertical > .slider {

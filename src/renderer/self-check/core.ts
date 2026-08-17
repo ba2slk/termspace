@@ -15,6 +15,7 @@ import {
   overlay,
   panes,
   press,
+  RENDERER_CANVAS,
   type Report,
   selectedCard,
   SKIPPED,
@@ -450,16 +451,16 @@ export function checkRendererBudget(report: Report): void {
    * a pane that just scrolled off keeps its context until it falls out of the
    * ranking.
    */
-  const contexts = document.querySelectorAll('.pane canvas').length
+  const contexts = document.querySelectorAll(`.pane ${RENDERER_CANVAS}`).length
   report['webglUnderTheCap'] =
     contexts <= MAX_WEBGL_CONTEXTS
       ? `ok (${String(contexts)} of ${String(MAX_WEBGL_CONTEXTS)})`
       : `FAIL (${String(contexts)} contexts, cap ${String(MAX_WEBGL_CONTEXTS)})`
   report['webglInFrozenPanes'] = String(
-    document.querySelectorAll('.pane--frozen canvas').length,
+    document.querySelectorAll(`.pane--frozen ${RENDERER_CANVAS}`).length,
   )
   report['webglInAwakePanes'] = String(
-    document.querySelectorAll('.pane:not(.pane--frozen) canvas').length,
+    document.querySelectorAll(`.pane:not(.pane--frozen) ${RENDERER_CANVAS}`).length,
   )
 }
 
@@ -477,7 +478,7 @@ export async function checkGridFillsPane(report: Report): Promise<void> {
     ...document.querySelectorAll<HTMLElement>('.pane:not(.pane--frozen) .terminal-host'),
   ]
   // The fit follows the renderer swap, which waits for the view to settle.
-  await waitFor(() => awake().some((host) => host.querySelector('canvas') !== null))
+  await waitFor(() => awake().some((host) => host.querySelector(RENDERER_CANVAS) !== null))
 
   let worst = 0
   let worstCells = 0
@@ -500,16 +501,17 @@ export async function checkGridFillsPane(report: Report): Promise<void> {
     return worstCells
   }
   /*
-   * One cell can always be left over — a column that does not fit does not fit.
-   * The scrollbar the fit reserves takes roughly two more.
+   * Nothing is reserved for the scrollbar any more, so the only leftover is the
+   * sub-cell remainder: a column that does not fit does not fit. The tolerance
+   * is one cell plus a sliver for the float maths behind the measurement.
    *
    * A pane that was just resized refits on the next observed frame, so wait for
    * the answer rather than reading whichever moment this check happened to land
    * in — on a loaded machine that moment is often mid-refit.
    */
-  await waitFor(() => measure() < 3, 8000)
+  await waitFor(() => measure() < 1.05, 8000)
   report['gridFillsPane'] =
-    worstCells < 3
+    worstCells < 1.05
       ? `ok (${worst.toFixed(0)}px left over)`
       : `FAIL ${worstCells.toFixed(1)} columns of empty pane`
 }

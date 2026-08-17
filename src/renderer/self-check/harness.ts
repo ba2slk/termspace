@@ -145,6 +145,13 @@ export function press(code: string, mods: Partial<KeyboardEventInit> = {}): void
   )
 }
 
+/*
+ * The renderer's canvas. xterm keeps a second canvas per terminal for the
+ * overview ruler, which the overviewRuler option turns on for its width alone,
+ * so "has a canvas" is no longer the same as "has a renderer".
+ */
+export const RENDERER_CANVAS = 'canvas:not(.xterm-decoration-overview-ruler)'
+
 export const panes = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.pane')]
 export const visiblePanes = (): HTMLElement[] => [
   ...document.querySelectorAll<HTMLElement>('.session-host:not([hidden]) .pane'),
@@ -233,7 +240,7 @@ export async function openSession(displayName: string): Promise<void> {
       visiblePanes().length > 0 &&
       visiblePanes().every((pane) => pane.querySelector('.terminal-host') !== null) &&
       // A renderer attached is the session drawing, not merely built.
-      visiblePanes().some((pane) => pane.querySelector('canvas') !== null),
+      visiblePanes().some((pane) => pane.querySelector(RENDERER_CANVAS) !== null),
     15_000,
   )
 }

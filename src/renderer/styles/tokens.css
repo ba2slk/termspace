@@ -86,6 +86,12 @@
   --bar-h: calc(var(--ctl-h) + 4px);
   /* Every scrollbar in the app, sideways or down, is this thick. */
   --scroll-w: 5px;
+  /* The terminal's own bar, thinner than the canvas indicator because it
+     overlays text rather than sitting beside it. */
+  --term-scroll-w: 3px;
+  /* How long that bar stays after the last scroll tick. Long enough to grab,
+     short enough that it is gone by the time you read what you scrolled to. */
+  --scroll-linger: 2000ms;
   /* Grown above and below the canvas thumb: 5px is not something to aim at. */
   --scroll-hit: 6px;
   --dur: 180ms;

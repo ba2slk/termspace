@@ -122,6 +122,34 @@ export async function checkWheelScroll(report: Report): Promise<void> {
       : `NO ACCEL (${perNotchLine.toFixed(1)} vs ${String(singleStep)} lines single)`
 
   /*
+   * The bar over the text is only there while the text is moving. xterm also
+   * reveals it on mouseover, which the sheet has to outrank, so "hidden" is
+   * measured as untouchable and not merely transparent.
+   */
+  const scrollBar = termHost?.querySelector<HTMLElement>(
+    '.xterm-scrollable-element > .scrollbar.vertical',
+  )
+  const barOpacity = (): number =>
+    scrollBar === undefined || scrollBar === null
+      ? -1
+      : Number(getComputedStyle(scrollBar).opacity)
+  if (scrollBar === undefined || scrollBar === null) {
+    report['terminalScrollbarHidesItself'] = 'FAIL (no scrollbar)'
+  } else {
+    await waitFor(() => barOpacity() === 0, 4000)
+    const restOpacity = barOpacity()
+    const restPointer = getComputedStyle(scrollBar).pointerEvents
+    wheelOverTerminal(-120)
+    await waitFor(() => barOpacity() === 1, 2000)
+    const scrollingOpacity = barOpacity()
+    await waitFor(() => barOpacity() === 0, 4000)
+    report['terminalScrollbarHidesItself'] =
+      restOpacity === 0 && restPointer === 'none' && scrollingOpacity === 1 && barOpacity() === 0
+        ? 'ok'
+        : `FAIL (rest ${String(restOpacity)}/${restPointer}, scrolling ${String(scrollingOpacity)}, after ${String(barOpacity())})`
+  }
+
+  /*
    * The strip around the title slides the canvas.
    *
    * A mouse has no horizontal wheel, and the seams between panels are 6px, so

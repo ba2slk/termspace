@@ -10,6 +10,7 @@ import {
   openSession,
   panes,
   press,
+  RENDERER_CANVAS,
   type Report,
   rowOf,
   sleep,
@@ -1022,20 +1023,24 @@ export async function checkResizeSync(report: Report): Promise<void> {
   }
 
   /*
-   * xterm 6 draws its own scrollbar, so ::-webkit-scrollbar rules do nothing.
-   * Measure the rendered width rather than trusting the stylesheet.
+   * xterm 6 draws its own scrollbar from the overviewRuler option, so neither
+   * ::-webkit-scrollbar rules nor the token reach it. Measure the rendered
+   * width and compare it with the token the option is meant to mirror.
    */
   const slider = document.querySelector<HTMLElement>(
     '.pane--focused .xterm-scrollable-element > .scrollbar.vertical',
   )
   const sliderWidth = slider === null ? -1 : Math.round(slider.getBoundingClientRect().width)
+  const wanted = Math.round(
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--term-scroll-w')),
+  )
   report['terminalScrollbarWidth'] = slider === null ? 'none' : `${String(sliderWidth)}px`
   report['terminalScrollbarIsThin'] =
     slider === null
       ? 'FAIL (no scrollbar)'
-      : sliderWidth <= 8
+      : sliderWidth === wanted
         ? 'ok'
-        : `FAIL (${String(sliderWidth)}px — thicker than the sheet's)`
+        : `FAIL (${String(sliderWidth)}px — --term-scroll-w is ${String(wanted)}px)`
 
   const before = await askPty()
   report['ptySizeBeforeResize'] = before
@@ -1120,7 +1125,7 @@ export async function checkCloseGuard(report: Report): Promise<void> {
 export async function checkHeldSessionJump(report: Report): Promise<void> {
   const withRenderer = (root: ParentNode): number =>
     [...root.querySelectorAll<HTMLElement>('.terminal-host')].filter(
-      (host) => host.querySelector('canvas') !== null,
+      (host) => host.querySelector(RENDERER_CANVAS) !== null,
     ).length
 
   // Faster than any autorepeat, so the check does not depend on the setting.

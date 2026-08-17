@@ -122,7 +122,7 @@ English copy.
 - **The grid fills its pane** (the WebGL renderer rounds the cell to whole device pixels
   and the DOM renderer does not, so a pane fitted before its context arrived sat several
   columns short of its own right edge). Measured in pixels: the drawn screen against the
-  host's width, allowing the leftover column and the scrollbar
+  host's width, allowing the one column that does not fit
 
 **Wheel scrolling**
 - Measures the distance of one notch (at 1:1 a 6000px canvas took sixty rolls)
@@ -132,6 +132,10 @@ English copy.
 - **Vertical scroll inside the terminal actually moves, and rolling repeatedly goes
   farther** (checking only "the canvas didn't move" is half a check — a state where
   neither the canvas nor the terminal moves passes that check as-is)
+- **The terminal's own scrollbar is there only while the text is moving** (it overlays the
+  last cells, and xterm reveals it on mouseover, which reads as a bar appearing at random
+  under the pointer). Measured as untouchable at rest, opaque during a scroll, and gone
+  again after the linger
 - A horizontal component moves the canvas
 - **Rolling the wheel over the title bar moves the canvas** (synthetic events only verify
   the wiring. Whether a real mouse reaches the window-drag region is an OS hit test, so a
@@ -276,9 +280,10 @@ English copy.
 - **The pane background follows the palette too** (checking only the terminal colors
   misses the inner padding staying a different color, looking like a black border inside
   the rounded corners)
-- The terminal scrollbar is 7px (xterm 6 draws its own scrollbar, so the
-  ::-webkit-scrollbar rules were being ignored wholesale — you have to measure the drawn
-  width, not check that the rule exists)
+- The terminal scrollbar is as thick as `--term-scroll-w` (xterm 6 draws its own
+  scrollbar from the overviewRuler option, so the ::-webkit-scrollbar rules were being
+  ignored wholesale — you have to measure the drawn width, not check that the rule
+  exists)
 - **The font list has something to pick** (accepting only monospace fonts dropped Korean
   fonts entirely — fontconfig marks a Latin monospace with Korean layered on as dual)
 - Icon and emoji fonts are absent from the list (their glyphs are all the same width so
