@@ -129,8 +129,8 @@ export interface AppSettings {
    * hints glyphs fully at whole-pixel positions. 'subpixel' is the browser's
    * LCD text as it was before this setting existed. Read at startup only: the
    * atlas mode is fixed when a terminal opens, and the hinting is a
-   * command-line switch. Only Linux offers the choice; the other platforms
-   * draw text their own way and ignore both.
+   * command-line switch. Only Linux offers the choice, and only Linux acts on
+   * it; the other platforms draw greyscale text already.
    */
   readonly textRendering: string
   /**
