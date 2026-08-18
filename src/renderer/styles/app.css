@@ -492,13 +492,11 @@ body {
   line-height: 1.5;
 }
 
+/* A state, not a row: centred and faint so it does not read as a list entry. */
 .sidebar__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 12px 8px;
-  color: var(--fg-dim);
+  padding: 16px 8px;
+  text-align: center;
+  color: var(--fg-faint);
   line-height: 1.6;
 }
 
