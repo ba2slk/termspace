@@ -38,6 +38,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   focusBorderColor: '#7a9bbf',
   // Empty follows the system locale.
   locale: '',
+  // What other terminals draw. 'subpixel' is the pre-1.1 look, kept for eyes
+  // used to it.
+  textRendering: 'grayscale',
 }
 
 /** True when this key still holds what the app ships with. */

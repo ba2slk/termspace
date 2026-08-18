@@ -13,6 +13,13 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ uiScale: Number.NaN }).uiScale).toBe(DEFAULT_SETTINGS.uiScale)
   })
 
+  it('knows two text rendering modes and falls back to greyscale', () => {
+    expect(normalizeSettings({ textRendering: 'subpixel' }).textRendering).toBe('subpixel')
+    expect(normalizeSettings({ textRendering: 'grayscale' }).textRendering).toBe('grayscale')
+    expect(normalizeSettings({ textRendering: 'lcd' }).textRendering).toBe('grayscale')
+    expect(normalizeSettings({}).textRendering).toBe('grayscale')
+  })
+
   it('accepts only locales we ship a catalogue for', () => {
     expect(normalizeSettings({ locale: 'ko' }).locale).toBe('ko')
     expect(normalizeSettings({ locale: 'en' }).locale).toBe('en')

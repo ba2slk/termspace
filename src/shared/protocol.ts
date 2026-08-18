@@ -123,6 +123,17 @@ export interface AppSettings {
   /** The colour for 'custom' mode, as #rrggbb. Ignored in the other two. */
   readonly focusBorderColor: string
   /**
+   * How terminal glyphs are antialiased: 'grayscale' or 'subpixel'.
+   *
+   * 'grayscale' draws the glyph atlas without colour fringes and, on Linux,
+   * hints glyphs fully at whole-pixel positions. 'subpixel' is the browser's
+   * LCD text as it was before this setting existed. Read at startup only: the
+   * atlas mode is fixed when a terminal opens, and the hinting is a
+   * command-line switch. Only Linux offers the choice; the other platforms
+   * draw text their own way and ignore both.
+   */
+  readonly textRendering: string
+  /**
    * Interface language: 'en', 'ko', or empty for the system's.
    *
    * Read at startup only. Every screen bakes its strings in when it is built,
