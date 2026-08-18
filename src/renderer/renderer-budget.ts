@@ -62,7 +62,26 @@ export function decideBudget(state: BudgetState): BudgetDecision {
    * A hidden session holds what it holds; the arriving one takes those slots
    * only when it actually runs short (see session-runtime's page ledger).
    */
-  const keep = state.active === false ? state.attached : ranked.slice(0, limit)
+  const wanted = ranked.slice(0, limit)
+
+  /*
+   * A renderer on a pane that scrolled out of view stays put while there is
+   * room. Swapping renderers shows: the DOM and WebGL cell widths differ, so
+   * the pane reflows and redraws when it comes back — a jolt on every scroll
+   * that crossed it. Idle contexts go only when a visible pane needs the slot,
+   * least recently seen first.
+   */
+  const inView = new Set(state.visible)
+  const idle = state.attached
+    .filter((id) => !inView.has(id))
+    .sort((a, b) => {
+      const seen = (state.lastSeen.get(b) ?? -Infinity) - (state.lastSeen.get(a) ?? -Infinity)
+      return seen !== 0 ? seen : a.localeCompare(b)
+    })
+  const keep =
+    state.active === false
+      ? state.attached
+      : wanted.concat(idle.slice(0, Math.max(0, limit - wanted.length)))
 
   // The focused pane never freezes: it is the one taking keystrokes, and a
   // frozen pane queues its output out of sight of both screen and clipboard.

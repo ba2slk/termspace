@@ -64,6 +64,19 @@ The self-check now also counts context loss on canvases still in the document du
 held-key burst, though at that check's size (eight contexts) the browser never evicts, so
 it guards the invariant rather than reproduces the bug.
 
+**A long scroll ended on a blank frame.** Fling to the far end of a wide canvas, or hold
+Alt+→ across it, and the panes that arrived went dark for one frame and drew again; a
+column at a time never did. The visible band is the viewport plus one viewport each side,
+and a pane leaving the band gave its WebGL renderer back at once. Coming back it drew
+through the DOM renderer until the view held still, then took a fresh WebGL renderer —
+which starts empty and paints on the next animation frame, so the DOM rows had already
+gone and the canvas had nothing yet: the blank frame. Four end-to-end round trips over an
+eight-column, 5600px canvas cost 40 renderer attaches. The budget now keeps the renderer
+of a pane out of view while there is room under the cap, and gives idle ones up least
+recently seen first only when a visible pane needs the slot. Same four round trips: 0
+attaches after the first sight of each pane. Freezing is unchanged — an idle renderer
+sits on a frozen pane doing nothing — so the two axes stay separate as before.
+
 **Then every switch stuttered.** Handing the contexts back on the way out is a rule about
 the *cap*, and it was paying for the cap on every switch whether or not the page was
 anywhere near it: two sessions of five panes need ten of the twelve slots, and each swap
