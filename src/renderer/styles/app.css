@@ -1149,6 +1149,12 @@ body {
   gap: 8px;
 }
 
+/* A hairline between sections: headings alone did not separate them enough. */
+.settings__section + .settings__section {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 .settings__heading {
   margin: 0;
   font-size: var(--fs-ui);
