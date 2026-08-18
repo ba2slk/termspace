@@ -227,7 +227,6 @@ shell.prepend(appBar.element)
 const sidebar = createSessionSidebar(workspace, {
   onOpen: (id) => void openSession(id),
   onClose: (id) => endSession(id),
-  onCreateExample: () => void api.createExampleSession().then(() => refreshSidebar()),
   onRefresh: () => void refreshSidebar(),
   onWidthChange: (width) => void saveSettings({ ...settings, sidebarWidth: width }),
   onCreateBlank: () => openNewSession(),

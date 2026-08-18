@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  createExampleSession,
   listSessions,
   loadSession,
   renameSessionName,
   reorderSession,
   saveSession,
+  seedFirstRun,
   sessionsDir,
 } from './session-config'
 import type { SessionDraft } from './session-writer'
@@ -152,26 +152,33 @@ describe('loadSession', () => {
   })
 })
 
-describe('createExampleSession', () => {
-  it('creates the directory and writes the example', async () => {
+describe('seedFirstRun', () => {
+  it('creates the directory and writes Welcome.yaml when the directory is missing', async () => {
     const target = join(dir, 'deep', 'sessions')
-    const file = await createExampleSession(target)
-    expect(file).toBe(join(target, 'example.yaml'))
-    expect(await readFile(file, 'utf8')).toContain('name: example')
+    expect(await seedFirstRun(target)).toBe(true)
+    expect(await readFile(join(target, 'Welcome.yaml'), 'utf8')).toContain('name: Welcome')
   })
 
-  it('the example it writes opens without error', async () => {
-    await createExampleSession(dir)
-    const result = await loadSession(dir, 'example', env)
+  it('does nothing when the directory already exists, even empty', async () => {
+    expect(await seedFirstRun(dir)).toBe(false)
+    await expect(readFile(join(dir, 'Welcome.yaml'), 'utf8')).rejects.toThrow()
+  })
+
+  it('the session it writes opens without error', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target)
+    const result = await loadSession(target, 'Welcome', env)
     expect(result.ok).toBe(true)
-    expect(result.spec!.columns.length).toBeGreaterThan(0)
-    // Every pane in the example must parse cleanly
+    expect(result.spec!.columns.length).toBe(3)
+    expect(result.spec!.columns.map((c) => c.panes.length)).toEqual([1, 2, 1])
+    // Every pane in the seeded session must parse cleanly
     expect(result.spec!.columns.flatMap((c) => c.panes).every((p) => p.kind === 'pane')).toBe(true)
   })
 
-  it('the example depends on nothing but the home directory (#29)', async () => {
-    await createExampleSession(dir)
-    const result = await loadSession(dir, 'example', env)
+  it('depends on nothing but the home directory (#29)', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target)
+    const result = await loadSession(target, 'Welcome', env)
     const panes = result.spec!.columns.flatMap((c) => c.panes).filter((p) => p.kind === 'pane')
     // Every pane starts in the home; ~/dev is nobody's default directory.
     for (const pane of panes) expect(pane.cwd).toBe(env.HOME)
@@ -181,10 +188,12 @@ describe('createExampleSession', () => {
     for (const command of commands) expect(command).toMatch(/^(echo|ls)\b/)
   })
 
-  it('returns the existing path without overwriting', async () => {
-    const file = await createExampleSession(dir)
+  it('never overwrites a file that is already there', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target)
+    const file = join(target, 'Welcome.yaml')
     await writeFile(file, 'name: mine\ncolumns:\n  - panes:\n      - {}\n')
-    await createExampleSession(dir)
+    await seedFirstRun(target)
     expect(await readFile(file, 'utf8')).toContain('name: mine')
   })
 })

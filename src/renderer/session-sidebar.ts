@@ -20,7 +20,6 @@ export interface SidebarHooks {
   readonly onOpen: (id: string) => void
   /** End a running session and its ptys. */
   readonly onClose: (id: string) => void
-  readonly onCreateExample: () => void
   readonly onRefresh: () => void
   readonly onWidthChange: (width: number) => void
   /** Create a blank one-pane session. */
@@ -441,16 +440,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     const lead = document.createElement('p')
     lead.textContent = t.sidebar.emptyLead
 
-    const path = document.createElement('code')
-    path.textContent = t.sidebar.sessionsDir
-
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'button'
-    button.textContent = t.sidebar.createExample
-    button.addEventListener('click', () => hooks.onCreateExample())
-
-    wrap.append(lead, path, button)
+    wrap.append(lead)
     return wrap
   }
 

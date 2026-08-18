@@ -23,31 +23,35 @@ export function sessionsDir(env: NodeJS.ProcessEnv): string {
 }
 
 /*
- * The example carries the same header as a saved session and uses every field
- * once, so reading one file is enough to write your own. Nothing in it may
- * depend on the machine: no directory beyond the home, no command that only
+ * The seeded session carries the same header as a saved one and uses every
+ * field once, so reading one file is enough to write your own. Nothing in it
+ * may depend on the machine: no directory beyond the home, no command that only
  * one platform ships (a first run that opens on an error reads as a broken
  * install, see #29). The relative cwd is shown commented out for that reason.
  */
-export const EXAMPLE_SESSION = `${SESSION_HEADER}
-name: example
+export const WELCOME_SESSION = `${SESSION_HEADER}
+name: Welcome
 
 # An unquoted ~ is null in YAML, so keep the quotes.
 cwd: "~"
 
 columns:
-  - width: 720
+  - width: 640
     panes:
       - title: shell
+
+  - width: 720
+    panes:
       - title: hello
         command: echo 'Welcome to Termspace'
         height: 0.35
-
-  - width: 640
-    panes:
       - title: notes
         # cwd: dev            # a pane's cwd is relative to the one above
         prefill: ls -la
+
+  - width: 640
+    panes:
+      - title: shell
 `
 
 async function summarize(dir: string, file: string): Promise<SessionSummary> {
@@ -328,14 +332,22 @@ export async function reorderSession(
   return listSessions(dir, orderPath)
 }
 
-export async function createExampleSession(dir: string): Promise<string> {
-  await mkdir(dir, { recursive: true })
-  const path = join(dir, 'example.yaml')
-  // wx fails if the file exists, so a customised example survives.
+/**
+ * Give a first run something to open. Keyed on the sessions directory being
+ * absent, not on the list being empty: someone who deletes every session must
+ * not find this one back on the next launch.
+ *
+ * Returns whether it seeded.
+ */
+export async function seedFirstRun(dir: string): Promise<boolean> {
   try {
-    await writeFile(path, EXAMPLE_SESSION, { encoding: 'utf8', flag: 'wx' })
+    await stat(dir)
+    return false
   } catch {
-    // Already there — leave it
+    // No directory — this is a first run.
   }
-  return path
+  await mkdir(dir, { recursive: true })
+  // wx fails if the file exists, so a customised welcome survives a race.
+  await writeFile(join(dir, 'Welcome.yaml'), WELCOME_SESSION, { encoding: 'utf8', flag: 'wx' })
+  return true
 }

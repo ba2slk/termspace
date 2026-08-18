@@ -502,12 +502,6 @@ body {
   line-height: 1.6;
 }
 
-.sidebar__empty > code {
-  font-size: var(--fs-ui-sm);
-  color: var(--fg-faint);
-  word-break: break-all;
-}
-
 /* ── Canvas ───────────────────────────────────────────── */
 
 .canvas {
