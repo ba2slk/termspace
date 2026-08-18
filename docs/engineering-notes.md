@@ -226,7 +226,9 @@ against the bar's lower edge.
 
 **The horizontal scrollbar touched the pane outlines.** A 5px bar inside a 6px bottom
 inset can't help but touch. Widened only the canvas's bottom inset to 12px to give the
-bar its own room (`CANVAS_BOTTOM`).
+bar its own room (`CANVAS_BOTTOM`). When the bar later thinned to 3px the inset stayed,
+and the 4px above the bar became 6px over 3px below — a gap that read as a gap. The
+inset is 10px now: 4px clear above, 3px of bar, 3px of floor, as the proportions were.
 
 **A failed pointer capture killed the drag.** Capture is only a convenience so events
 keep coming when the cursor leaves the window, but the exception propagated and the drag
