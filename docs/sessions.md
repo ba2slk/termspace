@@ -45,6 +45,14 @@ prompt but Enter is never pressed — tmux `send-keys` without the `C-m`.
 A typo in the config doesn't kill the session. The broken pane becomes a card
 saying what is wrong and which file to fix; everything else runs normally.
 
+## The first run
+
+If the sessions directory does not exist at all, the app creates it and writes
+one session into it, `Welcome.yaml`. It is not opened for you; it sits in the
+list as something to read and edit. Nothing rewrites it afterwards, so once it
+is there it is yours to change or delete: emptying the directory does not bring
+it back, only removing the directory itself does.
+
 ## Three ways to make one
 
 **Start empty** — `+` in the sidebar header, right-click the sidebar, or ☰ →

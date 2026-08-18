@@ -879,3 +879,14 @@ The remap is skipped when the window already has focus: clicking a notification
 for a pane in the focused window otherwise unmapped and remapped it, which reads
 as a flash. With focus already in hand there is no prevention left to beat, so
 only the pane travel runs.
+
+**A seed keyed on the directory, not on the list.** The empty sidebar used to
+carry a button that wrote `example.yaml` on demand, which meant the one file
+worth reading was the one nobody clicked for. Writing it on a first run is the
+fix, but "first run" has to mean the sessions directory is missing, not that the
+listing came back empty. Keyed on the listing, a user who deletes every session
+gets the welcome session back on the next launch, and deleting it again does
+nothing — the app would be arguing with them. The directory exists from the
+moment anything is written, so an empty directory is a deliberate state and is
+left alone.
+
