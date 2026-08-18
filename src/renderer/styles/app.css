@@ -1494,21 +1494,28 @@ button.keys__chord:hover {
 .update-chip {
   display: flex;
   align-items: center;
-  height: var(--ctl-h);
-  margin-left: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  color: var(--fg);
+  height: calc(var(--ctl-h) - 6px);
+  margin-left: 8px;
+  /* Outline only: a filled block in the bar reads as a fifth button. */
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg-dim);
   font-size: var(--fs-ui-sm);
   white-space: nowrap;
+  overflow: hidden;
   -webkit-app-region: no-drag;
+}
+
+.update-chip:hover {
+  border-color: var(--border-active);
+  color: var(--fg);
 }
 
 .update-chip__open,
 .update-chip__dismiss {
   height: 100%;
-  padding: 0 8px;
+  padding: 0 4px 0 10px;
   background: none;
   border: none;
   color: inherit;
@@ -1517,8 +1524,8 @@ button.keys__chord:hover {
 }
 
 .update-chip__dismiss {
-  padding: 0 6px 0 4px;
-  color: var(--fg-dim);
+  padding: 0 8px 0 4px;
+  color: var(--fg-faint);
 }
 
 .update-chip__open:hover,
