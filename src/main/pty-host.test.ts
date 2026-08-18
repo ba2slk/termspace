@@ -41,14 +41,22 @@ const hasLsof = ((): boolean => {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-/** Poll rather than wait a fixed time: spawning a job is slower on a loaded machine. */
-async function waitFor(read: () => Promise<string | null>): Promise<string | null> {
+/**
+ * Poll rather than wait a fixed time: spawning a job is slower on a loaded machine.
+ * The caller says what counts as arrived. Between fork and exec ps briefly reports the
+ * child as `[sleep]` with no args, and "anything non-null" would return that.
+ */
+async function waitFor(
+  read: () => Promise<string | null>,
+  accept: (value: string) => boolean,
+): Promise<string | null> {
+  let last: string | null = null
   for (let i = 0; i < 100; i++) {
-    const value = await read()
-    if (value !== null) return value
+    last = await read()
+    if (last !== null && accept(last)) return last
     await sleep(100)
   }
-  return null
+  return last
 }
 
 describe.skipIf(!hasPs || !hasBash)('the foreground command through ps', () => {
@@ -65,7 +73,10 @@ describe.skipIf(!hasPs || !hasBash)('the foreground command through ps', () => {
       expect(await foregroundCommandViaPs(term.pid)).toBe(null)
 
       term.write('sleep 300\r')
-      const running = await waitFor(() => foregroundCommandViaPs(term.pid))
+      const running = await waitFor(
+        () => foregroundCommandViaPs(term.pid),
+        (v) => /sleep 300$/.test(v),
+      )
       expect(running).toMatch(/sleep 300$/)
     } finally {
       term.kill()
