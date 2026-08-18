@@ -82,6 +82,10 @@ const en = {
     maximize: 'Maximize',
     restore: 'Restore',
     close: 'Close',
+    // The update chip, shown only while a newer release exists
+    updateAvailable: (version: string) => `${version} available`,
+    updateOpen: 'Open the release page',
+    updateDismiss: 'Hide until the next start',
   },
 
   /** session-sidebar.ts: the resident session list. */
@@ -398,6 +402,9 @@ const ko: Catalog = {
     maximize: '최대화',
     restore: '이전 크기로',
     close: '닫기',
+    updateAvailable: (version: string) => `${version} 나옴`,
+    updateOpen: '릴리스 페이지 열기',
+    updateDismiss: '다음 실행까지 숨기기',
   },
 
   sidebar: {
