@@ -68,17 +68,24 @@ if (!isSelfCheck && !app.requestSingleInstanceLock()) {
       )
     })
 
+    // An empty locale means "follow the system", as it does in the renderer.
+    const locale = loadSettingsSync(process.env).locale
+
     // A first run has nothing to open, so give it one session to look at. Only
     // a failure to write it is worth a line; the app runs fine without it.
     try {
-      await seedFirstRun(sessionsDir(process.env))
+      await seedFirstRun(
+        sessionsDir(process.env),
+        locale === '' ? app.getLocale() : locale,
+        process.platform === 'darwin',
+      )
     } catch (err) {
       process.stderr.write(
         `Could not write the first-run session: ${err instanceof Error ? err.message : String(err)}\n`,
       )
     }
 
-    const win = createMainWindow(loadSettingsSync(process.env).locale)
+    const win = createMainWindow(locale)
     const unregister = registerIpcHandlers(win, host, process.env)
 
     // The launch that lost the lock has quit by now. Surface this window, or

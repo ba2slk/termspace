@@ -5,7 +5,14 @@
 import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { parse as parseYaml, parseDocument } from 'yaml'
+import {
+  DEFAULT_BINDINGS,
+  DEFAULT_BINDINGS_MAC,
+  formatChord,
+  type ActionId,
+} from '../shared/keybindings'
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
+import { stringsFor } from '../shared/ui-strings'
 import { configDir } from './config-dir'
 import { applyOrder, moveTo, renameInOrder } from './session-order'
 import { readOrder, writeOrder } from './session-order-file'
@@ -29,7 +36,56 @@ export function sessionsDir(env: NodeJS.ProcessEnv): string {
  * one platform ships (a first run that opens on an error reads as a broken
  * install, see #29). The relative cwd is shown commented out for that reason.
  */
-export const WELCOME_SESSION = `${SESSION_HEADER}
+
+/** The shortcuts the welcome pane prints, in the order a first run needs them. */
+const WELCOME_ACTIONS: readonly ActionId[] = [
+  'add-column-right',
+  'focus-right',
+  'focus-left',
+  'split-down',
+  'close-pane',
+  'overview',
+  'toggle-sidebar',
+  'save-layout',
+  'settings',
+]
+
+/*
+ * Always quoted, unlike shellQuote, which leaves a bare word bare: every printf
+ * argument here is one word to the shell, empty lines included.
+ */
+function quoteArg(text: string): string {
+  return `'${text.replaceAll("'", `'\\''`)}'`
+}
+
+/**
+ * The seeded session, built for the platform and language the app started with.
+ * A constant cannot carry the chords: they differ on mac, and the labels differ
+ * by locale.
+ */
+export function welcomeSession(locale: string, isMac: boolean): string {
+  const t = stringsFor(locale)
+  const bindings = isMac ? DEFAULT_BINDINGS_MAC : DEFAULT_BINDINGS
+  const chords = WELCOME_ACTIONS.map((id) => formatChord(bindings[id][0] ?? '', isMac))
+  const column = Math.max(...chords.map((c) => c.length)) + 3
+  const lines = [
+    t.firstRun.welcomeTitle,
+    '',
+    ...WELCOME_ACTIONS.map((id, i) => `  ${(chords[i] as string).padEnd(column)}${t.keys[id]}`),
+    '',
+    t.firstRun.moreKeys,
+  ]
+
+  /*
+   * A folded scalar so the file stays one shortcut per line while the shell
+   * gets a single command. Every line sits at the block indent: a deeper one
+   * would keep its newline and submit a second command. `clear` first because
+   * the command is typed into the shell, and the prompt would otherwise stand
+   * above its own output.
+   */
+  const command = ["clear; printf '%s\\n'", ...lines.map(quoteArg)].join('\n          ')
+
+  return `${SESSION_HEADER}
 name: Welcome
 
 # An unquoted ~ is null in YAML, so keep the quotes.
@@ -42,9 +98,10 @@ columns:
 
   - width: 720
     panes:
-      - title: hello
-        command: echo 'Welcome to Termspace'
-        height: 0.35
+      - title: welcome
+        command: >-
+          ${command}
+        height: 0.45
       - title: notes
         # cwd: dev            # a pane's cwd is relative to the one above
         prefill: ls -la
@@ -53,6 +110,7 @@ columns:
     panes:
       - title: shell
 `
+}
 
 async function summarize(dir: string, file: string): Promise<SessionSummary> {
   const path = join(dir, file)
@@ -339,7 +397,7 @@ export async function reorderSession(
  *
  * Returns whether it seeded.
  */
-export async function seedFirstRun(dir: string): Promise<boolean> {
+export async function seedFirstRun(dir: string, locale: string, isMac: boolean): Promise<boolean> {
   try {
     await stat(dir)
     return false
@@ -348,6 +406,9 @@ export async function seedFirstRun(dir: string): Promise<boolean> {
   }
   await mkdir(dir, { recursive: true })
   // wx fails if the file exists, so a customised welcome survives a race.
-  await writeFile(join(dir, 'Welcome.yaml'), WELCOME_SESSION, { encoding: 'utf8', flag: 'wx' })
+  await writeFile(join(dir, 'Welcome.yaml'), welcomeSession(locale, isMac), {
+    encoding: 'utf8',
+    flag: 'wx',
+  })
   return true
 }

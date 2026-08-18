@@ -15,6 +15,8 @@ const en = {
   firstRun: {
     appName: 'Termspace',
     windowTitle: (session: string) => `Termspace — ${session}`,
+    // Heading the seeded session's welcome pane prints
+    welcomeTitle: 'Welcome to Termspace',
     // Under the four onboarding keys on the empty canvas
     moreKeys: 'The rest are in settings.',
     // Shown on the empty canvas only while there are no sessions at all
@@ -339,6 +341,7 @@ const ko: Catalog = {
   firstRun: {
     appName: 'Termspace',
     windowTitle: (session: string) => `Termspace — ${session}`,
+    welcomeTitle: 'Termspace에 오신 것을 환영합니다',
     moreKeys: '나머지 단축키는 설정에 있습니다.',
     createSession: '새 세션 만들기',
     closePane: 'pane 닫기',

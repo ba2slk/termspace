@@ -53,6 +53,9 @@ list as something to read and edit. Nothing rewrites it afterwards, so once it
 is there it is yours to change or delete: emptying the directory does not bring
 it back, only removing the directory itself does.
 
+Its middle pane prints the main shortcuts for the platform and the language the
+app started with; changing either later leaves the file as it was written.
+
 ## Three ways to make one
 
 **Start empty** — `+` in the sidebar header, right-click the sidebar, or ☰ →
