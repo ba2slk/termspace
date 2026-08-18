@@ -146,11 +146,12 @@ export function press(code: string, mods: Partial<KeyboardEventInit> = {}): void
 }
 
 /*
- * The renderer's canvas. xterm keeps a second canvas per terminal for the
- * overview ruler, which the overviewRuler option turns on for its width alone,
- * so "has a canvas" is no longer the same as "has a renderer".
+ * The WebGL renderer's canvas: an unclassed one directly under the screen.
+ * xterm keeps other canvases per terminal — the overview ruler, the link
+ * layer, the DOM renderer's measuring canvas — so "has a canvas" is not the
+ * same as "has a renderer".
  */
-export const RENDERER_CANVAS = 'canvas:not(.xterm-decoration-overview-ruler)'
+export const RENDERER_CANVAS = '.xterm-screen > canvas:not([class])'
 
 export const panes = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.pane')]
 export const visiblePanes = (): HTMLElement[] => [
