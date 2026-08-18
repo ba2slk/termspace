@@ -492,20 +492,12 @@ body {
   line-height: 1.5;
 }
 
+/* A state, not a row: centred and faint so it does not read as a list entry. */
 .sidebar__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 12px 8px;
-  color: var(--fg-dim);
-  line-height: 1.6;
-}
-
-.sidebar__empty > code {
-  font-size: var(--fs-ui-sm);
+  padding: 16px 8px;
+  text-align: center;
   color: var(--fg-faint);
-  word-break: break-all;
+  line-height: 1.6;
 }
 
 /* ── Canvas ───────────────────────────────────────────── */
@@ -605,6 +597,12 @@ body {
   margin: 12px 0 0;
   font-size: var(--fs-ui-sm);
   color: var(--fg-faint);
+}
+
+/* The block ignores the pointer; the one thing here to click must not. */
+.canvas-empty__create {
+  margin-top: 18px;
+  pointer-events: auto;
 }
 
 .canvas-track {

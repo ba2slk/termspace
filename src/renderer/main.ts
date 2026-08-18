@@ -144,7 +144,7 @@ function restoreCanvas(): void {
 
 // ── Empty canvas ────────────────────────────────────────
 
-const placeholder = createEmptyCanvas()
+const placeholder = createEmptyCanvas({ onCreateSession: () => openNewSession() })
 canvasHost.append(placeholder.el)
 
 function syncPlaceholder(): void {
@@ -227,7 +227,6 @@ shell.prepend(appBar.element)
 const sidebar = createSessionSidebar(workspace, {
   onOpen: (id) => void openSession(id),
   onClose: (id) => endSession(id),
-  onCreateExample: () => void api.createExampleSession().then(() => refreshSidebar()),
   onRefresh: () => void refreshSidebar(),
   onWidthChange: (width) => void saveSettings({ ...settings, sidebarWidth: width }),
   onCreateBlank: () => openNewSession(),
@@ -409,6 +408,7 @@ function renderSidebar(): void {
     [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
+  placeholder.setHasSessions(knownSessions.length > 0)
 }
 
 /**

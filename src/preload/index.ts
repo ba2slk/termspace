@@ -15,7 +15,6 @@ const api: TermspaceApi = {
   platform: process.platform,
   listSessions: () => ipcRenderer.invoke('session:list'),
   loadSession: (name) => ipcRenderer.invoke('session:load', name),
-  createExampleSession: () => ipcRenderer.invoke('session:create-example'),
   sessionExists: (id) => ipcRenderer.invoke('session:exists', id),
   saveSessionAs: (id, displayName, layout, overwrite, rootCwd) =>
     ipcRenderer.invoke('session:save-as', id, displayName, layout, overwrite, rootCwd),

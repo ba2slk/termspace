@@ -264,8 +264,6 @@ export interface TermspaceApi {
   readonly platform: string
   listSessions(): Promise<readonly SessionSummary[]>
   loadSession(name: string): Promise<LoadSessionResult>
-  /** Create the example session and return its path. */
-  createExampleSession(): Promise<string>
   /** Does this id already exist? Drives the overwrite affordance. */
   sessionExists(id: string): Promise<boolean>
   /** Write the layout. Refuses to replace an existing file unless overwrite is set. */

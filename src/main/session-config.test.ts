@@ -1,15 +1,19 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { DEFAULT_BINDINGS, DEFAULT_BINDINGS_MAC, formatChord } from '../shared/keybindings'
+import { stringsFor } from '../shared/ui-strings'
 import {
-  createExampleSession,
   listSessions,
   loadSession,
   renameSessionName,
   reorderSession,
   saveSession,
+  seedFirstRun,
   sessionsDir,
+  welcomeSession,
 } from './session-config'
 import type { SessionDraft } from './session-writer'
 
@@ -152,39 +156,88 @@ describe('loadSession', () => {
   })
 })
 
-describe('createExampleSession', () => {
-  it('creates the directory and writes the example', async () => {
-    const target = join(dir, 'deep', 'sessions')
-    const file = await createExampleSession(target)
-    expect(file).toBe(join(target, 'example.yaml'))
-    expect(await readFile(file, 'utf8')).toContain('name: example')
+describe('welcomeSession', () => {
+  const paneCommand = (yaml: string): string => {
+    const doc = parseYaml(yaml) as { columns: { panes: { title: string; command?: string }[] }[] }
+    const pane = doc.columns.flatMap((c) => c.panes).find((p) => p.title === 'welcome')
+    return pane?.command ?? ''
+  }
+
+  it('prints the linux chords and the en labels', () => {
+    const yaml = welcomeSession('en', false)
+    expect(yaml).toContain(formatChord(DEFAULT_BINDINGS['add-column-right'][0]!, false))
+    expect(yaml).toContain(stringsFor('en').keys['add-column-right'])
   })
 
-  it('the example it writes opens without error', async () => {
-    await createExampleSession(dir)
-    const result = await loadSession(dir, 'example', env)
+  it('prints the mac chords and the ko labels', () => {
+    const yaml = welcomeSession('ko', true)
+    expect(yaml).toContain(formatChord(DEFAULT_BINDINGS_MAC['add-column-right'][0]!, true))
+    expect(yaml).toContain(stringsFor('ko').keys['add-column-right'])
+  })
+
+  it('folds to a single line, whatever the locale', () => {
+    // A folded scalar keeps a more-indented line as its own line, and the shell
+    // would then be handed several commands.
+    for (const [locale, isMac] of [['en', false], ['ko', true]] as const) {
+      const command = paneCommand(welcomeSession(locale, isMac))
+      expect(command).not.toContain('\n')
+      expect(command.startsWith('clear; printf ')).toBe(true)
+    }
+  })
+
+  it('quotes every printf argument', () => {
+    for (const [locale, isMac] of [['en', false], ['ko', true]] as const) {
+      const command = paneCommand(welcomeSession(locale, isMac))
+      expect(command).toMatch(/^clear; printf '%s\\n'( '(?:[^']|'\\'')*')+$/)
+    }
+  })
+})
+
+describe('seedFirstRun', () => {
+  it('creates the directory and writes Welcome.yaml when the directory is missing', async () => {
+    const target = join(dir, 'deep', 'sessions')
+    expect(await seedFirstRun(target, 'en', false)).toBe(true)
+    expect(await readFile(join(target, 'Welcome.yaml'), 'utf8')).toContain('name: Welcome')
+  })
+
+  it('does nothing when the directory already exists, even empty', async () => {
+    expect(await seedFirstRun(dir, 'en', false)).toBe(false)
+    await expect(readFile(join(dir, 'Welcome.yaml'), 'utf8')).rejects.toThrow()
+  })
+
+  it('the session it writes opens without error', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target, 'en', false)
+    const result = await loadSession(target, 'Welcome', env)
     expect(result.ok).toBe(true)
-    expect(result.spec!.columns.length).toBeGreaterThan(0)
-    // Every pane in the example must parse cleanly
+    expect(result.spec!.columns.length).toBe(3)
+    expect(result.spec!.columns.map((c) => c.panes.length)).toEqual([1, 2, 1])
+    // The tutorial is the first thing on screen, on its own in the first column.
+    const first = result.spec!.columns[0]!.panes[0]!
+    expect(first.kind === 'pane' && first.title).toBe('welcome')
+    // Every pane in the seeded session must parse cleanly
     expect(result.spec!.columns.flatMap((c) => c.panes).every((p) => p.kind === 'pane')).toBe(true)
   })
 
-  it('the example depends on nothing but the home directory (#29)', async () => {
-    await createExampleSession(dir)
-    const result = await loadSession(dir, 'example', env)
+  it('depends on nothing but the home directory (#29)', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target, 'en', false)
+    const result = await loadSession(target, 'Welcome', env)
     const panes = result.spec!.columns.flatMap((c) => c.panes).filter((p) => p.kind === 'pane')
     // Every pane starts in the home; ~/dev is nobody's default directory.
     for (const pane of panes) expect(pane.cwd).toBe(env.HOME)
     // Commands must exist on Linux and mac alike; journalctl is Linux only.
     const commands = panes.map((p) => p.command ?? p.prefill).filter((c) => c !== null)
     expect(commands.length).toBeGreaterThan(0)
-    for (const command of commands) expect(command).toMatch(/^(echo|ls)\b/)
+    for (const command of commands) expect(command).toMatch(/^(echo|ls|clear|printf)\b/)
   })
 
-  it('returns the existing path without overwriting', async () => {
-    const file = await createExampleSession(dir)
+  it('never overwrites a file that is already there', async () => {
+    const target = join(dir, 'sessions')
+    await seedFirstRun(target, 'en', false)
+    const file = join(target, 'Welcome.yaml')
     await writeFile(file, 'name: mine\ncolumns:\n  - panes:\n      - {}\n')
-    await createExampleSession(dir)
+    await seedFirstRun(target, 'en', false)
     expect(await readFile(file, 'utf8')).toContain('name: mine')
   })
 })

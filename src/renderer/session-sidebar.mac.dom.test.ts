@@ -25,7 +25,6 @@ function summary(over: Partial<SessionSummary> = {}): SessionSummary {
 const hooks = (): SidebarHooks => ({
   onOpen: vi.fn(),
   onClose: vi.fn(),
-  onCreateExample: vi.fn(),
   onRefresh: vi.fn(),
   onWidthChange: vi.fn(),
   gotoHint: (index: number) => `Cmd+${String(index + 1)}`,

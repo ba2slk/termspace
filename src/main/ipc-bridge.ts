@@ -25,7 +25,6 @@ import { resolvePaneCommand } from './pane-command'
 import type { PtyHost } from './pty-host'
 import {
   createBlankSession,
-  createExampleSession,
   listSessions,
   loadSession,
   renameSessionName,
@@ -47,7 +46,6 @@ const HIGH_WATER_MARK_CHARS = 64 * 1024
 const INVOKE_CHANNELS = [
   'session:list',
   'session:load',
-  'session:create-example',
   'session:exists',
   'session:save-as',
   'session:create-blank',
@@ -168,8 +166,6 @@ export function registerIpcHandlers(
     'session:load',
     (_e, name: string): Promise<LoadSessionResult> => loadSession(dir, name, env),
   )
-  ipcMain.handle('session:create-example', (): Promise<string> => createExampleSession(dir))
-
   ipcMain.handle('session:exists', (_e, id: string): Promise<boolean> => sessionExists(dir, id))
 
   // Move to the trash rather than unlink, so the delete stays reversible.

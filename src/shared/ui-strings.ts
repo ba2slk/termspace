@@ -15,8 +15,12 @@ const en = {
   firstRun: {
     appName: 'Termspace',
     windowTitle: (session: string) => `Termspace — ${session}`,
+    // Heading the seeded session's welcome pane prints
+    welcomeTitle: 'Welcome to Termspace',
     // Under the four onboarding keys on the empty canvas
     moreKeys: 'The rest are in settings.',
+    // Shown on the empty canvas only while there are no sessions at all
+    createSession: 'Create a new session',
     // ☰ menu
     closePane: 'Close pane',
     newSession: 'New session',
@@ -85,9 +89,7 @@ const en = {
     title: 'Sessions',
     refreshList: 'Refresh list',
     newSession: 'New session',
-    emptyLead: 'No session files yet.',
-    sessionsDir: '~/.config/termspace/sessions/',
-    createExample: 'Create an example session',
+    emptyLead: 'No sessions.',
     running: 'Running',
     wants: 'A pane here rang',
     endSession: 'End session',
@@ -339,7 +341,9 @@ const ko: Catalog = {
   firstRun: {
     appName: 'Termspace',
     windowTitle: (session: string) => `Termspace — ${session}`,
+    welcomeTitle: 'Termspace에 오신 것을 환영합니다',
     moreKeys: '나머지 단축키는 설정에 있습니다.',
+    createSession: '새 세션 만들기',
     closePane: 'pane 닫기',
     newSession: '새 세션',
     saveLayout: '현재 배치 저장',
@@ -400,9 +404,7 @@ const ko: Catalog = {
     title: '세션',
     refreshList: '목록 새로고침',
     newSession: '새 세션',
-    emptyLead: '세션 파일이 없습니다.',
-    sessionsDir: '~/.config/termspace/sessions/',
-    createExample: '예시 세션 만들기',
+    emptyLead: '세션이 없습니다.',
     running: '실행 중',
     wants: '알림이 온 pane 있음',
     endSession: '세션 끝내기',
@@ -565,7 +567,7 @@ const ko: Catalog = {
     'focus-up': '위쪽 pane으로 포커스',
     'focus-down': '아래쪽 pane으로 포커스',
     'reveal-focus': '포커스한 pane으로 돌아가기',
-    overview: '전체 지도 열기',
+    overview: '오버뷰 맵 열기',
     'split-up': '위로 분할하기',
     'split-down': '아래로 분할하기',
     'add-column-left': '왼쪽에 컬럼 추가하기',

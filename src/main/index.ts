@@ -2,6 +2,7 @@ import { app, dialog } from 'electron'
 import { loadSettingsSync } from './app-settings'
 import { registerIpcHandlers } from './ipc-bridge'
 import { createPtyHost, type PtyHost } from './pty-host'
+import { seedFirstRun, sessionsDir } from './session-config'
 import { writeShellIntegrationFile } from './shell-integration'
 import { activateWindow, createMainWindow } from './window-manager'
 
@@ -43,7 +44,7 @@ if (!isSelfCheck && !app.requestSingleInstanceLock()) {
   process.stderr.write('Termspace is already running. Bringing that window to the front.\n')
   app.quit()
 } else {
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     let host: PtyHost
     try {
       host = createPtyHost()
@@ -67,7 +68,24 @@ if (!isSelfCheck && !app.requestSingleInstanceLock()) {
       )
     })
 
-    const win = createMainWindow(loadSettingsSync(process.env).locale)
+    // An empty locale means "follow the system", as it does in the renderer.
+    const locale = loadSettingsSync(process.env).locale
+
+    // A first run has nothing to open, so give it one session to look at. Only
+    // a failure to write it is worth a line; the app runs fine without it.
+    try {
+      await seedFirstRun(
+        sessionsDir(process.env),
+        locale === '' ? app.getLocale() : locale,
+        process.platform === 'darwin',
+      )
+    } catch (err) {
+      process.stderr.write(
+        `Could not write the first-run session: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
+
+    const win = createMainWindow(locale)
     const unregister = registerIpcHandlers(win, host, process.env)
 
     // The launch that lost the lock has quit by now. Surface this window, or
