@@ -567,7 +567,7 @@ const ko: Catalog = {
     'focus-up': '위쪽 pane으로 포커스',
     'focus-down': '아래쪽 pane으로 포커스',
     'reveal-focus': '포커스한 pane으로 돌아가기',
-    overview: '전체 지도 열기',
+    overview: '오버뷰 맵 열기',
     'split-up': '위로 분할하기',
     'split-down': '아래로 분할하기',
     'add-column-left': '왼쪽에 컬럼 추가하기',
