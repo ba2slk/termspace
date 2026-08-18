@@ -94,14 +94,14 @@ cwd: "~"
 columns:
   - width: 640
     panes:
-      - title: shell
-
-  - width: 720
-    panes:
       - title: welcome
         command: >-
           ${command}
-        height: 0.45
+
+  - width: 720
+    panes:
+      - title: shell
+        height: 0.55
       - title: notes
         # cwd: dev            # a pane's cwd is relative to the one above
         prefill: ls -la

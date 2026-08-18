@@ -212,6 +212,9 @@ describe('seedFirstRun', () => {
     expect(result.ok).toBe(true)
     expect(result.spec!.columns.length).toBe(3)
     expect(result.spec!.columns.map((c) => c.panes.length)).toEqual([1, 2, 1])
+    // The tutorial is the first thing on screen, on its own in the first column.
+    const first = result.spec!.columns[0]!.panes[0]!
+    expect(first.kind === 'pane' && first.title).toBe('welcome')
     // Every pane in the seeded session must parse cleanly
     expect(result.spec!.columns.flatMap((c) => c.panes).every((p) => p.kind === 'pane')).toBe(true)
   })
