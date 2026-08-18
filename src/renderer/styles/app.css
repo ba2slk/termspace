@@ -280,7 +280,8 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  margin: var(--edge) 0;
+  /* Its bottom sits on the panes' bottom line, above the canvas bar's floor. */
+  margin: var(--edge) 0 var(--edge-bottom);
   overflow: hidden;
 }
 

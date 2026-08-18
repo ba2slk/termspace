@@ -13,9 +13,11 @@ export const CANVAS_EDGE = 6
 
 /**
  * Deeper along the bottom: the scrollbar runs there and would otherwise sit on
- * the pane outline. Leaves clearance above and below the bar.
+ * the pane outline. Sized with the bar: 3px of bar over 3px of floor, and 4px
+ * clear of the outline above — the same clearance the 5px bar had in 12px.
+ * Mirrored by the --edge-bottom token, which the sidebar shares.
  */
-export const CANVAS_BOTTOM = 12
+export const CANVAS_BOTTOM = 10
 
 export interface Rect {
   readonly x: number

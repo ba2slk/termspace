@@ -80,6 +80,8 @@
   --radius-dot: 2px;
   --gap: 6px;
   --edge: 6px;
+  /* The floor under the panels: the canvas bar runs there. Mirrors CANVAS_BOTTOM. */
+  --edge-bottom: 10px;
   --hit: 12px;
   /* Every control in the title bar. Grows with the text it sits beside. */
   --ctl-h: calc(26px * var(--ui-scale));
