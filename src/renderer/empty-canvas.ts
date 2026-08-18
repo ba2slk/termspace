@@ -29,9 +29,15 @@ export interface EmptyCanvas {
   readonly el: HTMLElement
   setBindings(bindings: Bindings): void
   setHidden(hidden: boolean): void
+  /** Only an empty list needs the create button; otherwise the list is the way in. */
+  setHasSessions(has: boolean): void
 }
 
-export function createEmptyCanvas(): EmptyCanvas {
+export interface EmptyCanvasHooks {
+  readonly onCreateSession: () => void
+}
+
+export function createEmptyCanvas(hooks: EmptyCanvasHooks): EmptyCanvas {
   const el = document.createElement('div')
   el.className = 'canvas-empty'
 
@@ -59,7 +65,14 @@ export function createEmptyCanvas(): EmptyCanvas {
   more.className = 'canvas-empty__more'
   more.textContent = t.firstRun.moreKeys
 
-  el.append(mark, word, keys, more)
+  const create = document.createElement('button')
+  create.type = 'button'
+  create.className = 'button canvas-empty__create'
+  create.textContent = t.firstRun.createSession
+  create.hidden = true
+  create.addEventListener('click', () => hooks.onCreateSession())
+
+  el.append(mark, word, keys, more, create)
 
   return {
     el,
@@ -74,6 +87,9 @@ export function createEmptyCanvas(): EmptyCanvas {
     },
     setHidden(hidden) {
       el.hidden = hidden
+    },
+    setHasSessions(has) {
+      create.hidden = has
     },
   }
 }

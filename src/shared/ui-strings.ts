@@ -17,6 +17,8 @@ const en = {
     windowTitle: (session: string) => `Termspace — ${session}`,
     // Under the four onboarding keys on the empty canvas
     moreKeys: 'The rest are in settings.',
+    // Shown on the empty canvas only while there are no sessions at all
+    createSession: 'Create a new session',
     // ☰ menu
     closePane: 'Close pane',
     newSession: 'New session',
@@ -338,6 +340,7 @@ const ko: Catalog = {
     appName: 'Termspace',
     windowTitle: (session: string) => `Termspace — ${session}`,
     moreKeys: '나머지 단축키는 설정에 있습니다.',
+    createSession: '새 세션 만들기',
     closePane: 'pane 닫기',
     newSession: '새 세션',
     saveLayout: '현재 배치 저장',

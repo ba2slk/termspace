@@ -601,6 +601,12 @@ body {
   color: var(--fg-faint);
 }
 
+/* The block ignores the pointer; the one thing here to click must not. */
+.canvas-empty__create {
+  margin-top: 18px;
+  pointer-events: auto;
+}
+
 .canvas-track {
   position: absolute;
   inset: 0;

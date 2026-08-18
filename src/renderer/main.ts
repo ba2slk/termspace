@@ -144,7 +144,7 @@ function restoreCanvas(): void {
 
 // ── Empty canvas ────────────────────────────────────────
 
-const placeholder = createEmptyCanvas()
+const placeholder = createEmptyCanvas({ onCreateSession: () => openNewSession() })
 canvasHost.append(placeholder.el)
 
 function syncPlaceholder(): void {
@@ -408,6 +408,7 @@ function renderSidebar(): void {
     [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
+  placeholder.setHasSessions(knownSessions.length > 0)
 }
 
 /**
