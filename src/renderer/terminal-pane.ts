@@ -168,6 +168,10 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     fontSize: options.appearance.fontSize,
     lineHeight: options.appearance.lineHeight,
     allowProposedApi: true,
+    // Not for see-through panes: an opaque canvas gets subpixel (LCD) text
+    // antialiasing on Linux, which leaves colour fringes on every glyph edge.
+    // With alpha the glyph atlas is drawn greyscale, like other terminals.
+    allowTransparency: true,
     // Only the focused pane blinks; twenty blinking cursors is noise.
     cursorBlink: false,
     scrollback: options.appearance.scrollback,
