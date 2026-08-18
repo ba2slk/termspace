@@ -501,7 +501,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     const paneSpec = paneSpecs.get(paneId)
     if (paneSpec === undefined) return
 
-    const { fontSize, lineHeight, scrollback, fontFamily, scrollBoost } = options.settings()
+    const { fontSize, lineHeight, scrollback, fontFamily, scrollBoost, textRendering } =
+      options.settings()
     const terminal = createTerminalPane({
       paneId,
       appearance: {
@@ -511,6 +512,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         fontFamily,
         scrollBoost,
         theme: options.theme(),
+        textRendering,
       },
       onInput: (data) => api.write(paneId, data),
       // The addon detaches itself on context loss; untrack it or it never returns.
@@ -846,6 +848,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         fontFamily: next.fontFamily,
         scrollBoost: next.scrollBoost,
         theme: options.theme(),
+        // Fixed at open; a live change waits for the next start, like locale.
+        textRendering: next.textRendering,
       }
       for (const record of records.values()) record.terminal.applyAppearance(appearance)
     },

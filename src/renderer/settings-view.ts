@@ -12,6 +12,7 @@ import { api } from './api'
 import { normalizeHex } from './focus-border'
 import { createKeybindingsPanel, type KeybindingsPanel } from './keybindings-view'
 import { t } from './i18n'
+import { IS_LINUX } from './platform'
 
 interface Limit {
   readonly min: number
@@ -580,6 +581,43 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
    * Language. Applied at startup only, so the row says so rather than pretending
    * the screen behind it will change.
    */
+  function textRenderingRow(value: string): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'settings__row'
+
+    const text = document.createElement('div')
+    text.className = 'settings__text'
+    const label = document.createElement('span')
+    label.textContent = t.settings.textRenderingLabel
+    const description = document.createElement('small')
+    description.textContent = t.settings.textRenderingDesc
+    text.append(label, description)
+
+    const control = document.createElement('div')
+    control.className = 'settings__control'
+
+    const select = document.createElement('select')
+    select.className = 'settings__select'
+    select.dataset['setting'] = 'textRendering'
+    for (const [id, name] of [
+      ['grayscale', t.settings.textRenderingGrayscale],
+      ['subpixel', t.settings.textRenderingSubpixel],
+    ] as const) {
+      const option = document.createElement('option')
+      option.value = id
+      option.textContent = name
+      select.append(option)
+    }
+    select.value = value
+    select.addEventListener('change', () => {
+      commit({ ...hooks.settings(), textRendering: select.value })
+    })
+
+    control.append(select, resetButton('textRendering'))
+    row.append(text, control)
+    return row
+  }
+
   function localeRow(value: string): HTMLElement {
     const row = document.createElement('div')
     row.className = 'settings__row'
@@ -670,6 +708,8 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     const values = document.createElement('div')
     values.append(themeRow(settings.theme))
     values.append(fontRow(settings.fontFamily))
+    // Elsewhere the platform draws text its own way and the choice does nothing.
+    if (IS_LINUX) values.append(textRenderingRow(settings.textRendering))
     for (const field of FIELDS) values.append(fieldRow(field, settings[field.key]))
     values.append(toggleRow(NOTIFICATIONS, settings.notifications))
     values.append(toggleRow(INHERIT_WORKING_DIR, settings.inheritWorkingDir))

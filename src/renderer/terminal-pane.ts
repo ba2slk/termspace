@@ -12,6 +12,7 @@ import type { TerminalTheme } from '../shared/terminal-themes'
 import { api } from './api'
 import { guardImeDoubleCommit } from './ime-double-commit'
 import { ImeTrace } from './ime-trace'
+import { IS_LINUX } from './platform'
 import { isLinkActivation } from './link-activation'
 import { IS_MAC } from './platform'
 import { shellQuote } from '../shared/shell-quote'
@@ -115,6 +116,8 @@ export interface TerminalAppearance {
   readonly scrollBoost: number
   /** Colour palette. */
   readonly theme: TerminalTheme
+  /** 'grayscale' or 'subpixel'. Fixed once the terminal is open. */
+  readonly textRendering: string
 }
 
 /*
@@ -168,6 +171,11 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     fontSize: options.appearance.fontSize,
     lineHeight: options.appearance.lineHeight,
     allowProposedApi: true,
+    // Not for see-through panes: an opaque canvas gets subpixel (LCD) text
+    // antialiasing on Linux, which leaves colour fringes on every glyph edge.
+    // With alpha the glyph atlas is drawn greyscale, like other terminals.
+    // Elsewhere text is greyscale already, so the canvas stays opaque.
+    allowTransparency: IS_LINUX && options.appearance.textRendering === 'grayscale',
     // Only the focused pane blinks; twenty blinking cursors is noise.
     cursorBlink: false,
     scrollback: options.appearance.scrollback,

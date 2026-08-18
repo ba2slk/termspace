@@ -108,6 +108,32 @@ painted in the panel background color, so as soon as the terminal background dif
 looked like a black border inside the rounded corners. Removing the padding would press
 the text against the edge, so the pane background was matched to the terminal background.
 
+**Every glyph edge carried a colour fringe.** On Linux an opaque xterm canvas gets the
+browser's subpixel (LCD) text antialiasing, and next to Ghostty with the same font and
+palette the strokes read tinted and soft. `allowTransparency: true` makes the WebGL
+glyph atlas greyscale — that is what the option changes here, not see-through panes.
+Alone it left strokes thinner still (xterm.js #4212 is open on this), so on Linux the
+app also asks Chromium for full hinting at whole-pixel positions
+(`font-render-hinting=full`, `disable-font-subpixel-positioning`); mac and Windows draw
+text through their own engines and ignore both. Measured against Ghostty by the share
+of fully lit pixels per glyph, Latin lands within 1–2 points and Hangul about 9 behind.
+Panes past the WebGL cap draw through the DOM renderer, which the atlas option does not
+reach; with the switches on, a DOM pane and a WebGL pane came out identical at device
+pixels (edge chroma spread 0.076 vs 0.078), and `bench:render` showed no frame-time
+difference from the opaque build across 6, 12 and 18 streaming panes. The `subpixel`
+value of the `textRendering` setting is the previous look, untouched, for eyes used to
+it — a restart applies it, since the atlas mode is fixed when a terminal opens and the
+hinting is a command-line switch.
+
+**Thirteen streaming panes ran at eight frames a second.** Not this change: `main` does
+the same. Twelve WebGL panes streaming `yes` hold above 100 fps; the thirteenth falls to
+the DOM renderer, whose refresh rebuilds a row of elements per line and stalls the
+renderer thread for about 100 ms each time — the focused pane and the keyboard stall
+with it. Rare in practice, since panes past the cap mostly sit at a prompt, but a build
+log or agent streaming out there drags the whole window. Left as is for now; the
+cheapest fix would coalesce a DOM pane's output through the freeze queue and flush it a
+few times a second.
+
 ---
 
 ## Layout

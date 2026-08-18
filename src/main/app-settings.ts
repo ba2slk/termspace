@@ -14,6 +14,7 @@ export { DEFAULT_SETTINGS }
 
 /** What the focused pane's border may follow. */
 export const FOCUS_BORDER_MODES = ['white', 'palette', 'custom'] as const
+export const TEXT_RENDERING_MODES = ['grayscale', 'subpixel'] as const
 
 /** Interface languages with a catalogue. Empty means the system's. */
 export const LOCALES = ['', 'en', 'ko'] as const
@@ -78,6 +79,12 @@ function cleanFocusBorder(value: unknown): string {
     : DEFAULT_SETTINGS.focusBorder
 }
 
+function cleanTextRendering(value: unknown): string {
+  return typeof value === 'string' && (TEXT_RENDERING_MODES as readonly string[]).includes(value)
+    ? value
+    : DEFAULT_SETTINGS.textRendering
+}
+
 /** Reaches a CSS declaration, so nothing but a plain hex colour gets through. */
 function cleanHexColor(value: unknown): string {
   if (typeof value !== 'string') return DEFAULT_SETTINGS.focusBorderColor
@@ -110,6 +117,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     focusBorder: cleanFocusBorder(input['focusBorder']),
     focusBorderColor: cleanHexColor(input['focusBorderColor']),
     locale: cleanLocale(input['locale']),
+    textRendering: cleanTextRendering(input['textRendering']),
   }
 }
 
@@ -138,13 +146,15 @@ const HEADER = `# Termspace settings
 # focusBorder         what colours the focused pane's border: white, palette, or custom
 # focusBorderColor    the colour custom uses, as #rrggbb
 # locale              interface language: en, ko, or empty to follow the system
+# textRendering       terminal glyph antialiasing: grayscale, or subpixel for the browser's LCD text (Linux only)
 `
 
 /**
  * The same read, blocking.
  *
- * Only the locale needs this: it has to reach the renderer in the page URL,
- * which is fixed before the window is created and cannot wait on a promise.
+ * The locale needs this: it has to reach the renderer in the page URL, which
+ * is fixed before the window is created and cannot wait on a promise. So does
+ * textRendering, whose switches must be on the command line before app ready.
  */
 export function loadSettingsSync(env: NodeJS.ProcessEnv): AppSettings {
   try {

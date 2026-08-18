@@ -198,6 +198,10 @@ const en = {
     fontDesc: 'Terminal font. Only fixed-width fonts are listed',
     fontDefault: 'Default',
     fontMissing: (name: string) => `${name} — not installed`,
+    textRenderingLabel: 'Text rendering',
+    textRenderingDesc: 'Applied the next time the app starts.',
+    textRenderingGrayscale: 'Greyscale',
+    textRenderingSubpixel: 'Subpixel',
     paletteLabel: 'Palette',
 
     openSettingsFile: 'Open settings file',
@@ -502,6 +506,10 @@ const ko: Catalog = {
     fontDesc: '글자 폭이 일정한 글꼴만 보여 줍니다',
     fontDefault: '기본값',
     fontMissing: (name: string) => `${name} — 설치되어 있지 않음`,
+    textRenderingLabel: '글자 렌더링',
+    textRenderingDesc: '앱을 다시 시작하면 적용됩니다.',
+    textRenderingGrayscale: '회색조',
+    textRenderingSubpixel: '서브픽셀',
     paletteLabel: '팔레트',
 
     openSettingsFile: '설정 파일 열기',

@@ -9,3 +9,5 @@
 import { api } from './api'
 
 export const IS_MAC = api.platform === 'darwin'
+/** The one platform where text rendering is a choice; see AppSettings.textRendering. */
+export const IS_LINUX = api.platform === 'linux'

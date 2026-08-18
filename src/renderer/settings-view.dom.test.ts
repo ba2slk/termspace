@@ -20,6 +20,7 @@ const saveSettings = vi.fn<(next: AppSettings) => Promise<AppSettings>>(async (n
 let onDisk: readonly TerminalTheme[] = []
 
 vi.stubGlobal('termspace', {
+  platform: 'linux',
   listMonoFonts: async () => [],
   listUserThemes: async () => onDisk,
   shellIntegrationStatus: async () => null,
@@ -74,6 +75,7 @@ describe('restoring one setting', () => {
     open({})
     for (const key of [
       'fontSize', 'uiScale', 'copyOnSelect', 'fontFamily', 'theme', 'locale', 'focusBorder',
+      'textRendering',
     ] as const) {
       expect(reset(key), key).not.toBeNull()
     }
