@@ -890,3 +890,24 @@ nothing — the app would be arguing with them. The directory exists from the
 moment anything is written, so an empty directory is a deliberate state and is
 left alone.
 
+
+## Updates
+
+**The update check ships as a notice, not an installer.** The first design replaced
+the AppImage in place: download beside `$APPIMAGE`, verify against `SHA256SUMS.txt`,
+rename over the running file. It was cut to a check plus a link before the first
+public launch. The notice is the part that cannot be added retroactively, and an
+installer that overwrites the running binary is the wrong thing to ship untested to
+strangers. In-place replacement is deferred, with two decisions kept for it: the file
+is replaced at the same path and name, because launchers and the AppArmor profile pin
+`~/Applications/Termspace.AppImage`, and every failure leaves the installed binary
+untouched.
+
+**Prerelease visibility follows the running version, not a setting.** A stable build
+sees only stable releases; a `-beta.N` build sees both. That rules out the one wrong
+prompt that matters — telling a beta user to "update" to an older stable — and it is
+pinned by `update-check.test.ts`.
+
+**The self-check has no group for this.** The one path is a network request, and a
+check that fails when GitHub is unreachable would be reporting the network, not the
+app.
