@@ -2,7 +2,7 @@
  * Routes renderer requests to pty-host and session-config, and batches pty output back.
  */
 import { writeFile } from 'node:fs/promises'
-import { clipboard, dialog, ipcMain, Notification, shell, type BrowserWindow } from 'electron'
+import { app, clipboard, dialog, ipcMain, Notification, shell, type BrowserWindow } from 'electron'
 import type {
   LayoutSnapshot,
   PaneAttention,
@@ -18,6 +18,7 @@ import { RC_LINE, RC_LINE_ZSH } from './shell-integration'
 import { activateWindow } from './window-manager'
 import { loadSettings, saveSettings, settingsFile } from './app-settings'
 import { loadKeybindings, saveKeybindings } from './keybindings-file'
+import { createUpdater } from './updater'
 import { listMonoFonts } from './font-list'
 import { ensureThemesDir, listUserThemes } from './theme-config'
 import { OutputBatcher } from './output-batcher'
@@ -72,6 +73,7 @@ const INVOKE_CHANNELS = [
   'pty:foreground-commands',
   'pty:titles',
   'pty:cwd',
+  'update:check',
 ]
 const ON_CHANNELS = [
   'pty:write',
@@ -88,6 +90,7 @@ const ON_CHANNELS = [
   'settings:reveal',
   'themes:reveal',
   'app:visible-pane',
+  'update:open-release',
 ]
 
 export function registerIpcHandlers(
@@ -411,6 +414,21 @@ export function registerIpcHandlers(
   })
 
   /*
+   * Release check. The URL never crosses to the renderer: it gets a state and
+   * asks main to open the page.
+   */
+  const updater = createUpdater({
+    currentVersion: app.getVersion(),
+    fetch: (input, init) => fetch(input, init),
+    automatic: async () => (await loadSettings(env)).updateCheck === 1,
+    onState: (state) => send('update:state', state),
+  })
+  ipcMain.handle('update:check', () => updater.checkNow())
+  ipcMain.on('update:open-release', () => void shell.openExternal(updater.releaseUrl()))
+  // Not under the self-check: four instances asking GitHub at once is noise.
+  if (env['VITE_SELFCHECK'] !== '1') updater.start()
+
+  /*
    * Screenshots for the self-check. DOM queries can't see a layout that is
    * present and correctly classed but visually wrong.
    */
@@ -445,6 +463,7 @@ export function registerIpcHandlers(
     win.off('maximize', notifyMaximize)
     win.off('unmaximize', notifyMaximize)
     batcher.dispose()
+    updater.stop()
     for (const channel of INVOKE_CHANNELS) ipcMain.removeHandler(channel)
     for (const channel of ON_CHANNELS) ipcMain.removeAllListeners(channel)
   }

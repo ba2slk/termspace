@@ -78,6 +78,8 @@
   --radius-xs: 3px;
   /* Tiny markers — swatches, the drag ridge. */
   --radius-dot: 2px;
+  /* Full round-off for text pills; any value past half the height. */
+  --radius-pill: 999px;
   --gap: 6px;
   --edge: 6px;
   /* The floor under the panels: the canvas bar runs there. Mirrors CANVAS_BOTTOM. */

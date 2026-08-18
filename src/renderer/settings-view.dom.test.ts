@@ -24,9 +24,15 @@ vi.stubGlobal('termspace', {
   listMonoFonts: async () => [],
   listUserThemes: async () => onDisk,
   shellIntegrationStatus: async () => null,
+  update: {
+    check: vi.fn(async () => ({ kind: 'up-to-date' as const })),
+    openRelease: vi.fn(),
+    onState: () => () => {},
+  },
 })
 
 const { createSettingsView } = await import('./settings-view')
+const { t } = await import('./i18n')
 
 let view: SettingsView
 let latest: AppSettings
@@ -207,5 +213,55 @@ describe('user palettes', () => {
     themeSelect().dispatchEvent(new Event('change', { bubbles: true }))
     expect(latest.theme).toBe('mine')
     expect(themeById(latest.theme, owned).background).toBe('#0b0b0b')
+  })
+})
+
+describe('updates section', () => {
+  /*
+   * The view re-renders once the theme folder and the shell status come back,
+   * which replaces every row — so let those land before touching the buttons.
+   */
+  async function openSettled(): Promise<void> {
+    open({})
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  it('has the updateCheck toggle, on by default', () => {
+    open({})
+    const group = document.body.querySelector<HTMLElement>('[aria-label="' + t.settings.updateCheckLabel + '"]')
+    expect(group).not.toBeNull()
+    const on = group!.querySelectorAll('.settings__segment--on')
+    expect(on).toHaveLength(1)
+    expect(on[0]?.textContent).toBe(t.settings.on)
+  })
+
+  it('check now reports the result in the row and offers the page when a release exists', async () => {
+    const check = (window as unknown as { termspace: { update: { check: ReturnType<typeof vi.fn> } } }).termspace.update.check
+    check.mockResolvedValueOnce({ kind: 'available', version: '1.2.0' })
+    await openSettled()
+    const button = document.body.querySelector<HTMLButtonElement>('button[data-action="check-updates"]')!
+    button.click()
+    const result = document.body.querySelector<HTMLElement>('.settings__update-result')!
+    await vi.waitFor(() => {
+      expect(result.textContent).toBe(t.settings.checkNowAvailable('1.2.0'))
+    })
+    const openButton = document.body.querySelector<HTMLButtonElement>('button[data-action="open-release"]')!
+    expect(openButton.hidden).toBe(false)
+  })
+
+  it('check now says up to date, and failed, through the catalog', async () => {
+    const check = (window as unknown as { termspace: { update: { check: ReturnType<typeof vi.fn> } } }).termspace.update.check
+    await openSettled()
+    const button = document.body.querySelector<HTMLButtonElement>('button[data-action="check-updates"]')!
+    const result = () => document.body.querySelector<HTMLElement>('.settings__update-result')!.textContent
+    button.click()
+    await vi.waitFor(() => {
+      expect(result()).toBe(t.settings.checkNowUpToDate)
+    })
+    check.mockResolvedValueOnce({ kind: 'failed' })
+    button.click()
+    await vi.waitFor(() => {
+      expect(result()).toBe(t.settings.checkNowFailed)
+    })
   })
 })

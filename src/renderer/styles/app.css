@@ -1489,6 +1489,50 @@ button.keys__chord:hover {
   color: var(--fg-faint);
 }
 
+/* The update chip: a small pill at the end of the left group, only while a
+   newer release exists. It is a control, so it opts out of window drag. */
+.update-chip {
+  display: flex;
+  align-items: center;
+  height: calc(var(--ctl-h) - 6px);
+  margin-left: 8px;
+  /* Outline only: a filled block in the bar reads as a fifth button. */
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg-dim);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.update-chip:hover {
+  border-color: var(--border-active);
+  color: var(--fg);
+}
+
+.update-chip__open,
+.update-chip__dismiss {
+  height: 100%;
+  padding: 0 4px 0 10px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.update-chip__dismiss {
+  padding: 0 8px 0 4px;
+  color: var(--fg-faint);
+}
+
+.update-chip__open:hover,
+.update-chip__dismiss:hover {
+  background: var(--fill-hover);
+}
+
 /* For values that suit neither a slider nor a toggle, like a font name. */
 .settings__select {
   max-width: 260px;

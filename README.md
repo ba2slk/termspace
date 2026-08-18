@@ -185,6 +185,12 @@ palettes** — Catppuccin, Gruvbox, Nord, Tokyo Night, Solarized, Dracula, the
 Termspace default. Drop a YAML into `~/.config/termspace/themes/` for your
 own.
 
+Termspace checks GitHub for a newer release when it starts and once a day: one
+anonymous request to the releases API, nothing else sent. A newer release shows
+as a chip in the title bar that opens the release page. `updateCheck: 0` in
+`~/.config/termspace/settings.yaml` (or the toggle in Settings › Updates) turns
+the check off; "Check now" in the same section works either way.
+
 ## Developing
 
 Setup, the test commands, and the bar for a PR are in

@@ -94,6 +94,13 @@ const NOTIFICATIONS: ToggleSpec = {
   description: t.settings.notificationsDesc,
 }
 
+/** Its own section: it is about the app reaching out, not about any terminal. */
+const UPDATE_CHECK: ToggleSpec = {
+  key: 'updateCheck',
+  label: t.settings.updateCheckLabel,
+  description: t.settings.updateCheckDesc,
+}
+
 const INHERIT_WORKING_DIR: ToggleSpec = {
   key: 'inheritWorkingDir',
   label: t.settings.inheritWorkingDirLabel,
@@ -316,6 +323,58 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
     }
 
     control.append(group, resetButton(spec.key))
+    row.append(text, control)
+    return row
+  }
+
+  /**
+   * "Check now" runs regardless of the toggle — the user just asked — and
+   * shows what it found here rather than in the title-bar chip, which stays
+   * dismissed if it was dismissed.
+   */
+  function checkNowRow(): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'settings__row'
+    const text = document.createElement('div')
+    text.className = 'settings__text'
+    const name = document.createElement('span')
+    name.textContent = t.settings.checkNowLabel
+    const result = document.createElement('small')
+    result.className = 'settings__update-result'
+    text.append(name, result)
+
+    const control = document.createElement('div')
+    control.className = 'settings__control'
+    const openRelease = document.createElement('button')
+    openRelease.type = 'button'
+    openRelease.className = 'button'
+    openRelease.dataset['action'] = 'open-release'
+    openRelease.textContent = t.settings.checkNowOpen
+    openRelease.hidden = true
+    openRelease.addEventListener('click', () => api.update.openRelease())
+
+    const check = document.createElement('button')
+    check.type = 'button'
+    check.className = 'button'
+    check.dataset['action'] = 'check-updates'
+    check.textContent = t.settings.checkNowButton
+    check.addEventListener('click', () => {
+      check.disabled = true
+      result.textContent = t.settings.checkNowChecking
+      openRelease.hidden = true
+      void api.update.check().then((state) => {
+        check.disabled = false
+        if (state.kind === 'available') {
+          result.textContent = t.settings.checkNowAvailable(state.version)
+          openRelease.hidden = false
+        } else if (state.kind === 'failed') {
+          result.textContent = t.settings.checkNowFailed
+        } else {
+          result.textContent = t.settings.checkNowUpToDate
+        }
+      })
+    })
+    control.append(openRelease, check)
     row.append(text, control)
     return row
   }
@@ -752,6 +811,10 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
       files.append(row)
     }
 
+    const updates = document.createElement('div')
+    updates.append(toggleRow(UPDATE_CHECK, settings.updateCheck))
+    updates.append(checkNowRow())
+
     const note = document.createElement('p')
     note.className = 'settings__note'
     note.textContent = t.settings.note
@@ -763,6 +826,7 @@ export function createSettingsView(host: HTMLElement, hooks: SettingsHooks): Set
       section(t.settings.sectionKeyboard, keyboard),
       section(t.settings.sectionMouse, toggles),
       section(t.settings.sectionFiles, files),
+      section(t.settings.sectionUpdates, updates),
       ...(shellIntegration === null
         ? []
         : [section(t.settings.sectionShell, shellBody(shellIntegration))]),

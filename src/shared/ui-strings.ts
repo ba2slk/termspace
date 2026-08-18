@@ -82,6 +82,10 @@ const en = {
     maximize: 'Maximize',
     restore: 'Restore',
     close: 'Close',
+    // The update chip, shown only while a newer release exists
+    updateAvailable: (version: string) => `${version} available`,
+    updateOpen: 'Open the release page',
+    updateDismiss: 'Hide until the next start',
   },
 
   /** session-sidebar.ts: the resident session list. */
@@ -148,6 +152,7 @@ const en = {
     sectionKeyboard: 'Keyboard',
     sectionMouse: 'Mouse',
     sectionFiles: 'Files',
+    sectionUpdates: 'Updates',
     uiScaleLabel: 'Interface size',
     uiScaleDesc: "Scales the app's own text and title bar. It leaves the terminal's font size alone.",
     focusBorderLabel: 'Focused pane border',
@@ -213,6 +218,16 @@ const en = {
     openThemesDir: 'Open palettes folder',
     themesDirPath: '~/.config/termspace/themes/',
     openButton: 'Open',
+
+    updateCheckLabel: 'Check for updates',
+    updateCheckDesc: 'Asks GitHub for a newer release at startup and once a day. Nothing else is sent.',
+    checkNowLabel: 'Check now',
+    checkNowButton: 'Check',
+    checkNowChecking: 'Checking…',
+    checkNowUpToDate: 'Up to date',
+    checkNowAvailable: (version: string) => `${version} is available`,
+    checkNowFailed: 'Could not reach GitHub',
+    checkNowOpen: 'Open the release page',
 
     sectionShell: 'Shell integration',
     shellLead:
@@ -398,6 +413,9 @@ const ko: Catalog = {
     maximize: '최대화',
     restore: '이전 크기로',
     close: '닫기',
+    updateAvailable: (version: string) => `${version} 업데이트`,
+    updateOpen: '릴리스 페이지 열기',
+    updateDismiss: '다음 실행까지 숨기기',
   },
 
   sidebar: {
@@ -456,6 +474,7 @@ const ko: Catalog = {
     sectionKeyboard: '키보드',
     sectionMouse: '마우스',
     sectionFiles: '파일',
+    sectionUpdates: '업데이트',
     uiScaleLabel: '화면 배율',
     uiScaleDesc: '앱 글자와 제목 표시줄만 조정합니다. 터미널 글자 크기에는 영향을 주지 않습니다.',
     focusBorderLabel: '포커스 pane 테두리',
@@ -521,6 +540,16 @@ const ko: Catalog = {
     openThemesDir: '팔레트 폴더 열기',
     themesDirPath: '~/.config/termspace/themes/',
     openButton: '열기',
+
+    updateCheckLabel: '업데이트 확인',
+    updateCheckDesc: '시작할 때와 하루에 한 번 GitHub에서 새 릴리스를 확인합니다. 다른 정보는 보내지 않습니다.',
+    checkNowLabel: '지금 확인',
+    checkNowButton: '확인',
+    checkNowChecking: '확인 중…',
+    checkNowUpToDate: '최신 버전입니다',
+    checkNowAvailable: (version: string) => `${version} 업데이트가 있습니다`,
+    checkNowFailed: 'GitHub에 연결할 수 없습니다',
+    checkNowOpen: '릴리스 페이지 열기',
 
     sectionShell: '셸 연동',
     shellLead:

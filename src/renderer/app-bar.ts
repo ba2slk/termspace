@@ -10,6 +10,8 @@ import { createAppMark, MARK_CHROME } from './app-mark'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
 import { createCommandMenu, type CommandItem } from './command-menu'
+import { createUpdateChip } from './update-chip'
+import type { UpdateState } from '../shared/protocol'
 import type { ActionId } from '../shared/keybindings'
 
 export interface AppBarHooks {
@@ -43,6 +45,8 @@ export interface AppBar {
   setSidebarVisible(visible: boolean): void
   /** Re-evaluate whether the split controls are enabled. */
   syncControls(): void
+  /** A newer release exists (or not). The chip decides whether to show it. */
+  setUpdate(state: UpdateState): void
   /** Collapse any open dropdown before another surface comes forward. */
   closeMenus(): void
   destroy(): void
@@ -191,8 +195,12 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   const divider = document.createElement('span')
   divider.className = 'app-bar__divider'
 
+  // End of the left group: the pan strip in the middle must stay untouched,
+  // and the right end differs between platforms.
+  const updateChip = createUpdateChip({ onOpen: () => api.update.openRelease() })
+
   // Splitting and saving both act on the arrangement, so they share a group.
-  left.append(menuButton, panelButton, divider, splitButton, saveButton)
+  left.append(menuButton, panelButton, divider, splitButton, saveButton, updateChip.element)
 
   const title = document.createElement('div')
   title.className = 'app-bar__title'
@@ -290,6 +298,9 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
       const pans = hooks.barPans()
       pan.classList.toggle('app-bar__pan--off', !pans)
       if (!pans) bar.classList.remove('app-bar--pannable')
+    },
+    setUpdate(state) {
+      updateChip.setState(state)
     },
     closeMenus() {
       menu.close()

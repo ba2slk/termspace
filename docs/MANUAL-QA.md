@@ -471,6 +471,16 @@ These can't be replaced by automated judgment. They're matters of impression, no
       appear as typed (both English and Korean), Enter commits, and the session file has the
       new title without pressing save. Escape leaves the card as it was
 
+### Update check (no self-check covers this)
+
+- [ ] **Update chip.** Run the previous release (`~/Applications/Termspace.AppImage`
+      before `install:local`, or an older AppImage from the releases page). Within a few
+      seconds of startup the title bar's left group ends in a chip naming the new
+      version. Clicking it opens that release's GitHub page in the browser. Close the
+      chip: it stays hidden; Settings › Updates › Check now still reports the version and
+      offers the page. Why manual: the only path is a live request to GitHub, which a
+      self-check must not depend on
+
 ### Shell integration (bash and zsh)
 
 The OSC round trip itself is automated — the check emits the hook's sequences with

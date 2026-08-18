@@ -222,6 +222,9 @@ const appBar = createAppBar(shell, {
 })
 shell.prepend(appBar.element)
 
+// A background check found a newer release. The chip hides itself if dismissed.
+api.update.onState((state) => appBar.setUpdate(state))
+
 // ── Sidebar ─────────────────────────────────────────────
 
 const sidebar = createSessionSidebar(workspace, {
