@@ -413,7 +413,7 @@ const ko: Catalog = {
     maximize: '최대화',
     restore: '이전 크기로',
     close: '닫기',
-    updateAvailable: (version: string) => `${version} 나옴`,
+    updateAvailable: (version: string) => `${version} 업데이트`,
     updateOpen: '릴리스 페이지 열기',
     updateDismiss: '다음 실행까지 숨기기',
   },
