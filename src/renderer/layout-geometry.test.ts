@@ -8,6 +8,7 @@ import {
   maxScrollX,
   paneRects,
   scrollToReveal,
+  snapToDevicePixels,
   visiblePaneIds,
 } from './layout-geometry'
 
@@ -137,5 +138,23 @@ describe('visiblePaneIds', () => {
   it('scrolling far drops the panes left behind', () => {
     const ids = visiblePaneIds(rects, { width: 300, height: H, scrollX: 1500 })
     expect(ids).not.toContain('a1')
+  })
+})
+
+describe('snapToDevicePixels', () => {
+  it('rounds to whole CSS pixels at 1× and 2×', () => {
+    expect(snapToDevicePixels(10.4, 1)).toBe(10)
+    expect(snapToDevicePixels(10.26, 2)).toBe(10.5)
+  })
+
+  it('lands on a device pixel at fractional scales', () => {
+    const dpr = 5 / 3
+    const snapped = snapToDevicePixels(184, dpr)
+    expect(Math.abs(snapped * dpr - Math.round(snapped * dpr))).toBeLessThan(1e-9)
+    expect(Math.abs(snapped - 184)).toBeLessThan(1 / dpr)
+  })
+
+  it('treats a missing ratio as 1×', () => {
+    expect(snapToDevicePixels(3.7, 0)).toBe(4)
   })
 })

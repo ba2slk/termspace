@@ -76,6 +76,14 @@ of a pane out of view while there is room under the cap, and gives idle ones up 
 recently seen first only when a visible pane needs the slot. Same four round trips: 0
 attaches after the first sight of each pane. Freezing is unchanged — an idle renderer
 sits on a frozen pane doing nothing — so the two axes stay separate as before.
+**Thin strokes shimmered while the canvas glided.** The track moves by `translateX`, and
+the offset was rounded to whole CSS pixels. At this machine's 1.67× scale a whole CSS
+pixel is one and two-thirds device pixels, so two frames in three landed the composited
+layers between device pixels and the compositor resampled them — box-drawing lines and
+underscores swam, and a glide that stopped on such a frame stayed soft at rest. The offset
+is now rounded in device pixels (`snapToDevicePixels`), which at 1× and 2× is what it was.
+Screencast of the same six-notch fling, variance of the Laplacian over the pane area:
+moving frames averaged 128 before and 143 after; the frame at rest went from 127 to 148.
 
 **Then every switch stuttered.** Handing the contexts back on the way out is a rule about
 the *cap*, and it was paying for the cap on every switch whether or not the page was

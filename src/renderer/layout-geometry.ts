@@ -113,6 +113,19 @@ export function scrollToReveal(
  * Panes overlapping the active region: the viewport widened by one screen each
  * way, so renderers are attached before they scroll into view.
  */
+/**
+ * A CSS length that lands on a whole device pixel.
+ *
+ * The track slides by a transform, and a translation that stops between device
+ * pixels is resampled by the compositor: at a 1.67× or 1.5× scale most integer
+ * CSS offsets do, so thin strokes shimmer while the canvas glides. Rounding in
+ * device pixels keeps every frame crisp; at 1× and 2× it is plain rounding.
+ */
+export function snapToDevicePixels(cssPx: number, devicePixelRatio: number): number {
+  const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1
+  return Math.round(cssPx * dpr) / dpr
+}
+
 export function visiblePaneIds(rects: readonly PaneRect[], viewport: Viewport): string[] {
   const from = viewport.scrollX - viewport.width
   const to = viewport.scrollX + viewport.width * 2

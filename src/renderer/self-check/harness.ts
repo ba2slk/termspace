@@ -220,7 +220,8 @@ export function wheel(
 
 export function trackOffset(): number {
   const track = document.querySelector<HTMLElement>('.session-host:not([hidden]) .canvas-track')
-  const match = /translateX\((-?\d+)px\)/.exec(track?.style.transform ?? '')
+  // Snapped to device pixels, so at fractional scales the CSS value has decimals.
+  const match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(track?.style.transform ?? '')
   return match === null ? 0 : Number(match[1])
 }
 

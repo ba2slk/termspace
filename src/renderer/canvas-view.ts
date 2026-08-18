@@ -12,6 +12,7 @@ import {
   maxScrollX,
   paneRects,
   scrollToReveal,
+  snapToDevicePixels,
   type PaneRect,
   type Viewport,
 } from './layout-geometry'
@@ -164,7 +165,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
   function applyScroll(value: number): void {
     scrollX = value
-    track.style.transform = `translateX(${-Math.round(value)}px)`
+    track.style.transform = `translateX(${-snapToDevicePixels(value, window.devicePixelRatio)}px)`
     syncIndicator()
     hooks.onScroll?.()
   }
