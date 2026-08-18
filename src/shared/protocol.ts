@@ -206,6 +206,17 @@ export interface ShellIntegrationStatus {
   readonly active: boolean
 }
 
+/**
+ * What a release check found. `up-to-date` and `failed` only answer a check
+ * the user asked for; a background check is silent unless something is
+ * available.
+ */
+export type UpdateState =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'available'; readonly version: string }
+  | { readonly kind: 'up-to-date' }
+  | { readonly kind: 'failed' }
+
 export interface SpawnRequest {
   readonly paneId: string
   readonly cwd: string
@@ -344,6 +355,15 @@ export interface TermspaceApi {
     toggleFullScreen(): Promise<boolean>
     toggleDevTools(): void
     onMaximizeChange(handler: (maximized: boolean) => void): () => void
+  }
+  /** Release checks. Main keeps the URL; the renderer only sees a state. */
+  readonly update: {
+    /** A check the user asked for. Resolves to what it found. */
+    check(): Promise<UpdateState>
+    /** Open the offered release's page, or the releases index. */
+    openRelease(): void
+    /** A background check found something. Returns an unsubscribe function. */
+    onState(handler: (state: UpdateState) => void): () => void
   }
   /** Open the sessions folder in the file manager. */
   openSessionsDir(): void

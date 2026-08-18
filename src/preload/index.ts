@@ -5,6 +5,7 @@ import type {
   PtyExit,
   SpawnRequest,
   TermspaceApi,
+  UpdateState,
 } from '../shared/protocol'
 
 /**
@@ -72,6 +73,15 @@ const api: TermspaceApi = {
       const listener = (_e: unknown, maximized: boolean): void => handler(maximized)
       ipcRenderer.on('window:maximize-changed', listener)
       return () => ipcRenderer.off('window:maximize-changed', listener)
+    },
+  },
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    openRelease: () => ipcRenderer.send('update:open-release'),
+    onState: (handler) => {
+      const listener = (_e: unknown, state: UpdateState): void => handler(state)
+      ipcRenderer.on('update:state', listener)
+      return () => ipcRenderer.off('update:state', listener)
     },
   },
   onData: (handler) => {
