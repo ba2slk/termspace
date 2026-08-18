@@ -9,6 +9,14 @@ import { activateWindow, createMainWindow } from './window-manager'
 // XWayland, which hurts HiDPI scaling and IME behaviour.
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
 
+// Linux only: FreeType text. Snap glyphs to whole pixels and hint them fully,
+// or strokes fall between pixels and read thin and soft. mac and Windows draw
+// text through their own engines and ignore both. Experiment.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('font-render-hinting', 'full')
+  app.commandLine.appendSwitch('disable-font-subpixel-positioning')
+}
+
 // If the launching terminal closes, later writes throw EPIPE and an unhandled
 // exception in main becomes an error dialog. Losing a log line is harmless.
 for (const stream of [process.stdout, process.stderr]) {
