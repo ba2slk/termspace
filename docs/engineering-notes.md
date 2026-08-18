@@ -84,8 +84,24 @@ Inertial scrolling stalls on top of that. `backgroundThrottling: false`.
 
 **xterm 6 does not use the browser scrollbar.** It draws its own scrollbar, taken from
 VS Code, so `::-webkit-scrollbar` rules are ignored wholesale. The rules were written
-down and believed to have thinned the bar, when in fact they did nothing. The width is
-set inline, so `!important` is required.
+down and believed to have thinned the bar, when in fact they did nothing. The width comes
+from the `overviewRuler` option instead; the sheet keeps only the corner radius and the
+visibility rules described below.
+
+**Every pane left a dead band right of the grid.** The fit addon subtracts
+`overviewRuler.width` for the scrollbar and reads 0 as "use the default 14", so it cannot
+be told to reserve nothing; the grid ended up 14px short of a bar drawn far thinner. The
+option still sizes the drawn bar, so it stays (at the token's 3px) and `applySize` counts
+the columns itself from the host width and the cell width, through the same private seam
+the addon reads — the bar overlays the last cells instead, leaving only the sub-cell
+remainder any terminal leaves. The option costs a second canvas per
+terminal for the ruler that stays empty, so the self-check, which counts canvases to count
+WebGL contexts, excludes that one by class. The ruler also draws a 1px border whether or
+not it has marks, which showed as a light line down every pane's right edge until
+`overviewRulerBorder` was set to the terminal background. A bar over text should not be
+there when nothing is moving, and xterm reveals it on mouseover with no option to stop it,
+so the pane shows it only while a scroll is running and outranks those rules with
+`!important`.
 
 **Switching palettes exposed a colored band inside panes.** The body's inner padding was
 painted in the panel background color, so as soon as the terminal background differed it

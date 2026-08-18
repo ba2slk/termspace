@@ -47,11 +47,13 @@ function toXtermTheme(theme: TerminalTheme): ITheme {
     brightMagenta: theme.brightMagenta,
     brightCyan: theme.brightCyan,
     brightWhite: theme.brightWhite,
-    // Scrollbar: visible enough to know it's there, no more. Literal values
-    // because xterm's ITheme cannot take var(); kin to the --thumb ramp.
-    scrollbarSliderBackground: 'rgba(255,255,255,0.10)',
-    scrollbarSliderHoverBackground: 'rgba(255,255,255,0.20)',
-    scrollbarSliderActiveBackground: 'rgba(255,255,255,0.28)',
+    // The ruler is on for its width alone; its 1px border must not show.
+    overviewRulerBorder: theme.background,
+    // Scrollbar. Literal values because xterm's ITheme cannot take var();
+    // they mirror --thumb, --thumb-hover and --thumb-active in tokens.css.
+    scrollbarSliderBackground: 'rgba(255,255,255,0.4)',
+    scrollbarSliderHoverBackground: 'rgba(255,255,255,0.5)',
+    scrollbarSliderActiveBackground: 'rgba(255,255,255,0.6)',
   }
 }
 
@@ -169,6 +171,10 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     // Only the focused pane blinks; twenty blinking cursors is noise.
     cursorBlink: false,
     scrollback: options.appearance.scrollback,
+    // xterm sizes the scrollbar from this. The fit addon would also reserve it,
+    // which is why applySize counts the columns itself. Mirrors --scroll-w
+    // in tokens.css.
+    overviewRuler: { width: 3 },
     // OSC 8 hyperlinks. Without a handler xterm asks through confirm() and
     // opens the page itself; these take the same route as a plain URL.
     linkHandler: { activate: openLink },
@@ -295,6 +301,31 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
   let lastFrameAt = 0
   let burst = 1
 
+  /*
+   * The bar is hidden at rest and shown only while a scroll is running; the
+   * class is what app.css keys on. Mirrors --scroll-linger in tokens.css.
+   */
+  const SCROLL_LINGER_MS = 2000
+  const SCROLL_BAR = '.xterm-scrollable-element > .scrollbar.vertical'
+  let barTimer: number | null = null
+  /** The pointer is on the bar, so it must stay under the hand holding it. */
+  let barHeld = false
+
+  function showScrollBar(): void {
+    element.classList.add('terminal-host--scrolling')
+    if (barTimer !== null) clearTimeout(barTimer)
+    barTimer = window.setTimeout(hideScrollBar, SCROLL_LINGER_MS)
+  }
+
+  function hideScrollBar(): void {
+    if (barTimer !== null) {
+      clearTimeout(barTimer)
+      barTimer = null
+    }
+    if (barHeld) return
+    element.classList.remove('terminal-host--scrolling')
+  }
+
   function glideScroll(now: number): void {
     // Baseline is one 60fps frame, corrected for the real interval.
     const dt = lastFrameAt === 0 ? FRAME_MS : Math.min(64, now - lastFrameAt)
@@ -305,6 +336,7 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     const lines = move > 0 ? Math.floor(move) : Math.ceil(move)
     if (lines !== 0) {
       term.scrollLines(lines)
+      showScrollBar()
       scrollTarget -= lines
     } else {
       scrollTarget -= move
@@ -345,10 +377,38 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
       // Pixels to lines.
       const lineHeight = Math.max(1, term.options.fontSize! * (term.options.lineHeight ?? 1))
       scrollTarget += (px / lineHeight) * boost * burst
+      showScrollBar()
       if (scrollRaf === null) scrollRaf = requestAnimationFrame(glideScroll)
     },
     { passive: false, capture: true },
   )
+
+  /*
+   * xterm scrolls the viewport on Shift+PageUp itself, without passing through
+   * the handler above, so the bar has to be told about that scroll too.
+   */
+  element.addEventListener('keydown', (event) => {
+    if (!event.shiftKey || (event.key !== 'PageUp' && event.key !== 'PageDown')) return
+    if (term.buffer.active.type === 'alternate') return
+    showScrollBar()
+  })
+
+  /*
+   * Delegated because the bar is xterm's element, built after this. Only
+   * reachable while the bar is shown — hidden, it takes no pointer events.
+   */
+  element.addEventListener('mouseover', (event) => {
+    if ((event.target as HTMLElement).closest(SCROLL_BAR) === null) return
+    barHeld = true
+    showScrollBar()
+  })
+
+  element.addEventListener('mouseout', (event) => {
+    if ((event.target as HTMLElement).closest(SCROLL_BAR) === null) return
+    barHeld = false
+    // Not a hide: the linger starts again from the moment the hand leaves.
+    showScrollBar()
+  })
 
   // Copy-on-select: report once, on release.
   element.addEventListener('mouseup', () => {
@@ -419,7 +479,25 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
     if (disposed) return
     const proposed = fit.proposeDimensions()
     if (proposed === undefined) return
-    const { cols, rows } = proposed
+    const { rows } = proposed
+    const host = term.element?.parentElement
+    if (host === null || host === undefined) return
+    /*
+     * Columns are counted here rather than taken from the fit, which always
+     * subtracts overviewRuler.width for the scrollbar and reads 0 as "use the
+     * default 14" — it cannot be told to reserve nothing. The bar overlays the
+     * last cells instead, and shows only while scrolling. Cell width comes
+     * from the same private seam the addon reads, on the same measurement: the
+     * host carries no padding, so its computed width is what the grid gets.
+     */
+    const cellWidth = (
+      term as unknown as {
+        _core: { _renderService: { dimensions: { css: { cell: { width: number } } } } }
+      }
+    )._core._renderService.dimensions.css.cell.width
+    if (cellWidth === 0) return
+    const hostWidth = parseInt(getComputedStyle(host).getPropertyValue('width'), 10)
+    const cols = Math.max(2, Math.floor(hostWidth / cellWidth))
     if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) return
     if (cols === lastCols && rows === lastRows) return
     lastCols = cols
@@ -557,6 +635,8 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
       if (disposed) return
       disposed = true
       stopScrollGlide()
+      barHeld = false
+      hideScrollBar()
       renderer?.dispose()
       renderer = null
       queue = []
