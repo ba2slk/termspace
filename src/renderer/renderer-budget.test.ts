@@ -18,10 +18,39 @@ describe('decideBudget — attach and detach', () => {
     expect(d.detach).toEqual([])
   })
 
-  it('detaches a renderer from a pane out of view', () => {
+  // Swapping renderers is visible: the DOM and WebGL cell widths differ, so a
+  // pane that comes back reflows and redraws. Under the cap there is no reason
+  // to pay that on every scroll.
+  it('keeps the renderer of a pane out of view while there is room', () => {
     const d = decideBudget(state({ visible: ['a'], attached: ['a', 'b'], focusedPaneId: 'a' }))
-    expect(d.detach).toEqual(['b'])
+    expect(d.detach).toEqual([])
     expect(d.attach).toEqual([])
+  })
+
+  it('gives idle renderers up only to make room, least recently seen first', () => {
+    const lastSeen = new Map([
+      ['old', 1],
+      ['new', 5],
+    ])
+    const d = decideBudget(
+      state({
+        visible: ['a'],
+        attached: ['old', 'new'],
+        focusedPaneId: 'a',
+        lastSeen,
+        limit: 2,
+      }),
+    )
+    expect(d.attach).toEqual(['a'])
+    expect(d.detach).toEqual(['old'])
+  })
+
+  it('a visible pane outranks any idle renderer', () => {
+    const d = decideBudget(
+      state({ visible: ['a', 'b'], attached: ['idle'], focusedPaneId: 'a', limit: 2 }),
+    )
+    expect([...d.attach].sort()).toEqual(['a', 'b'])
+    expect(d.detach).toEqual(['idle'])
   })
 
   it('does not re-attach what is already attached', () => {

@@ -47,6 +47,36 @@ pane still draws through the DOM renderer while it waits.
 Both halves are needed: the accounting alone overruns the browser's reclaim, and the
 delay alone still lets two sessions hold contexts at the same time.
 
+**A pane still went white on an ordinary switch, and on scroll.** Not held keys this time:
+one switch, or a scroll that brought a pane in, and a pane already on screen turned white
+with a small sad-face icon in its corner — Chromium's drawing for a canvas whose context is
+lost. The ledger was right about live contexts and wrong about the browser's count.
+`WebglAddon.dispose()` removes the canvas but never loses the context, and Chromium keeps
+counting it against its per-page cap until garbage collection gets to it. Every pane
+leaving the screen left one behind, so the page held twelve live contexts and a trail of
+dead ones, the browser saw more than sixteen, and it force-lost the oldest live one — the
+addon then waited for `webglcontextrestored`, which arrived once the garbage was
+collected, and redrew. Detaching now loses the context explicitly through
+`WEBGL_lose_context`, which frees the slot at once. Eight switches between a fourteen-pane
+and a nine-pane session, screencast at device pixels: 13 white frames of 87 before, 0 of
+83 after; the `webglcontextrestored` events on live canvases went from a dozen to none.
+The self-check now also counts context loss on canvases still in the document during the
+held-key burst, though at that check's size (eight contexts) the browser never evicts, so
+it guards the invariant rather than reproduces the bug.
+
+**A long scroll ended on a blank frame.** Fling to the far end of a wide canvas, or hold
+Alt+→ across it, and the panes that arrived went dark for one frame and drew again; a
+column at a time never did. The visible band is the viewport plus one viewport each side,
+and a pane leaving the band gave its WebGL renderer back at once. Coming back it drew
+through the DOM renderer until the view held still, then took a fresh WebGL renderer —
+which starts empty and paints on the next animation frame, so the DOM rows had already
+gone and the canvas had nothing yet: the blank frame. Four end-to-end round trips over an
+eight-column, 5600px canvas cost 40 renderer attaches. The budget now keeps the renderer
+of a pane out of view while there is room under the cap, and gives idle ones up least
+recently seen first only when a visible pane needs the slot. Same four round trips: 0
+attaches after the first sight of each pane. Freezing is unchanged — an idle renderer
+sits on a frozen pane doing nothing — so the two axes stay separate as before.
+
 **Then every switch stuttered.** Handing the contexts back on the way out is a rule about
 the *cap*, and it was paying for the cap on every switch whether or not the page was
 anywhere near it: two sessions of five panes need ten of the twelve slots, and each swap

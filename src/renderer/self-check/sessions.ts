@@ -1128,6 +1128,17 @@ export async function checkHeldSessionJump(report: Report): Promise<void> {
       (host) => host.querySelector(RENDERER_CANVAS) !== null,
     ).length
 
+  /*
+   * A context the browser takes back fires webglcontextlost on a canvas that is
+   * still in the document; the ones the app gives back fire it on canvases
+   * already removed. Only the first kind leaves a pane white.
+   */
+  let liveLost = 0
+  const onLost = (event: Event): void => {
+    if ((event.target as HTMLCanvasElement).isConnected) liveLost++
+  }
+  document.addEventListener('webglcontextlost', onLost, true)
+
   // Faster than any autorepeat, so the check does not depend on the setting.
   for (let i = 0; i < 61; i++) {
     press('Digit2', { altKey: true })
@@ -1152,6 +1163,12 @@ export async function checkHeldSessionJump(report: Report): Promise<void> {
     pageContexts <= MAX_WEBGL_CONTEXTS
       ? `ok (${pageContexts})`
       : `FAIL ${pageContexts} > ${MAX_WEBGL_CONTEXTS} across the page`
+
+  // Give the browser a moment to evict, if it is going to.
+  await sleep(300)
+  document.removeEventListener('webglcontextlost', onLost, true)
+  report['heldJumpLiveContextsKept'] =
+    liveLost === 0 ? 'ok' : `FAIL (${liveLost} live contexts taken back by the browser)`
 
   // Leave one session running: the checks after this one count what is open.
   const spare = [...document.querySelectorAll<HTMLButtonElement>('.sidebar__close')].find(
