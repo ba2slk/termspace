@@ -38,6 +38,7 @@ export const SETTING_LIMITS = {
   inheritWorkingDir: { min: 0, max: 1, step: 1 },
   // Below 80 the chrome stops being readable; above 160 it crowds out the canvas.
   uiScale: { min: 80, max: 160, step: 5 },
+  updateCheck: { min: 0, max: 1, step: 1 },
 } as const
 
 export function settingsFile(env: NodeJS.ProcessEnv): string {
@@ -110,6 +111,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     paneLabels: Math.round(clampNumber(input['paneLabels'], 'paneLabels')),
     idleDim: clampNumber(input['idleDim'], 'idleDim'),
     notifications: Math.round(clampNumber(input['notifications'], 'notifications')),
+    updateCheck: Math.round(clampNumber(input['updateCheck'], 'updateCheck')),
     inheritWorkingDir: Math.round(clampNumber(input['inheritWorkingDir'], 'inheritWorkingDir')),
     fontFamily: cleanFontFamily(input['fontFamily']),
     theme: cleanId(input['theme']),
@@ -147,6 +149,7 @@ const HEADER = `# Termspace settings
 # focusBorderColor    the colour custom uses, as #rrggbb
 # locale              interface language: en, ko, or empty to follow the system
 # textRendering       terminal glyph antialiasing: grayscale, or subpixel for the browser's LCD text (Linux only)
+# updateCheck         1 asks GitHub for a newer release at startup and once a day. Nothing else is sent
 `
 
 /**

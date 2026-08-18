@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // What other terminals draw. 'subpixel' is the pre-1.1 look, kept for eyes
   // used to it.
   textRendering: 'grayscale',
+  updateCheck: 1,
 }
 
 /** True when this key still holds what the app ships with. */

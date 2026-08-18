@@ -62,4 +62,11 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ paneLabels: 0.4 }).paneLabels).toBe(0)
     expect(normalizeSettings({ paneLabels: 'off' }).paneLabels).toBe(DEFAULT_SETTINGS.paneLabels)
   })
+
+  it('reads updateCheck as 0 or 1 and defaults it on', () => {
+    expect(normalizeSettings({}).updateCheck).toBe(1)
+    expect(normalizeSettings({ updateCheck: 0 }).updateCheck).toBe(0)
+    expect(normalizeSettings({ updateCheck: 5 }).updateCheck).toBe(1)
+    expect(normalizeSettings({ updateCheck: 'no' }).updateCheck).toBe(1)
+  })
 })

@@ -140,6 +140,13 @@ export interface AppSettings {
    * so switching without a restart would need all of them rebuilt.
    */
   readonly locale: string
+  /**
+   * 1 asks GitHub for a newer release at startup and once a day.
+   *
+   * One anonymous GET, nothing sent but the request itself. "Check now" in the
+   * settings ignores this: the user just asked.
+   */
+  readonly updateCheck: number
 }
 
 export interface SessionSummary {
