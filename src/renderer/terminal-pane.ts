@@ -477,6 +477,26 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
   }
 
   /**
+   * Dispose the WebGL addon and give its context back to the browser now.
+   *
+   * Disposing drops the canvas but not the context: that lives until garbage
+   * collection, and Chromium counts it against its per-page cap until then.
+   * With panes leaving and arriving on every scroll and switch, the discarded
+   * contexts outnumber the live ones, the cap is hit, and the browser
+   * force-loses the oldest live context — a pane goes blank until it is
+   * restored. Losing the context explicitly frees the slot at once.
+   */
+  function dropRenderer(webgl: WebglAddon): void {
+    const canvases = Array.from(term.element?.querySelectorAll('canvas') ?? [])
+    webgl.dispose()
+    for (const canvas of canvases) {
+      if (canvas.isConnected) continue // still in use by another layer
+      const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+      gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+  }
+
+  /**
    * Fit the grid to the host, if that moves it.
    *
    * Which renderer is loaded changes the answer: WebGL rounds the cell to whole
@@ -634,7 +654,7 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
 
     detachRenderer() {
       if (renderer === null) return
-      renderer.dispose()
+      dropRenderer(renderer)
       renderer = null
       applySize()
     },
@@ -645,7 +665,7 @@ export function createTerminalPane(options: TerminalPaneOptions): TerminalPane {
       stopScrollGlide()
       barHeld = false
       hideScrollBar()
-      renderer?.dispose()
+      if (renderer !== null) dropRenderer(renderer)
       renderer = null
       queue = []
       term.dispose()
