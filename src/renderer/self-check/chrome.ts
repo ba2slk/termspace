@@ -62,6 +62,23 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
       left >= 78 ? `ok (${left.toFixed(1)}px)` : `FAIL (first control at ${left.toFixed(1)}px)`
   }
 
+  /*
+   * The update chip takes no room while there is nothing to say. Measured, not
+   * queried: the hidden attribute lost once to the chip's own display rule and
+   * left an empty pill on the bar. The updater never starts under the
+   * self-check, so the chip is always in its idle state here.
+   */
+  const chip = bar.querySelector<HTMLElement>('.update-chip')
+  if (chip === null) {
+    report['updateChipIdleTakesNoRoom'] = 'FAIL (no chip element on the bar)'
+  } else {
+    const box = chip.getBoundingClientRect()
+    report['updateChipIdleTakesNoRoom'] =
+      box.width === 0 && box.height === 0
+        ? 'ok'
+        : `FAIL (idle chip is ${box.width.toFixed(1)}x${box.height.toFixed(1)}px)`
+  }
+
   bar.querySelector<HTMLButtonElement>('.app-bar__btn')?.click()
   await waitFor(() => openMenu() !== null)
   const menu = document.querySelector<HTMLElement>('.command-menu')

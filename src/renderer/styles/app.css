@@ -1507,6 +1507,11 @@ button.keys__chord:hover {
   -webkit-app-region: no-drag;
 }
 
+/* display: flex above would beat the hidden attribute's display: none. */
+.update-chip[hidden] {
+  display: none;
+}
+
 .update-chip:hover {
   border-color: var(--border-active);
   color: var(--fg);
