@@ -18,7 +18,7 @@
 <p align="center"><a href="README.md">English</a></p>
 
 <p align="center">
-  <img src="docs/media/termspace.gif" alt="저장해 둔 세션을 열고, 캔버스를 가로지르고, Alt+M 오버뷰를 여는 장면" width="100%" />
+  <img src="docs/media/termspace.webp" alt="코딩 에이전트와 서버를 나란히 둔 세션에서 Alt+방향키로 포커스를 옮기고, Alt+1-9로 세션을 오가고, Alt+Shift+방향키로 페인을 나누는 장면" width="100%" />
 </p>
 
 Termspace는 화면보다 넓은 캔버스에 터미널 패인을 늘어놓습니다. 화면 밖에 있는 패인도

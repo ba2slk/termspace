@@ -18,7 +18,7 @@
 <p align="center"><a href="README.ko.md">한국어</a></p>
 
 <p align="center">
-  <img src="docs/media/termspace.gif" alt="Opening a saved session, moving across the canvas, and the Alt+M overview" width="100%" />
+  <img src="docs/media/termspace.webp" alt="A saved session with coding agents and servers side by side: moving focus with Alt+arrows, jumping between sessions with Alt+1-9, and splitting panes with Alt+Shift+arrows" width="100%" />
 </p>
 
 Termspace lays terminal panes out on a canvas **wider than your screen**. Panes
