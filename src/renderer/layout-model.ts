@@ -13,6 +13,11 @@ export interface Pane {
   readonly title: string
   /** Share of the column's height; the column always totals 1. */
   readonly heightRatio: number
+  /**
+   * Folded to a bar. The ratio is kept while folded, so unfolding lands on the
+   * height the pane had rather than on a share recomputed from its neighbours.
+   */
+  readonly minimized?: boolean
 }
 
 export interface Column {
@@ -33,6 +38,7 @@ export interface PaneSeed {
   readonly id: string
   readonly title: string
   readonly heightRatio?: number
+  readonly minimized?: boolean
 }
 
 export interface ColumnSeed {
@@ -72,7 +78,12 @@ export function createLayout(seeds: readonly ColumnSeed[]): Layout {
     return {
       id: seed.id,
       width: Math.max(MIN_COLUMN_WIDTH, seed.width ?? DEFAULT_COLUMN_WIDTH),
-      panes: seed.panes.map((p, i) => ({ id: p.id, title: p.title, heightRatio: ratios[i]! })),
+      panes: seed.panes.map((p, i) => ({
+        id: p.id,
+        title: p.title,
+        heightRatio: ratios[i]!,
+        ...(p.minimized === true ? { minimized: true } : {}),
+      })),
     }
   })
 
@@ -325,6 +336,30 @@ export function renamePane(layout: Layout, paneId: string, title: string): Layou
         : column,
     ),
   }
+}
+
+/**
+ * Fold a pane to a bar, or unfold it.
+ *
+ * Only what is drawn changes: the ratio stays where it was, so the column's
+ * ratios still total 1 and unfolding gives back the exact height, rather than a
+ * share renegotiated with whoever grew in the meantime. Focus stays put too —
+ * folding the pane you are on must not move you somewhere else.
+ */
+export function setMinimized(layout: Layout, paneId: string, minimized: boolean): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null || (found.pane.minimized === true) === minimized) return layout
+
+  const { column, columnIndex, paneIndex } = found
+  const panes = [...column.panes]
+  panes[paneIndex] = { ...found.pane, minimized }
+  return { ...layout, columns: withColumn(layout, columnIndex, { ...column, panes }) }
+}
+
+export function toggleMinimized(layout: Layout, paneId: string): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null) return layout
+  return setMinimized(layout, paneId, found.pane.minimized !== true)
 }
 
 /**

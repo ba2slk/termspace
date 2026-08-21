@@ -15,8 +15,10 @@ import {
   renamePane,
   resizeColumn,
   resizePane,
+  setMinimized,
   splitDown,
   splitPane,
+  toggleMinimized,
   type ColumnSeed,
 } from './layout-model'
 
@@ -754,6 +756,73 @@ describe('movePane', () => {
       layout = movePane(layout, dir, HEIGHT, `n-${dir}`)
       expect(layoutViolations(layout)).toEqual([])
     }
+  })
+})
+
+describe('toggleMinimized', () => {
+  const base = createLayout([
+    {
+      id: 'c1',
+      panes: [
+        { id: 'a', title: 'a' },
+        { id: 'b', title: 'b' },
+        { id: 'c', title: 'c' },
+      ],
+    },
+  ])
+
+  it('folds and unfolds the same pane', () => {
+    const folded = toggleMinimized(base, 'b')
+    expect(findPane(folded, 'b')?.pane.minimized).toBe(true)
+    expect(findPane(toggleMinimized(folded, 'b'), 'b')?.pane.minimized).toBe(false)
+  })
+
+  it('leaves the height ratio alone, so unfolding restores it', () => {
+    const resized = resizePane(base, 'b', 90, 1000)
+    const ratio = findPane(resized, 'b')!.pane.heightRatio
+    const round = toggleMinimized(toggleMinimized(resized, 'b'), 'b')
+    expect(findPane(round, 'b')?.pane.heightRatio).toBe(ratio)
+    expect(layoutViolations(round)).toEqual([])
+  })
+
+  it('keeps the ratios totalling 1 while folded', () => {
+    expect(layoutViolations(toggleMinimized(base, 'b'))).toEqual([])
+    expect(layoutViolations(setMinimized(toggleMinimized(base, 'b'), 'a', true))).toEqual([])
+  })
+
+  it('folds every pane in a column without complaint', () => {
+    let layout = base
+    for (const id of ['a', 'b', 'c']) layout = setMinimized(layout, id, true)
+    expect(layout.columns[0]!.panes.every((p) => p.minimized === true)).toBe(true)
+    expect(layoutViolations(layout)).toEqual([])
+  })
+
+  it('touches neither the focus nor the remembered height', () => {
+    const next = toggleMinimized(base, 'b')
+    expect(next.focusedPaneId).toBe(base.focusedPaneId)
+    expect(next.desiredY).toBe(base.desiredY)
+  })
+
+  it('does not mutate its input', () => {
+    const before = JSON.stringify(base)
+    toggleMinimized(base, 'b')
+    expect(JSON.stringify(base)).toBe(before)
+  })
+
+  it('leaves the layout as it is when the state already matches', () => {
+    expect(setMinimized(base, 'b', false)).toBe(base)
+  })
+
+  it('is a no-op for an unknown pane', () => {
+    expect(toggleMinimized(base, 'nope')).toBe(base)
+  })
+
+  it('is carried in from a seed, so a session file can start folded', () => {
+    const seeded = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b', minimized: true }] },
+    ])
+    expect(findPane(seeded, 'a')?.pane.minimized).toBeUndefined()
+    expect(findPane(seeded, 'b')?.pane.minimized).toBe(true)
   })
 })
 
