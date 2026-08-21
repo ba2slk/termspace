@@ -167,16 +167,25 @@ export function layoutViolations(layout: Layout): string[] {
 /**
  * Can these panes all clear the minimum height in this column?
  *
- * Folded panes are asked nothing: their bar is a fixed height that always fits,
- * and they only have to be counted out of the room the others share.
+ * Two geometries have to answer yes, not one. What is on screen now counts a
+ * folded pane as a bar and shares the rest out among the others; what will be
+ * on screen once it opens counts every ratio against the whole column. A bar's
+ * 30px is on loan, so a layout that only fits while it is up comes apart the
+ * moment it is opened — and folding must not be able to arrange that behind
+ * your back.
  */
 function fitsMinimum(panes: readonly Pane[], columnHeight: number): boolean {
-  const content = expandedRoom(columnHeight, panes)
-  if (content <= 0) return false
+  const whole = columnContentHeight(columnHeight, panes.length)
+  if (whole <= 0) return false
+  const room = expandedRoom(columnHeight, panes)
   const sum = expandedRatioSum(panes)
-  if (sum <= 0) return true // Every pane a bar; nothing is sharing anything.
+  if (sum > 0 && room <= 0) return false
   return panes.every(
-    (p) => p.minimized === true || (p.heightRatio / sum) * content >= MIN_PANE_HEIGHT,
+    (p) =>
+      // Unfolded, every pane included: this is what the column becomes.
+      p.heightRatio * whole >= MIN_PANE_HEIGHT &&
+      // As drawn: a bar is a fixed height and always fits.
+      (p.minimized === true || (p.heightRatio / sum) * room >= MIN_PANE_HEIGHT),
   )
 }
 
@@ -434,7 +443,15 @@ export function resizePane(
   const sum = expandedRatioSum(column.panes)
   if (sum <= 0) return layout
 
-  const minRatio = (MIN_PANE_HEIGHT / content) * sum
+  /*
+   * The clamp answers to both geometries, for the reason fitsMinimum does: a
+   * pane pushed against the on-screen minimum while a bar is up would fall
+   * straight through it when the bar opens and the borrowed 30px goes back.
+   * The stricter of the two bounds wins; with nothing folded they are equal.
+   */
+  const whole = columnContentHeight(columnHeight, column.panes.length)
+  if (whole <= 0) return layout
+  const minRatio = Math.max((MIN_PANE_HEIGHT / content) * sum, MIN_PANE_HEIGHT / whole)
   const pair = pane.heightRatio + partner.heightRatio
   // Nothing to adjust if the pair can't hold two minimums.
   if (pair < minRatio * 2) return layout

@@ -175,6 +175,29 @@ describe('splitDown', () => {
     expect(splitDown(two, 'a', 170, { id: 'n', title: 'n' })).toBe(two)
   })
 
+  /*
+   * The bar's 30px is on loan. A split that only fits while a neighbour is
+   * folded would come apart the moment it opens, so both geometries have to
+   * hold before the pane is cut in half.
+   */
+  it('refuses a split that only fits while a neighbour is folded', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    expect(splitDown(folded, 'a', 224, { id: 'n', title: 'n' })).toBe(folded)
+  })
+
+  it('still allows a split both geometries can hold', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    const next = splitDown(folded, 'a', 1000, { id: 'n', title: 'n' })
+    expect(next.columns[0]!.panes.map((p) => p.id)).toEqual(['a', 'n', 'b'])
+    expect(layoutViolations(next)).toEqual([])
+  })
+
   it('is a no-op for an unknown pane', () => {
     expect(splitDown(base, 'nope', 1000, { id: 'p2', title: 's' })).toBe(base)
   })
@@ -566,6 +589,32 @@ describe('resizePane', () => {
     it('refuses when no expanded partner is left', () => {
       const alone = setMinimized(setMinimized(three, 'a', true), 'c', true)
       expect(resizePane(alone, 'b', 60, H)).toBe(alone)
+    })
+
+    /*
+     * Folding hands the column extra room, so a pane clamped against the
+     * minimum while a bar is up would fall through it the moment the bar opens.
+     * The clamp has to answer for both geometries, not just the one on screen.
+     */
+    it('clamps so that unfolding cannot leave a pane under the minimum', () => {
+      const SHORT = 324
+      const folded = setMinimized(three, 'c', true)
+      const shrunk = resizePane(folded, 'a', -9999, SHORT)
+      const opened = setMinimized(shrunk, 'c', false)
+      const content = columnContentHeight(SHORT, 3)
+      const heights = opened.columns[0]!.panes.map((p) => p.heightRatio * content)
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(MIN_PANE_HEIGHT - 1e-6)
+    })
+
+    it('still clamps to the folded minimum where that is the stricter one', () => {
+      // A tall column: the bar frees so little that the on-screen minimum bites
+      // first, and the clamp must not be loosened by the other geometry.
+      const folded = setMinimized(three, 'c', true)
+      const shrunk = resizePane(folded, 'a', -9999, 4000)
+      const room = expandedRoom(4000, shrunk.columns[0]!.panes)
+      const sum = expandedRatioSum(shrunk.columns[0]!.panes)
+      const onScreen = (shrunk.columns[0]!.panes[0]!.heightRatio / sum) * room
+      expect(onScreen).toBeGreaterThanOrEqual(MIN_PANE_HEIGHT - 1e-6)
     })
   })
 })
