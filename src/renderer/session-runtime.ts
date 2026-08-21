@@ -825,7 +825,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function openCommandPane(command: string): void {
     exitZoom()
-    unfoldFocused()
+    // A folded pane stays folded here too. It is not what the command acts on,
+    // and opening it would undo a choice nobody asked to revisit; see
+    // splitFocused, whose split this shares.
     const id = newId('p')
     const cwd = focusedCwd()
     const split = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, 'down')
