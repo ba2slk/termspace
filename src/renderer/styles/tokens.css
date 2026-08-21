@@ -100,6 +100,8 @@
   /* The floor under the panels: the canvas bar runs there. Mirrors CANVAS_BOTTOM. */
   --edge-bottom: 10px;
   --hit: 12px;
+  /* A folded pane's bar. Mirrors FOLD_BAR_HEIGHT in layout-model.ts. */
+  --fold-h: 30px;
   /* Every control in the title bar. Grows with the text it sits beside. */
   --ctl-h: calc(26px * var(--ui-scale));
   /* That control plus 4px of air above it; the bar is bottom aligned. */

@@ -53,11 +53,32 @@ export const DEFAULT_COLUMN_WIDTH = 640
 export const MIN_PANE_HEIGHT = 62
 /** Gap between panes. Mirrors the --gap token; owned here as part of the maths. */
 export const PANE_GAP = 6
+/**
+ * A folded pane's bar: one line of chrome, whatever share it holds. Mirrors the
+ * --fold-h token; owned here because both the rects and the resize maths need it.
+ */
+export const FOLD_BAR_HEIGHT = 30
 const RATIO_EPSILON = 1e-9
 
 /** Column height minus the gaps — what the panes actually share. */
 export function columnContentHeight(columnHeight: number, paneCount: number): number {
   return columnHeight - PANE_GAP * Math.max(0, paneCount - 1)
+}
+
+/**
+ * Height the expanded panes share: the column, less a fixed bar per folded one.
+ *
+ * Folding gives space back rather than taking it, so this only ever grows — but
+ * a window short enough cannot fit the bars either, hence the floor.
+ */
+export function expandedRoom(columnHeight: number, panes: readonly Pane[]): number {
+  const folded = panes.filter((p) => p.minimized === true).length
+  return Math.max(0, columnContentHeight(columnHeight, panes.length) - folded * FOLD_BAR_HEIGHT)
+}
+
+/** What the expanded panes' ratios add up to; 0 when the column is all bars. */
+export function expandedRatioSum(panes: readonly Pane[]): number {
+  return panes.reduce((a, p) => (p.minimized === true ? a : a + p.heightRatio), 0)
 }
 
 function normalize(ratios: readonly number[]): number[] {
