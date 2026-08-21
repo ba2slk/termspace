@@ -469,8 +469,10 @@ export function resizePane(
 
 /**
  * Move the focused pane. Vertically it swaps identities with its neighbour
- * while the size slots stay put — sizes never change, so the move is always
- * legal. Horizontally the pane leaves its column and joins the neighbour at
+ * while the size slots stay put — no pane changes height, so the move is always
+ * legal. Across a folded bar the ratios travel with the panes instead, for the
+ * same reason: it is what leaves both heights as they were.
+ * Horizontally the pane leaves its column and joins the neighbour at
  * the slot nearest desiredY; past the edge it breaks out into a new column,
  * which is why the caller must supply an id for one. Unchanged layout back
  * means the move was refused.
@@ -491,8 +493,20 @@ export function movePane(
     if (other === undefined) return layout
 
     const panes = [...column.panes]
-    panes[paneIndex] = { ...other, heightRatio: pane.heightRatio }
-    panes[otherIndex] = { ...pane, heightRatio: other.heightRatio }
+    /*
+     * Identities swap and the size slots stay put, so nothing changes height.
+     * That only holds while both slots are drawn the same way: a bar's ratio is
+     * dormant, so trading across one would hand the moved pane a share it
+     * cannot see and leave the bar holding a height that is not its own. There
+     * the panes carry their ratios with them and only the order changes.
+     */
+    if (pane.minimized === true || other.minimized === true) {
+      panes[paneIndex] = other
+      panes[otherIndex] = pane
+    } else {
+      panes[paneIndex] = { ...other, heightRatio: pane.heightRatio }
+      panes[otherIndex] = { ...pane, heightRatio: other.heightRatio }
+    }
     return {
       columns: withColumn(layout, columnIndex, { ...column, panes }),
       focusedPaneId: pane.id,

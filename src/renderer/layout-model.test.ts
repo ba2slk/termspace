@@ -748,6 +748,48 @@ describe('movePane', () => {
     expect(movePane(layout, 'up', HEIGHT, 'cx')).toBe(layout)
   })
 
+  /*
+   * Slots stay put only while both are drawn the same way. Across a bar the
+   * moved pane would be handed the folded one's dormant share and shrink on
+   * screen, and the bar would forget the height it is holding for later.
+   */
+  it('stepping past a folded bar carries the ratios with the panes', () => {
+    const column = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a', heightRatio: 0.5 },
+          { id: 'b', title: 'b', heightRatio: 0.2, minimized: true },
+          { id: 'c', title: 'c', heightRatio: 0.3 },
+        ],
+      },
+    ])
+    const next = movePane({ ...column, focusedPaneId: 'a' }, 'down', HEIGHT, 'cx')
+    const panes = next.columns[0]!.panes
+    expect(panes.map((p) => p.id)).toEqual(['b', 'a', 'c'])
+    expect(findPane(next, 'a')!.pane.heightRatio).toBe(0.5)
+    expect(findPane(next, 'b')!.pane.heightRatio).toBe(0.2)
+    expect(findPane(next, 'b')!.pane.minimized).toBe(true)
+    expect(next.focusedPaneId).toBe('a')
+    expect(layoutViolations(next)).toEqual([])
+  })
+
+  it('a folded pane moved past an open one keeps its dormant share too', () => {
+    const column = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a', heightRatio: 0.8 },
+          { id: 'b', title: 'b', heightRatio: 0.2, minimized: true },
+        ],
+      },
+    ])
+    const next = movePane({ ...column, focusedPaneId: 'b' }, 'up', HEIGHT, 'cx')
+    expect(next.columns[0]!.panes.map((p) => p.id)).toEqual(['b', 'a'])
+    expect(findPane(next, 'b')!.pane.heightRatio).toBe(0.2)
+    expect(findPane(next, 'a')!.pane.heightRatio).toBe(0.8)
+  })
+
   it('right steps out into a column of its own rather than joining the neighbour', () => {
     const next = movePane(base(), 'right', HEIGHT, 'cx')
     expect(next.columns.map((c) => c.id)).toEqual(['c1', 'cx', 'c2'])
