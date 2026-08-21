@@ -1085,12 +1085,19 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       return true
     },
 
-    watchedPaneId: () => (active ? layout.focusedPaneId : null),
+    /*
+     * A folded pane is not being watched, however focused it is: nothing of it
+     * is on screen. Reporting it as watched would have main swallow the desktop
+     * notification for the one pane that most needs to send one.
+     */
+    watchedPaneId: () =>
+      active && !isFolded(layout.focusedPaneId) ? layout.focusedPaneId : null,
 
     noteAttention(paneId) {
       if (!records.has(paneId)) return false
-      // The focused pane is already being looked at, so it has nothing to ask for.
-      if (paneId === layout.focusedPaneId && active) return true
+      // The focused pane is already being looked at, so it has nothing to ask
+      // for — unless it is folded, where holding focus shows you nothing.
+      if (paneId === layout.focusedPaneId && active && !isFolded(paneId)) return true
       if (attention.has(paneId)) return true
       attention.add(paneId)
       refreshFoldDetail(paneId)
