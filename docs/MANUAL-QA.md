@@ -132,6 +132,20 @@ English copy.
   is rounded to whole pixels and the track's transform snaps to device ones, so the
   two can disagree by a fraction and the pane behind showed through that sliver)
 
+**Pane fold**
+- **`Alt+D` folds the focused pane to a bar of exactly `FOLD_BAR_HEIGHT`, and opening
+  it again gives back the pixel height it had** (measured with
+  `getBoundingClientRect`: the ratio is never touched by folding, so the height that
+  comes back has to be the same one, not a share renegotiated with the neighbours)
+- **The bar carries the pane's title** (it is the only thing left on screen saying
+  what is in there; an unnamed bar is a row of nothing)
+- **Focus stays on the pane that was folded** (otherwise `Alt+D` twice is not the
+  round trip it looks like)
+- **Keys typed at a folded pane never reach its shell, and plain Enter opens it
+  again** (the same keystrokes are typed twice through the same route, once at the bar
+  and once at the open pane; only the second may appear in the buffer. A shell that
+  echoes neither is reported as unmeasurable rather than as a pass)
+
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
 - Frozen panes hold no WebGL context

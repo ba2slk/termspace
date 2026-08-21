@@ -2,12 +2,13 @@ import { api } from '../api'
 import { IS_MAC } from '../platform'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
 import { CANVAS_BOTTOM, CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
-import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
+import { DEFAULT_COLUMN_WIDTH, FOLD_BAR_HEIGHT, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
 import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   animationRuns,
   capture,
+  focusedHost,
   focusedId,
   holdsStill,
   hoveredLinkOf,
@@ -636,6 +637,93 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   press('ArrowLeft', { altKey: true })
   await waitFor(() => focusedId() === zoomedId)
   await trackSettles()
+}
+
+/**
+ * Folding: the pane becomes a bar of a fixed height, and stops taking keys.
+ *
+ * Measured in pixels and in what the shell actually received. The class only
+ * says the app agrees the pane is folded; what the feature promises is a bar
+ * exactly FOLD_BAR_HEIGHT tall, the height it had when it opens again, and a
+ * shell that never saw what was typed at it in the meantime.
+ */
+export async function checkPaneFold(report: Report): Promise<void> {
+  const pane = document.querySelector<HTMLElement>('.pane--focused')
+  const hostEl = focusedHost()
+  const term = termOf(hostEl)
+  const textarea = hostEl?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+  const paneId = focusedId()
+  if (pane === null || term === undefined || textarea === undefined || textarea === null) {
+    report['paneFold'] = 'FAIL (no focused pane to fold)'
+    return
+  }
+
+  const height = (): number => Math.round(pane.getBoundingClientRect().height)
+  const before = height()
+  const isBar = (): boolean => height() === FOLD_BAR_HEIGHT
+
+  press('KeyD', { altKey: true })
+  await waitFor(isBar)
+  report['paneFoldBarHeight'] = isBar()
+    ? `ok (${String(before)}px -> ${String(height())}px)`
+    : `FAIL (${String(height())}px, expected ${String(FOLD_BAR_HEIGHT)})`
+
+  // The bar is all there is to go on, so it has to name the pane.
+  const bar = pane.querySelector<HTMLElement>('.pane__fold')
+  const named = bar !== null && !bar.hidden &&
+    (bar.querySelector<HTMLElement>('.pane__fold-title')?.textContent ?? '') !== ''
+  report['paneFoldBarNamesThePane'] = named
+    ? 'ok'
+    : `FAIL (${bar === null ? 'no bar' : 'the bar carries no title'})`
+
+  // Alt+D twice is a round trip, which it cannot be if focus wandered off.
+  report['paneFoldKeepsFocus'] =
+    focusedId() === paneId ? 'ok' : `FAIL (focus ${String(focusedId())} was ${String(paneId)})`
+
+  /*
+   * Type at the bar, then open it and type the same way again. The second
+   * string proves the route works at all; the first must not be there.
+   */
+  const BLIND = 'zzblind'
+  const LIVE = 'zzlive'
+  const type = (text: string): void => {
+    for (const ch of text) {
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: ch,
+          code: `Key${ch.toUpperCase()}`,
+          keyCode: ch.toUpperCase().charCodeAt(0),
+          bubbles: true,
+          cancelable: true,
+        }),
+      )
+    }
+  }
+  const selection = (): string => {
+    term.selectAll()
+    return term.getSelection()
+  }
+  type(BLIND)
+
+  // Plain Enter is the bar's own way out; it must not reach the shell either.
+  press('Enter')
+  const reopened = await waitFor(() => height() === before)
+  report['paneFoldEnterUnfolds'] = reopened
+    ? 'ok'
+    : `FAIL (${String(height())}px, was ${String(before)}px)`
+  report['paneFoldRestoresHeight'] =
+    height() === before ? 'ok' : `MISMATCH (${String(height())}px, was ${String(before)}px)`
+
+  type(LIVE)
+  const echoed = await waitFor(() => selection().includes(LIVE), 6000)
+  report['paneFoldSwallowsKeys'] = !echoed
+    ? 'skipped: the shell echoed nothing after unfolding, so nothing can be told apart'
+    : selection().includes(BLIND)
+      ? `FAIL (${BLIND} reached the shell while the pane was folded)`
+      : 'ok'
+
+  // Leave the prompt as it was found.
+  if (paneId !== undefined) api.write(paneId, '\u0015')
 }
 
 export function checkRendererBudget(report: Report): void {

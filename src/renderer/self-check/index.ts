@@ -25,6 +25,7 @@ import {
   checkOverview,
   checkOverviewScaleFloor,
   checkPaneTitlePeek,
+  checkPaneFold,
   checkPaneZoom,
   checkTerminalSignals,
   checkRendererBudget,
@@ -93,6 +94,7 @@ const GROUPS: Readonly<
     await checkTerminalSignals(report)
     await checkLayoutEditing(report)
     await checkPaneZoom(report)
+    await checkPaneFold(report)
     checkRendererBudget(report)
     await checkGridFillsPane(report)
     await checkClickableLinks(report)
