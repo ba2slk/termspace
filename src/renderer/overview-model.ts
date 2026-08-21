@@ -27,6 +27,27 @@ export const MAX_OVERVIEW_SCALE = 0.5
  */
 export const MIN_OVERVIEW_COLUMN_PX = 110
 
+/**
+ * A row shorter than this cannot carry a line of text at map scale.
+ *
+ * The same answer as the rule above, on the other axis. A folded pane is a
+ * fixed 30px bar on screen, so at map scale its row is a few pixels tall —
+ * less than a card's own padding and border, which border-box cannot compress
+ * below. Left alone the browser floors the row at its chrome, and it paints
+ * over the row beneath it and out of the bottom of the map.
+ *
+ * The fix is not a minimum height: inflating the row would make the map lie
+ * about a layout it exists to describe. The row keeps its true height and
+ * gives up the text it has no room for, exactly as a column too narrow to
+ * label stops shrinking rather than printing something unreadable.
+ */
+export const MIN_OVERVIEW_LABEL_PX = 28
+
+/** Whether a card that tall has the room to print anything. */
+export function fitsALabel(cardHeight: number): boolean {
+  return cardHeight >= MIN_OVERVIEW_LABEL_PX
+}
+
 export interface OverviewCard extends Rect {
   readonly paneId: string
   readonly columnId: string

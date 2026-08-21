@@ -1151,6 +1151,30 @@ body {
   cursor: pointer;
 }
 
+/*
+ * A row with no room for text: a folded pane's bar, shrunk to map scale.
+ *
+ * The padding and border come to about 14px and border-box will not compress
+ * below them, so a row the map made 5px tall rendered at 14px — over the row
+ * beneath it, and past the bottom of the map onto the session behind. Dropping
+ * the padding and the text lets the row be exactly as tall as the layout says,
+ * which is the only honest thing for a map to draw. See MIN_OVERVIEW_LABEL_PX.
+ */
+.overview__card--squat {
+  padding: 0;
+  /* Nothing inside would fit; keeping it would only reintroduce the floor. */
+  gap: 0;
+}
+
+.overview__card--squat > * {
+  display: none;
+}
+
+/* At this size the whole row has to carry what a dot normally would. */
+.overview__card--squat.overview__card--wants {
+  background: var(--wants);
+}
+
 /* Same two-part grammar as the canvas: brighter border plus a hard ring — with
    a lit surface under them, which the viewport marker cannot drown out. */
 .overview__card--selected {

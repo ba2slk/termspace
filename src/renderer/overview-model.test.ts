@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CANVAS_BOTTOM, CANVAS_EDGE, canvasWidth, paneRects } from './layout-geometry'
-import { createLayout, focusDir } from './layout-model'
+import { createLayout, focusDir, FOLD_BAR_HEIGHT, setMinimized } from './layout-model'
 import {
   clampStripOffset,
   columnAtLensCenter,
@@ -10,6 +10,8 @@ import {
   lensRect,
   MAX_OVERVIEW_SCALE,
   MIN_OVERVIEW_COLUMN_PX,
+  MIN_OVERVIEW_LABEL_PX,
+  fitsALabel,
   moveSelection,
   overviewLayout,
   paneNearestY,
@@ -274,6 +276,49 @@ describe('paneNearestY', () => {
 
   it('is null for a column that is not there', () => {
     expect(paneNearestY(cards, 'gone', 0)).toBeNull()
+  })
+})
+
+/*
+ * A folded pane is a bar on screen, and the map is a picture of what is on
+ * screen, so its row is a bar too — proportionally, in its real slot. The row
+ * ends up far too short to carry text at map scale, which is the same problem a
+ * column too narrow to label has, and it gets the same answer: the row keeps its
+ * true height and gives up its text rather than inflating into a lie.
+ */
+describe('overviewLayout — folded panes', () => {
+  const folded = setMinimized(
+    createLayout([
+      {
+        id: 'c1',
+        width: 700,
+        panes: [
+          { id: 'a1', title: 'editor', heightRatio: 0.5 },
+          { id: 'a2', title: 'shell', heightRatio: 0.5 },
+        ],
+      },
+    ]),
+    'a2',
+    true,
+  )
+  const overview = overviewLayout(folded, viewport)
+  const card = (id: string) => overview.cards.find((c) => c.paneId === id)!
+
+  it('draws the folded pane as the bar it is, scaled like everything else', () => {
+    expect(card('a2').height).toBeCloseTo(FOLD_BAR_HEIGHT * overview.scale, 6)
+  })
+
+  it('leaves it in its real slot, under the pane above it', () => {
+    expect(card('a2').y).toBeGreaterThan(card('a1').y + card('a1').height - 1)
+  })
+
+  it('reports the row as one that cannot carry text', () => {
+    expect(fitsALabel(card('a2').height)).toBe(false)
+    expect(fitsALabel(card('a1').height)).toBe(true)
+  })
+
+  it('does not inflate the row to fit a label', () => {
+    expect(card('a2').height).toBeLessThan(MIN_OVERVIEW_LABEL_PX)
   })
 })
 

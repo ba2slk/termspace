@@ -10,6 +10,7 @@ import {
   clampStripOffset,
   columnAtLensCenter,
   columnSnapOffset,
+  fitsALabel,
   landingScrollX,
   type Lens,
   lensOnStrip,
@@ -311,6 +312,13 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       el.dataset['paneId'] = card.paneId
       if (hooks.isError(card.paneId)) el.classList.add('overview__card--error')
       if (hooks.wants(card.paneId)) el.classList.add('overview__card--wants')
+      /*
+       * A row too short for text — a folded pane's bar, at map scale — gives up
+       * its padding along with it. The card cannot render shorter than its own
+       * chrome, so keeping the padding would floor the row above its real
+       * height and push it over the row below and out of the map.
+       */
+      if (!fitsALabel(card.height)) el.classList.add('overview__card--squat')
       px(card, el)
 
       const title = document.createElement('div')
