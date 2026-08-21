@@ -779,6 +779,35 @@ export async function checkPaneFold(report: Report): Promise<void> {
     await waitFor(() => height() === before)
   }
 
+  /*
+   * A split leaves the bar a bar. Folding a pane is a deliberate choice and
+   * asking for another pane is not a request to undo it, so the new pane opens
+   * beside the bar and takes the focus while the bar stays exactly as it was.
+   */
+  press('KeyD', { altKey: true })
+  await waitFor(isBar)
+  const paneCount = (): number => visiblePanes().length
+  const beforeSplit = paneCount()
+  press('ArrowDown', { altKey: true, shiftKey: true })
+  const split = await waitFor(() => paneCount() > beforeSplit)
+  if (!split) {
+    report['paneFoldSplitKeepsTheBar'] = 'skipped: the column had no room for another pane'
+  } else {
+    report['paneFoldSplitKeepsTheBar'] = isBar()
+      ? `ok (${String(beforeSplit)} -> ${String(paneCount())} panes, the bar still ${String(height())}px)`
+      : `FAIL (the split opened the folded pane: ${String(height())}px)`
+    report['paneFoldSplitFocusesTheNewPane'] =
+      focusedId() !== paneId ? 'ok' : 'FAIL (focus stayed on the bar)'
+    // Put the column back: close the pane the split added.
+    press('KeyW', { altKey: true, shiftKey: true })
+    await waitFor(() => paneCount() === beforeSplit)
+  }
+  // However that ended, the pane must be left open again.
+  if (isBar()) {
+    press('Enter')
+    await waitFor(() => !isBar())
+  }
+
   // Leave the prompt as it was found.
   if (paneId !== undefined) api.write(paneId, '\u0015')
 }

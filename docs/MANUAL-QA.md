@@ -150,6 +150,10 @@ English copy.
   without a keydown ever reaching the page, so a keyboard-only guard would have two
   doors and one of them open. The clipboard is shared with the desktop, so a priming
   write that does not come back is reported as unmeasurable)
+- **A split leaves a folded pane folded, and focuses the new pane beside it**
+  (folding is a deliberate choice and a split is not a request to undo it. The bar
+  keeps half of the height it was holding and the new pane opens with the other half;
+  a split that could not be opened again afterwards is still refused outright)
 - **Search on a folded pane opens the pane before it opens the bar** (the search box
   lives inside the pane body, which is not drawn while folded — opened there it would
   take the keys and show nothing)
