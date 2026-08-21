@@ -46,6 +46,9 @@ import { createTerminalPane, type TerminalPane } from './terminal-pane'
  *
  * tmux's rule: the zoom is dropped first and the action then lands on the real
  * layout, rather than on a screen that is not what the layout says it is.
+ *
+ * 'focus' is the exception handleKey makes: it drops the zoom and does no more,
+ * because a move needs the layout visible to aim at.
  */
 const EXITS_ZOOM: readonly Action['t'][] = [
   'focus',
@@ -791,6 +794,17 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (isAppAction(action)) return
     event.preventDefault()
     event.stopPropagation()
+    /*
+     * A focus move out of a zoom costs two presses. Under a zoom the neighbours
+     * are not on screen, so the first arrow would move blind — it drops the
+     * zoom and stops there, and the second one moves with the layout in view.
+     * The other zoom-exiting actions name what they act on, so they still land
+     * in the same press.
+     */
+    if (zoomedPaneId !== null && action.t === 'focus') {
+      exitZoom()
+      return
+    }
     if (EXITS_ZOOM.includes(action.t)) exitZoom()
 
     switch (action.t) {

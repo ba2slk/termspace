@@ -591,6 +591,51 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   report['paneZoomRestores'] = restored()
     ? 'ok'
     : `MISMATCH (${boxText()}, was ${String(Math.round(before.width))}x${String(Math.round(before.height))} at ${String(Math.round(before.left))},${String(Math.round(before.top))})`
+
+  /*
+   * A focus move out of a zoom takes two presses. The neighbours are off screen
+   * under a zoom, so the first arrow only drops it and focus stays put; the
+   * second aims with the layout back in view. Both halves are worth pinning:
+   * the first press moving focus would be a blind jump, and the second failing
+   * to move would mean the zoom had swallowed the key for good.
+   */
+  const zoomedId = focusedId()
+  press('KeyZ', { altKey: true })
+  await waitFor(covers)
+  if (!covers()) {
+    report['paneZoomFocusMoveDropsTheZoomOnly'] = 'FAIL (the pane would not zoom again)'
+    return
+  }
+  press('ArrowRight', { altKey: true })
+  await waitFor(restored)
+  report['paneZoomFocusMoveDropsTheZoomOnly'] =
+    restored() && focusedId() === zoomedId
+      ? 'ok'
+      : `FAIL (zoom ${restored() ? 'gone' : 'still on'}, focus ${String(focusedId())} was ${String(zoomedId)})`
+
+  /*
+   * Whether the next press has anywhere to go, read off the boxes rather than
+   * assumed: the checks before this one rearrange the layout, so the pane that
+   * ends up focused here is not always the one that started with a neighbour.
+   */
+  const focusedBox = pane.getBoundingClientRect()
+  const hasRightNeighbour = visiblePanes().some(
+    (other) => other !== pane && other.getBoundingClientRect().left >= focusedBox.right,
+  )
+  if (!hasRightNeighbour) {
+    report['paneZoomSecondPressMovesFocus'] = 'skipped: nothing to the right of the zoomed pane'
+    return
+  }
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() !== zoomedId)
+  const landed = focusedId()
+  report['paneZoomSecondPressMovesFocus'] =
+    landed !== zoomedId ? `ok (${String(zoomedId)} → ${String(landed)})` : 'FAIL (focus stayed put)'
+
+  // Put the focus, and the scroll the move dragged along, back where they were.
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() === zoomedId)
+  await trackSettles()
 }
 
 export function checkRendererBudget(report: Report): void {

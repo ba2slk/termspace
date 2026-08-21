@@ -120,6 +120,11 @@ English copy.
   colour, and asserts the two actually differ. The zoomed pane is also the focused
   one, so the rule only works if it beats `.pane--focused`, which a class name cannot
   show)
+- **A focus move under a zoom takes two presses: the first drops the zoom with the
+  focus where it was, the second moves** (the neighbours are off screen under a zoom,
+  so one press would aim blind. Every other zoom-dropping action — resize, split,
+  move, add column, close, overview — still lands in the same press, since each names
+  what it acts on)
 - **Holding the peek modifier while zoomed shows no label from the panes
   underneath** (asked of `elementFromPoint` at each label's centre: a pane sets no
   z-index, so its label at 4 climbed the track's ladder and drew over the zoom)
