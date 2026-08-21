@@ -64,6 +64,27 @@ const EXITS_ZOOM: readonly Action['t'][] = [
   'fold',
 ]
 
+/**
+ * Is this key on its way to something that takes typing of its own?
+ *
+ * The fold swallow runs at window capture, before the target has seen anything,
+ * so it has to recognise the surfaces that are not the canvas. The sidebar's
+ * rename box never silences the session, and swallowing its keys would leave it
+ * impossible to type in — with plain Enter unfolding a pane rather than
+ * committing the name. Inside a pane the target is xterm's own textarea, which
+ * is precisely what the swallow exists for.
+ */
+function typesIntoChrome(event: KeyboardEvent): boolean {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('.pane') !== null) return false
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  )
+}
+
 /** A SIGWINCH storm during a drag makes full-screen apps redraw constantly. */
 const PTY_RESIZE_DEBOUNCE_MS = 100
 const RESIZE_STEP_PX = 40
@@ -866,7 +887,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
      * shell with nothing on screen to show what they did. Enter is the way back
      * out, which is the one thing the bar has to answer to.
      */
-    if (action === null && isFolded(layout.focusedPaneId)) {
+    if (action === null && isFolded(layout.focusedPaneId) && !typesIntoChrome(event)) {
       event.preventDefault()
       event.stopPropagation()
       const plainEnter =
