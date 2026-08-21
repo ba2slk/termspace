@@ -190,6 +190,7 @@ function commandItems(): readonly CommandItem[] {
     },
     {
       zoomPane: () => session?.toggleZoom(),
+      foldPane: () => session?.toggleFold(),
       closePane: () => session?.closeFocusedPane(),
       newSession: openNewSession,
       saveLayout: () => void saveCurrentLayout(),

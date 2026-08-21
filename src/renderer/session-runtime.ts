@@ -30,6 +30,7 @@ import {
   resizeColumn,
   resizePane,
   splitPane,
+  toggleMinimized,
   type ColumnSeed,
   type Direction,
   type Layout,
@@ -58,6 +59,9 @@ const EXITS_ZOOM: readonly Action['t'][] = [
   'add-column',
   'close-pane',
   'overview',
+  // Folding rearranges the column, so the zoom goes first and the bar appears
+  // where the layout really puts it.
+  'fold',
 ]
 
 /** A SIGWINCH storm during a drag makes full-screen apps redraw constantly. */
@@ -127,6 +131,8 @@ export interface SessionRuntime {
   closeFocusedPane(): void
   /** Lay the focused pane over the canvas, or put it back. */
   toggleZoom(): void
+  /** Fold the focused pane to a bar, or open it again. */
+  toggleFold(): void
   /**
    * The clipboard actions for callers that are not the keymap: on mac the
    * application menu owns Cmd+C/V, so the keydown never reaches the page.
@@ -481,6 +487,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     zoomedPaneId = layout.focusedPaneId
     canvas.setZoom(zoomedPaneId)
     records.get(zoomedPaneId)?.terminal.setSize()
+  }
+
+  function toggleFold(): void {
+    setLayout(toggleMinimized(layout, layout.focusedPaneId))
   }
 
   function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
@@ -852,6 +862,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       case 'zoom':
         toggleZoom()
         break
+      case 'fold':
+        toggleFold()
+        break
     }
   }
 
@@ -948,6 +961,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     openCommandPane,
     closeFocusedPane: () => removePane(layout.focusedPaneId),
     toggleZoom,
+    toggleFold,
     copySelection,
     pasteIntoFocused,
     canSplit,
