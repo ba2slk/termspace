@@ -22,7 +22,11 @@ export interface BudgetState {
   readonly frozen: readonly string[]
   /** Currently holding a WebGL context. */
   readonly attached: readonly string[]
-  readonly focusedPaneId: string
+  /**
+   * The pane taking keystrokes, or null when there is none to keep awake — a
+   * folded pane shows nothing of itself, so it is not a reason to stay running.
+   */
+  readonly focusedPaneId: string | null
   /** paneId to last-seen tick; any monotonic counter works. */
   readonly lastSeen: ReadonlyMap<string, number>
   readonly limit?: number
@@ -85,7 +89,9 @@ export function decideBudget(state: BudgetState): BudgetDecision {
 
   // The focused pane never freezes: it is the one taking keystrokes, and a
   // frozen pane queues its output out of sight of both screen and clipboard.
-  const awake = new Set([...state.visible, state.focusedPaneId])
+  // Unless it is not showing at all, which is what a null focus says.
+  const awake = new Set(state.visible)
+  if (state.focusedPaneId !== null) awake.add(state.focusedPaneId)
 
   return {
     attach: difference(keep, state.attached),

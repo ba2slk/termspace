@@ -277,6 +277,27 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    */
   const attention = new Set<string>()
 
+  /** What each folded pane's bar last said it was running. */
+  const foldCommands = new Map<string, string>()
+
+  const isFolded = (paneId: string): boolean =>
+    findPane(layout, paneId)?.pane.minimized === true
+
+  function refreshFoldDetail(paneId: string): void {
+    canvas.setFoldDetail(paneId, {
+      command: foldCommands.get(paneId) ?? '',
+      wants: attention.has(paneId),
+    })
+  }
+
+  /** Ask what the pane is running, the way the overview asks for its cards. */
+  function loadFoldDetail(paneId: string): void {
+    void api.foregroundCommands([paneId]).then((commands) => {
+      foldCommands.set(paneId, commands[paneId] ?? '')
+      refreshFoldDetail(paneId)
+    })
+  }
+
   const overview = createOverviewView(host, {
     layout: () => layout,
     viewport: () => canvas.getViewport(),
@@ -356,10 +377,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     return decideBudget({
       allPaneIds: allPanes(layout).map((p) => p.id).filter(hasTerminal),
-      visible,
+      // A folded pane draws none of its terminal, so it needs no renderer and
+      // nothing of it has to stay awake — not even while it holds the keyboard.
+      visible: visible.filter((id) => !isFolded(id)),
       frozen,
       attached,
-      focusedPaneId: layout.focusedPaneId,
+      focusedPaneId: isFolded(layout.focusedPaneId) ? null : layout.focusedPaneId,
       lastSeen,
       active,
     })
@@ -442,7 +465,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    */
   function revealFocused(): void {
     canvas.scrollToPane(layout.focusedPaneId, layout)
-    records.get(layout.focusedPaneId)?.terminal.focus()
+    if (!isFolded(layout.focusedPaneId)) records.get(layout.focusedPaneId)?.terminal.focus()
   }
 
   /** Have every terminal remeasure after a DOM size change. */
@@ -484,13 +507,37 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       exitZoom()
       return
     }
+    // A bar has nothing to blow up: open the pane first, then lay it over.
+    unfoldFocused()
     zoomedPaneId = layout.focusedPaneId
     canvas.setZoom(zoomedPaneId)
     records.get(zoomedPaneId)?.terminal.setSize()
   }
 
   function toggleFold(): void {
-    setLayout(toggleMinimized(layout, layout.focusedPaneId))
+    const paneId = layout.focusedPaneId
+    const folding = !isFolded(paneId)
+    setLayout(toggleMinimized(layout, paneId))
+    if (folding) {
+      /*
+       * Nothing of the pane is on screen any more, so it must not hold the
+       * keyboard either: a keystroke landing in a shell nobody can see is input
+       * with no way of knowing what it did. The pty keeps running regardless.
+       */
+      records.get(paneId)?.terminal.setFocused(false)
+      loadFoldDetail(paneId)
+      return
+    }
+    const record = records.get(paneId)
+    record?.terminal.setFocused(true)
+    record?.terminal.focus()
+    // Back at its layout height, so the grid has to follow the box.
+    record?.terminal.setSize()
+  }
+
+  /** Open the focused pane if it is folded, for an action that needs its body. */
+  function unfoldFocused(): void {
+    if (isFolded(layout.focusedPaneId)) toggleFold()
   }
 
   function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
@@ -505,13 +552,19 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (focusChanged) {
       options.onWatchedPaneChanged()
       // Looking at it is what dismisses it.
-      if (attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      if (attention.delete(layout.focusedPaneId)) {
+        options.onAttentionChanged()
+        refreshFoldDetail(layout.focusedPaneId)
+      }
       // The bar belongs to the focused pane; a bar left on an unfocused one lies.
       searchBar.close()
       records.get(previousFocus)?.terminal.setFocused(false)
       const record = records.get(layout.focusedPaneId)
-      record?.terminal.setFocused(true)
-      record?.terminal.focus()
+      // Focus lands on a folded bar like any other pane, but the terminal under
+      // it takes neither the caret nor the keys.
+      const folded = isFolded(layout.focusedPaneId)
+      record?.terminal.setFocused(!folded)
+      if (!folded) record?.terminal.focus()
       canvas.scrollToPane(layout.focusedPaneId, layout)
       publishTitle()
     }
@@ -607,6 +660,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     attached = attached.filter((id) => id !== paneId)
     frozen = frozen.filter((id) => id !== paneId)
     lastSeen.delete(paneId)
+    foldCommands.delete(paneId)
     api.kill(paneId)
   }
 
@@ -702,6 +756,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function splitFocused(side: 'up' | 'down'): void {
     exitZoom()
+    // Splitting a bar would halve a height nobody can see; open it first.
+    unfoldFocused()
     const id = newId('p')
     const cwd = focusedCwd() // read before focus moves away
     const next = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, side)
@@ -712,6 +768,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function openCommandPane(command: string): void {
     exitZoom()
+    unfoldFocused()
     const id = newId('p')
     const cwd = focusedCwd()
     const split = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, 'down')
@@ -797,6 +854,23 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         // Closed without a jump (Esc, Alt+M): hand the keyboard back to the pane.
         if (!overview.isOpen) records.get(layout.focusedPaneId)?.terminal.focus()
       }
+      return
+    }
+    /*
+     * A folded pane is a bar, and a bar takes no typing: the keys would reach a
+     * shell with nothing on screen to show what they did. Enter is the way back
+     * out, which is the one thing the bar has to answer to.
+     */
+    if (action === null && isFolded(layout.focusedPaneId)) {
+      event.preventDefault()
+      event.stopPropagation()
+      const plainEnter =
+        event.key === 'Enter' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !event.metaKey
+      if (plainEnter) toggleFold()
       return
     }
     if (action === null) return // not the app's — pass it through to the terminal
@@ -914,8 +988,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   canvas.render(layout)
   for (const pane of allPanes(layout)) mountPane(pane.id)
   setLayout(layout)
-  records.get(layout.focusedPaneId)?.terminal.setFocused(true)
-  records.get(layout.focusedPaneId)?.terminal.focus()
+  if (!isFolded(layout.focusedPaneId)) {
+    records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+    records.get(layout.focusedPaneId)?.terminal.focus()
+  }
+  for (const pane of allPanes(layout)) if (pane.minimized === true) loadFoldDetail(pane.id)
 
   return {
     get spec() {
@@ -987,6 +1064,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       if (paneId === layout.focusedPaneId && active) return true
       if (attention.has(paneId)) return true
       attention.add(paneId)
+      refreshFoldDetail(paneId)
       overview.refreshIfOpen()
       options.onAttentionChanged()
       return true
@@ -1015,8 +1093,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // hidden, so only pull the scroll back into range.
       canvas.clampScroll(layout)
       updateBudget()
-      records.get(layout.focusedPaneId)?.terminal.setFocused(true)
-      records.get(layout.focusedPaneId)?.terminal.focus()
+      if (!isFolded(layout.focusedPaneId)) {
+        records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+        records.get(layout.focusedPaneId)?.terminal.focus()
+      }
     },
     destroy() {
       contextHolders.delete(holder)
