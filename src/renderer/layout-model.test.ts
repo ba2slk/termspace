@@ -5,6 +5,8 @@ import {
   columnContentHeight,
   createLayout,
   DEFAULT_COLUMN_WIDTH,
+  expandedRatioSum,
+  expandedRoom,
   findPane,
   focusDir,
   layoutViolations,
@@ -518,6 +520,53 @@ describe('resizePane', () => {
 
   it('is a no-op for an unknown pane', () => {
     expect(resizePane(base, 'nope', 10, H)).toBe(base)
+  })
+
+  describe('with a folded neighbour', () => {
+    const three = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a' },
+          { id: 'b', title: 'b' },
+          { id: 'c', title: 'c' },
+        ],
+      },
+    ])
+    const middleFolded = setMinimized(three, 'b', true)
+
+    it('trades across the bar with the next pane that still has a height', () => {
+      const next = resizePane(middleFolded, 'a', 60, H)
+      expect(next.columns[0]!.panes[0]!.heightRatio).toBeGreaterThan(1 / 3)
+      expect(next.columns[0]!.panes[1]!.heightRatio).toBe(1 / 3) // the bar is untouched
+      expect(next.columns[0]!.panes[2]!.heightRatio).toBeLessThan(1 / 3)
+      expect(layoutViolations(next)).toEqual([])
+    })
+
+    it('moves the pixels the caller asked for, counting only the shared room', () => {
+      const next = resizePane(middleFolded, 'a', 60, H)
+      const room = expandedRoom(H, middleFolded.columns[0]!.panes)
+      const sum = expandedRatioSum(middleFolded.columns[0]!.panes)
+      const before = (1 / 3 / sum) * room
+      expect((next.columns[0]!.panes[0]!.heightRatio / sum) * room).toBeCloseTo(before + 60, 6)
+    })
+
+    it('takes from above when everything below is folded', () => {
+      const bottomFolded = setMinimized(three, 'c', true)
+      const next = resizePane(bottomFolded, 'b', 60, H)
+      expect(next.columns[0]!.panes[1]!.heightRatio).toBeGreaterThan(1 / 3)
+      expect(next.columns[0]!.panes[0]!.heightRatio).toBeLessThan(1 / 3)
+      expect(next.columns[0]!.panes[2]!.heightRatio).toBe(1 / 3)
+    })
+
+    it('refuses to resize a folded pane: a bar has no height to trade', () => {
+      expect(resizePane(middleFolded, 'b', 60, H)).toBe(middleFolded)
+    })
+
+    it('refuses when no expanded partner is left', () => {
+      const alone = setMinimized(setMinimized(three, 'a', true), 'c', true)
+      expect(resizePane(alone, 'b', 60, H)).toBe(alone)
+    })
   })
 })
 
