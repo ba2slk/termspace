@@ -34,6 +34,7 @@ export function layoutSnapshot(
           prefill: spec?.prefill ?? null,
           fallbackCwd: spec?.cwd ?? sessionCwd,
           heightRatio: pane.heightRatio,
+          minimized: pane.minimized === true,
         }
       }),
     })),

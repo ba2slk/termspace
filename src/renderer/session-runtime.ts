@@ -228,6 +228,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         id,
         title: entry.kind === 'pane' ? entry.title : t.runtime.configError,
         heightRatio: entry.heightRatio,
+        // An error card is a fault to read, so it is never folded away.
+        minimized: entry.kind === 'pane' && entry.minimized,
       }
     }),
   }))
@@ -742,6 +744,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       prefill: null,
       cwd: spec.cwd,
       heightRatio: 0,
+      minimized: false,
     })
     mountPane(id, cwd)
     syncSizes()

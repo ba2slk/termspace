@@ -23,6 +23,8 @@ export interface PaneSpec {
   /** Already resolved to an absolute path. */
   readonly cwd: string
   readonly heightRatio: number
+  /** Starts folded to a bar: the pane runs, but only its title row is drawn. */
+  readonly minimized: boolean
 }
 
 export interface ErrorSpec {
@@ -184,6 +186,8 @@ export interface LayoutSnapshot {
       /** Used when the pty is already gone: the path this pane started in. */
       readonly fallbackCwd: string
       readonly heightRatio: number
+      /** Folded on screen right now, so a save brings it back that way. */
+      readonly minimized: boolean
     }[]
   }[]
 }

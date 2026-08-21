@@ -334,6 +334,7 @@ export function registerIpcHandlers(
                   prefill: pane.prefill,
                   cwd: liveCwd ?? pane.fallbackCwd,
                   heightRatio: pane.heightRatio,
+                  minimized: pane.minimized,
                 }
               }),
             ),
