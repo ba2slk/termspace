@@ -832,8 +832,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function pasteIntoFocused(): void {
     // Pasting into a pane hidden behind the overview would dirty its shell line
-    // out of sight; see copySelection.
-    if (overview.isOpen) return
+    // out of sight; see copySelection. A folded pane is hidden the same way,
+    // and the guard lives here rather than on the keyboard path because on mac
+    // the Edit menu delivers Cmd+V without a keydown ever reaching the page.
+    if (overview.isOpen || isFolded(layout.focusedPaneId)) return
     void api.readClipboard().then((text) => {
       if (text === '') return
       // Through xterm for bracketed paste, so multi-line input isn't executed.
@@ -923,6 +925,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         pasteIntoFocused()
         break
       case 'search': {
+        // The bar has no scrollback on screen, and a search box inside a body
+        // that is not drawn takes the keys and shows nothing.
+        unfoldFocused()
         const body = canvas.paneBody(layout.focusedPaneId)
         const record = records.get(layout.focusedPaneId)
         // An error card has no scrollback to search.
