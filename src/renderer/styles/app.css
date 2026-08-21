@@ -767,6 +767,16 @@ body {
   border-color: var(--focus-border, var(--border-active));
 }
 
+/*
+ * Zoomed: one pane laid over the visible canvas. Only the box changes — the
+ * layout still holds the pane's real rect, which is what a save writes.
+ * Above the neighbouring panes and the resize handles, which sit at 2 inside
+ * the same track; the side gutters still cover the canvas inset.
+ */
+.pane--zoomed {
+  z-index: 3;
+}
+
 /* Outside the active region: the browser skips layout and paint for this subtree. */
 .pane--frozen .pane__body {
   content-visibility: hidden;

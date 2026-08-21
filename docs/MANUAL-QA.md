@@ -107,6 +107,12 @@ English copy.
   moves via a round trip of the left coordinate, and focus must stay on the pane
   throughout the move
 
+**Pane zoom**
+- **`Alt+Z` lays the focused pane over the visible canvas, and `Alt+Z` again puts it
+  back where it was** (measured as pixels against the canvas host, insets included: the
+  class saying "zoomed" was never the promise, the box is. The restore is compared with
+  the rect the pane held before the zoom, since the layout behind it never changed)
+
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
 - Frozen panes hold no WebGL context

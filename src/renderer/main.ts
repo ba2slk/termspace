@@ -184,6 +184,7 @@ function commandItems(): readonly CommandItem[] {
       hint: hintFor,
     },
     {
+      zoomPane: () => session?.toggleZoom(),
       closePane: () => session?.closeFocusedPane(),
       newSession: openNewSession,
       saveLayout: () => void saveCurrentLayout(),

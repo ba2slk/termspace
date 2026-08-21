@@ -56,6 +56,76 @@ describe('createCanvasView', () => {
     expect(first.style.width).toBe('700px')
   })
 
+  /*
+   * Zoom is view state: the pane's box changes, the layout behind it does not.
+   * 800x600 host, 6px edges and a 10px floor, so the box is 788x584 at 6,6.
+   */
+  it('lays the zoomed pane over the visible canvas', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    expect([pane.style.left, pane.style.top, pane.style.width, pane.style.height]).toEqual([
+      '6px',
+      '6px',
+      '788px',
+      '584px',
+    ])
+    expect(pane.classList.contains('pane--zoomed')).toBe(true)
+  })
+
+  it('leaves every other pane where the layout put it', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const other = host.querySelector<HTMLElement>('[data-pane-id="b1"]')!
+    const before = other.style.cssText
+    view.setZoom('a1')
+    expect(other.style.cssText).toBe(before)
+    expect(other.classList.contains('pane--zoomed')).toBe(false)
+  })
+
+  it('restores the exact rect it had, in the element it already had', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    const before = pane.style.cssText
+    view.setZoom('a1')
+    view.setZoom(null)
+    // The same element throughout — xterm lives inside it.
+    expect(host.querySelector('[data-pane-id="a1"]')).toBe(pane)
+    expect(pane.style.cssText).toBe(before)
+    expect(pane.classList.contains('pane--zoomed')).toBe(false)
+  })
+
+  it('ignores a pan while zoomed, so the pane cannot slide away', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    const before = view.root.style.transform
+    view.panBy(240, 0)
+    view.scrollByExact(240)
+    expect(view.root.style.transform).toBe(before)
+    expect(view.getViewport().scrollX).toBe(0)
+  })
+
+  it('scrolls again once the zoom is gone', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    view.setZoom(null)
+    view.scrollByExact(120)
+    expect(view.getViewport().scrollX).toBe(120)
+  })
+
+  /* The layout is untouched, so the budget still sees the panes as they are. */
+  it('keeps getRects on the layout rects', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const before = JSON.stringify(view.getRects())
+    view.setZoom('a1')
+    expect(JSON.stringify(view.getRects())).toBe(before)
+  })
+
   it('calls the hook with the pane id on mousedown', () => {
     const onPaneMouseDown = vi.fn()
     const view = createCanvasView(host, { onPaneMouseDown })

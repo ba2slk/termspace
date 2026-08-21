@@ -1,7 +1,7 @@
 import { api } from '../api'
 import { IS_MAC } from '../platform'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
-import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
+import { CANVAS_BOTTOM, CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
 import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
@@ -437,6 +437,62 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
   await waitFor(() => panes().length === beforeClose - 1)
   report['closePane'] =
     panes().length === beforeClose - 1 ? 'ok' : `FAIL ${beforeClose}→${panes().length}`
+}
+
+/**
+ * Zoom lays the focused pane over the visible canvas, and puts it back exactly.
+ *
+ * Measured in pixels: the class says only that the app agrees it is zoomed, and
+ * what the feature promises is the box — the same insets every pane keeps, and
+ * the rect it started from when the zoom is dropped.
+ */
+export async function checkPaneZoom(report: Report): Promise<void> {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  const pane = document.querySelector<HTMLElement>('.pane--focused')
+  if (host === null || pane === null) {
+    report['paneZoom'] = 'FAIL (no focused pane)'
+    return
+  }
+
+  const before = pane.getBoundingClientRect()
+  const canvas = host.getBoundingClientRect()
+  // A pixel of tolerance: the rects are rounded, and a fractional scale rounds
+  // the window's own edges too.
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
+  const covers = (): boolean => {
+    const box = pane.getBoundingClientRect()
+    return (
+      near(box.left, canvas.left + CANVAS_EDGE) &&
+      near(box.top, canvas.top + CANVAS_EDGE) &&
+      near(box.width, canvas.width - CANVAS_EDGE * 2) &&
+      near(box.height, canvas.height - CANVAS_EDGE - CANVAS_BOTTOM)
+    )
+  }
+  const boxText = (): string => {
+    const box = pane.getBoundingClientRect()
+    return `${String(Math.round(box.width))}x${String(Math.round(box.height))} at ${String(Math.round(box.left))},${String(Math.round(box.top))}`
+  }
+
+  press('KeyZ', { altKey: true })
+  await waitFor(covers)
+  report['paneZoomCoversCanvas'] = covers()
+    ? `ok (${boxText()})`
+    : `FAIL (${boxText()}, canvas ${String(Math.round(canvas.width))}x${String(Math.round(canvas.height))})`
+
+  const restored = (): boolean => {
+    const box = pane.getBoundingClientRect()
+    return (
+      near(box.left, before.left) &&
+      near(box.top, before.top) &&
+      near(box.width, before.width) &&
+      near(box.height, before.height)
+    )
+  }
+  press('KeyZ', { altKey: true })
+  await waitFor(restored)
+  report['paneZoomRestores'] = restored()
+    ? 'ok'
+    : `MISMATCH (${boxText()}, was ${String(Math.round(before.width))}x${String(Math.round(before.height))} at ${String(Math.round(before.left))},${String(Math.round(before.top))})`
 }
 
 export function checkRendererBudget(report: Report): void {

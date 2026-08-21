@@ -27,6 +27,7 @@ export interface CommandState {
 
 /** One callback per row, wired by main. */
 export interface CommandActions {
+  readonly zoomPane: () => void
   readonly closePane: () => void
   readonly newSession: () => void
   readonly saveLayout: () => void
@@ -51,6 +52,12 @@ export function commandItems(
   // Grouped by what they act on: the pane, this session's file, the session
   // list, the view, the app. Quit stands alone.
   return [
+    {
+      label: t.firstRun.zoomPane,
+      hint: state.hint('zoom-pane'),
+      disabled: !state.hasSession,
+      run: actions.zoomPane,
+    },
     {
       label: t.firstRun.closePane,
       hint: state.hint('close-pane'),

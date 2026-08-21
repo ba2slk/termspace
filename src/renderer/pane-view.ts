@@ -14,6 +14,8 @@ export interface PaneView {
    */
   setTitle(title: string): void
   setFrozen(frozen: boolean): void
+  /** Drawn over its neighbours, at whatever rect it is then given. */
+  setZoomed(zoomed: boolean): void
   setRect(rect: Rect): void
 }
 
@@ -53,6 +55,9 @@ export function createPaneView(paneId: string): PaneView {
     },
     setFrozen(frozen) {
       element.classList.toggle('pane--frozen', frozen)
+    },
+    setZoomed(zoomed) {
+      element.classList.toggle('pane--zoomed', zoomed)
     },
     setRect(rect) {
       // Round to keep borders crisp.

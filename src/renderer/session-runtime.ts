@@ -17,7 +17,7 @@ import { t } from './i18n'
 import { createCanvasView, type CanvasView } from './canvas-view'
 import { renderConfigError, renderExitBanner } from './error-card'
 import { columnHeightIn, maxColumnWidth, visiblePaneIds } from './layout-geometry'
-import { isAppAction, resolveAction } from './keymap'
+import { isAppAction, resolveAction, type Action } from './keymap'
 import {
   addColumn,
   allPanes,
@@ -40,6 +40,22 @@ import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './rendere
 import { attachResizeDrag } from './resize-drag'
 import { createSearchBar } from './search-bar'
 import { createTerminalPane, type TerminalPane } from './terminal-pane'
+
+/**
+ * Actions that rearrange the canvas, and so cannot run against a zoomed pane.
+ *
+ * tmux's rule: the zoom is dropped first and the action then lands on the real
+ * layout, rather than on a screen that is not what the layout says it is.
+ */
+const EXITS_ZOOM: readonly Action['t'][] = [
+  'focus',
+  'resize',
+  'split',
+  'move',
+  'add-column',
+  'close-pane',
+  'overview',
+]
 
 /** A SIGWINCH storm during a drag makes full-screen apps redraw constantly. */
 const PTY_RESIZE_DEBOUNCE_MS = 100
@@ -106,6 +122,8 @@ export interface SessionRuntime {
   /** Run one command in a new pane, splitting below the focused one. */
   openCommandPane(command: string): void
   closeFocusedPane(): void
+  /** Lay the focused pane over the canvas, or put it back. */
+  toggleZoom(): void
   /**
    * The clipboard actions for callers that are not the keymap: on mac the
    * application menu owns Cmd+C/V, so the keydown never reaches the page.
@@ -237,6 +255,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     scrollBoost: () => options.settings().scrollBoost,
     shiftPans: () => options.settings().shiftPanning === 1,
   })
+
+  /*
+   * The zoomed pane, if any. View state only: the layout is untouched, so a
+   * save writes the columns as they really are.
+   */
+  let zoomedPaneId: string | null = null
 
   /*
    * Panes that rang while you were elsewhere. Cleared by looking at the pane,
@@ -437,6 +461,25 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     }, SIZE_SETTLE_MS)
   }
 
+  function exitZoom(): void {
+    const paneId = zoomedPaneId
+    if (paneId === null) return
+    zoomedPaneId = null
+    canvas.setZoom(null)
+    // The pane is back at its layout size; its grid has to follow the box.
+    records.get(paneId)?.terminal.setSize()
+  }
+
+  function toggleZoom(): void {
+    if (zoomedPaneId !== null) {
+      exitZoom()
+      return
+    }
+    zoomedPaneId = layout.focusedPaneId
+    canvas.setZoom(zoomedPaneId)
+    records.get(zoomedPaneId)?.terminal.setSize()
+  }
+
   function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
     const focusChanged = next.focusedPaneId !== layout.focusedPaneId
     const previousFocus = layout.focusedPaneId
@@ -557,6 +600,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   // ── Actions ──────────────────────────────────────────
 
   function removePane(paneId: string): void {
+    // A pane that is going cannot stay zoomed; its terminal is about to go too,
+    // so the state is dropped rather than resized back.
+    if (paneId === zoomedPaneId) {
+      zoomedPaneId = null
+      canvas.setZoom(null)
+    }
     const next = closePane(layout, paneId)
     unmountPane(paneId)
     paneSpecs.delete(paneId)
@@ -569,6 +618,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function applyResize(dir: Direction): void {
+    exitZoom()
     const found = findPane(layout, layout.focusedPaneId)
     if (found === null) return
     if (dir === 'left' || dir === 'right') {
@@ -638,6 +688,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function splitFocused(side: 'up' | 'down'): void {
+    exitZoom()
     const id = newId('p')
     const cwd = focusedCwd() // read before focus moves away
     const next = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, side)
@@ -647,6 +698,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function openCommandPane(command: string): void {
+    exitZoom()
     const id = newId('p')
     const cwd = focusedCwd()
     const split = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, 'down')
@@ -670,6 +722,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   }
 
   function addColumnBesideFocused(side: 'left' | 'right'): void {
+    exitZoom()
     const found = findPane(layout, layout.focusedPaneId)
     if (found === null) return
     const id = newId('p')
@@ -738,6 +791,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (isAppAction(action)) return
     event.preventDefault()
     event.stopPropagation()
+    if (EXITS_ZOOM.includes(action.t)) exitZoom()
 
     switch (action.t) {
       case 'focus':
@@ -780,6 +834,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         break
       case 'reveal-focus':
         revealFocused()
+        break
+      case 'zoom':
+        toggleZoom()
         break
     }
   }
@@ -864,6 +921,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       if (!next) {
         searchBar.close()
         overview.close()
+        // A session off screen must come back as its layout describes it.
+        exitZoom()
         records.get(layout.focusedPaneId)?.terminal.setFocused(false)
         // Stop the panes working while nobody is looking. The WebGL contexts
         // stay: the session arriving takes them only if it runs short of slots.
@@ -874,6 +933,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     addColumnBesideFocused,
     openCommandPane,
     closeFocusedPane: () => removePane(layout.focusedPaneId),
+    toggleZoom,
     copySelection,
     pasteIntoFocused,
     canSplit,
