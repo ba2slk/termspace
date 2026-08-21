@@ -424,6 +424,13 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
       const columnRects = rects.filter((r) => r.columnId === column.id)
       for (let p = 0; p < columnRects.length - 1; p++) {
+        /*
+         * No handle under a folded bar. The seam's drag targets the pane above
+         * it, and a folded pane can neither give height nor take it, so the
+         * handle would offer a resize cursor and then do nothing. Seams between
+         * panes that still have a height are unaffected.
+         */
+        if (column.panes[p]?.minimized === true) continue
         const rect = columnRects[p]!
         const handle = document.createElement('div')
         handle.className = 'resize-handle resize-handle--pane'

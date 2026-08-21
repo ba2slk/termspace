@@ -402,6 +402,33 @@ describe('createCanvasView', () => {
       expect(bar.classList.contains('pane__fold--wants')).toBe(true)
     })
 
+    /*
+     * The seam below a bar drags the folded pane, which refuses to resize. A
+     * handle that answers nothing is worse than no handle: it offers a resize
+     * cursor over a seam that cannot move.
+     */
+    it('leaves no drag handle on the seam under a folded bar', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(
+        createLayout([
+          {
+            id: 'c1',
+            width: 700,
+            panes: [
+              { id: 'a1', title: 'a', minimized: true },
+              { id: 'a2', title: 'b' },
+              { id: 'a3', title: 'c' },
+            ],
+          },
+        ]),
+      )
+      const targets = [...host.querySelectorAll<HTMLElement>('.resize-handle--pane')].map(
+        (h) => h.dataset['targetId'],
+      )
+      // Two seams, but only the one between the panes that still have a height.
+      expect(targets).toEqual(['a2'])
+    })
+
     it('hides the bar again on unfolding, and gives the height back', () => {
       const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
       view.render(folded)
