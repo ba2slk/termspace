@@ -166,9 +166,17 @@ English copy.
   session behind the scrim)
 - **A folded pane's row stays thinner than the panes around it** (the map is a picture
   of what is on screen, so a bar on screen is a bar on the map. Inflating the row to
-  whatever a line of text needs would make the map lie about the layout it exists to
-  describe; the row gives up its text instead, the same answer a column too narrow to
-  label gets)
+  whatever a stacked card needs would make the map lie about the layout it exists to
+  describe; the row gives up what it cannot hold instead, the same answer a column too
+  narrow to label gets)
+- **Every row with the room for one line says which pane it is** (run against a fixture
+  of the shape this was reported on: five of its six panes folded. A bar is a fixed
+  30px and the map never scales past a half, so a folded row is at most 15px — under
+  what a stacked card needs, at every scale. Measured against the row's height and the
+  title's computed style together, because a title that is present but `display: none`
+  is exactly the state that left the map unreadable)
+- **The viewport marker stays inside the map** (it frames a region of the map, so one
+  running off the side would say the wrong thing about where you are)
 
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
