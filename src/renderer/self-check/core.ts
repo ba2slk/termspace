@@ -812,6 +812,93 @@ export async function checkPaneFold(report: Report): Promise<void> {
   if (paneId !== undefined) api.write(paneId, '\u0015')
 }
 
+/**
+ * The overview with folded panes in it.
+ *
+ * A card cannot render shorter than its own padding and border, and a folded
+ * pane's row at map scale is a few pixels — so the browser floored the row,
+ * which then painted over the row beneath it and out of the bottom of the map
+ * onto the session behind the scrim. Measured against the map's own box and
+ * against the neighbouring rows, because inline styles were right the whole
+ * time: only the rendered boxes showed it.
+ */
+export async function checkOverviewWithFoldedPanes(report: Report): Promise<void> {
+  const paneCount = (): number => visiblePanes().length
+  const before = paneCount()
+  // Make the sibling rather than hope for one: the row that matters is the one
+  // with a neighbour under it to be drawn over.
+  press('ArrowDown', { altKey: true, shiftKey: true })
+  if (!(await waitFor(() => paneCount() > before))) {
+    report['overviewFolded'] = 'skipped: the column had no room for a second pane'
+    return
+  }
+  const paneId = focusedId()
+  const foldedPane = document.querySelector<HTMLElement>(`.pane[data-pane-id="${String(paneId)}"]`)
+  const barHeight = (): number => Math.round(foldedPane?.getBoundingClientRect().height ?? 0)
+
+  press('KeyD', { altKey: true })
+  await waitFor(() => barHeight() === FOLD_BAR_HEIGHT)
+
+  press('KeyM', { altKey: true })
+  await waitFor(() => overlay() !== null)
+  const map = overlay()?.querySelector<HTMLElement>('.overview__map')
+  const cards = [...(overlay()?.querySelectorAll<HTMLElement>('.overview__card') ?? [])]
+  const box = (el: HTMLElement): DOMRect => el.getBoundingClientRect()
+
+  if (map === null || map === undefined || cards.length === 0) {
+    report['overviewFolded'] = 'FAIL (the map drew no cards)'
+  } else {
+    const mapBox = box(map)
+
+    // Every row inside the map it belongs to. A row floored by its own chrome
+    // is the one that hangs out of the bottom, over the session behind.
+    const escaped = cards.filter((c) => box(c).bottom > mapBox.bottom + 1)
+    report['overviewFoldedRowsStayInTheMap'] =
+      escaped.length === 0
+        ? `ok (${String(cards.length)} rows)`
+        : `FAIL (${String(escaped.length)} of ${String(cards.length)} hang past the map bottom)`
+
+    // No row over its neighbour. Grouped by left edge, which is the column.
+    const columns = new Map<number, HTMLElement[]>()
+    for (const c of cards) {
+      const left = Math.round(box(c).left)
+      columns.set(left, [...(columns.get(left) ?? []), c])
+    }
+    let overlaps = 0
+    for (const column of columns.values()) {
+      const sorted = [...column].sort((a, b) => box(a).top - box(b).top)
+      for (let i = 1; i < sorted.length; i++) {
+        if (box(sorted[i]!).top + 1 < box(sorted[i - 1]!).bottom) overlaps++
+      }
+    }
+    report['overviewFoldedRowsDoNotOverlap'] =
+      overlaps === 0 ? 'ok' : `FAIL (${String(overlaps)} rows drawn over the one above)`
+
+    /*
+     * And the row is honest about the layout: a bar on screen is a bar on the
+     * map, so it stays far shorter than the panes around it rather than being
+     * inflated to whatever a line of text needs.
+     */
+    const foldedCard = cards.find((c) => c.dataset['paneId'] === paneId)
+    const others = cards.filter((c) => c !== foldedCard)
+    const shortest = others.length === 0 ? Infinity : Math.min(...others.map((c) => box(c).height))
+    report['overviewFoldedRowIsThin'] =
+      foldedCard === undefined
+        ? 'FAIL (no row for the folded pane)'
+        : box(foldedCard).height < shortest
+          ? `ok (${String(Math.round(box(foldedCard).height))}px against ${String(Math.round(shortest))}px)`
+          : `FAIL (${String(Math.round(box(foldedCard).height))}px, no thinner than the ${String(Math.round(shortest))}px rows)`
+  }
+
+  // Put the canvas back: close the map, open the pane, remove the one added.
+  press('Escape')
+  await waitFor(() => overlay() === null)
+  press('Enter')
+  await waitFor(() => barHeight() !== FOLD_BAR_HEIGHT)
+  press('KeyW', { altKey: true, shiftKey: true })
+  await waitFor(() => paneCount() === before)
+}
+
 export function checkRendererBudget(report: Report): void {
   const frozen = document.querySelectorAll('.pane--frozen').length
   report['frozenOffscreenPanes'] = frozen > 0 ? `ok (${frozen})` : 'FAIL (nothing froze)'

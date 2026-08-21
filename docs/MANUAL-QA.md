@@ -158,6 +158,18 @@ English copy.
   lives inside the pane body, which is not drawn while folded — opened there it would
   take the keys and show nothing)
 
+**The overview with folded panes**
+- **No row hangs past the bottom of the map, and no row is drawn over the one above
+  it** (measured from `getBoundingClientRect`, because the inline styles were right the
+  whole time. A card cannot render shorter than its own padding and border, so a row
+  the map sized at 5px came out at 14px, over its neighbour and out of the map onto the
+  session behind the scrim)
+- **A folded pane's row stays thinner than the panes around it** (the map is a picture
+  of what is on screen, so a bar on screen is a bar on the map. Inflating the row to
+  whatever a line of text needs would make the map lie about the layout it exists to
+  describe; the row gives up its text instead, the same answer a column too narrow to
+  label gets)
+
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
 - Frozen panes hold no WebGL context

@@ -24,6 +24,7 @@ import {
   checkNavigation,
   checkOverview,
   checkOverviewScaleFloor,
+  checkOverviewWithFoldedPanes,
   checkPaneTitlePeek,
   checkPaneFold,
   checkPaneZoom,
@@ -95,6 +96,7 @@ const GROUPS: Readonly<
     await checkLayoutEditing(report)
     await checkPaneZoom(report)
     await checkPaneFold(report)
+    await checkOverviewWithFoldedPanes(report)
     checkRendererBudget(report)
     await checkGridFillsPane(report)
     await checkClickableLinks(report)
