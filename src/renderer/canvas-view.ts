@@ -18,7 +18,7 @@ import {
   type Rect,
   type Viewport,
 } from './layout-geometry'
-import { PANE_GAP, type Layout } from './layout-model'
+import { PANE_GAP, type Layout, type Pane } from './layout-model'
 import { isDefaultPaneTitle } from './pane-title'
 import { createPaneView, type PaneView } from './pane-view'
 import { indicatorMetrics, scrollForThumbDelta } from './scroll-indicator'
@@ -85,6 +85,12 @@ export interface CanvasView {
    * writes and which panes the renderer budget sees are untouched.
    */
   setZoom(paneId: string | null): void
+  /**
+   * What a folded pane's bar shows besides its title. Kept here rather than
+   * asked for on every render: it comes over IPC, and the layout redraws far
+   * more often than a shell changes what it is running.
+   */
+  setFoldDetail(paneId: string, detail: { command: string; wants: boolean }): void
   getViewport(): Viewport
   getRects(): readonly PaneRect[]
   paneBody(paneId: string): HTMLElement | null
@@ -129,6 +135,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   host.append(track, gutter, gutterRight, indicator)
 
   const views = new Map<string, PaneView>()
+  const foldDetails = new Map<string, { command: string; wants: boolean }>()
   let rects: PaneRect[] = []
   let currentLayout: Layout | null = null
   let scrollX = 0
@@ -439,9 +446,9 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       rects = paneRects(layout, host.clientHeight)
       syncIndicator()
 
-      const titles = new Map<string, string>()
+      const panes = new Map<string, Pane>()
       for (const column of layout.columns) {
-        for (const pane of column.panes) titles.set(pane.id, pane.title)
+        for (const pane of column.panes) panes.set(pane.id, pane)
       }
 
       const alive = new Set<string>()
@@ -456,14 +463,22 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         }
         view.setRect(rect)
         view.setFocused(rect.paneId === layout.focusedPaneId)
-        const title = titles.get(rect.paneId) ?? ''
+        const pane = panes.get(rect.paneId)
+        const title = pane?.title ?? ''
         view.setTitle(isDefaultPaneTitle(title) ? '' : title)
+        // The bar names the pane even when the peek label would not: it is all
+        // there is to go on, so a default title still beats an empty row.
+        view.setFolded(pane?.minimized === true, {
+          title,
+          ...(foldDetails.get(rect.paneId) ?? { command: '', wants: false }),
+        })
       }
 
       for (const [paneId, view] of views) {
         if (alive.has(paneId)) continue
         view.element.remove()
         views.delete(paneId)
+        foldDetails.delete(paneId)
       }
 
       renderHandles(layout)
@@ -523,6 +538,15 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       } else {
         scrim.remove()
       }
+    },
+
+    setFoldDetail(paneId, detail) {
+      foldDetails.set(paneId, detail)
+      const pane = currentLayout?.columns
+        .flatMap((c) => c.panes)
+        .find((p) => p.id === paneId)
+      if (pane === undefined) return
+      views.get(paneId)?.setFolded(pane.minimized === true, { title: pane.title, ...detail })
     },
 
     getViewport() {

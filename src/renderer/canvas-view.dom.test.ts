@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCanvasView } from './canvas-view'
-import { createLayout } from './layout-model'
+import { createLayout, FOLD_BAR_HEIGHT } from './layout-model'
 
 const layout = createLayout([
   { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'editor' }, { id: 'a2', title: 'shell' }] },
@@ -360,5 +360,56 @@ describe('createCanvasView', () => {
     const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
     expect(pane.querySelector('.pane__label')!.parentElement).toBe(pane)
     expect(pane.style.width).toBe('700px')
+  })
+
+  describe('a folded pane', () => {
+    const folded = createLayout([
+      {
+        id: 'c1',
+        width: 700,
+        panes: [
+          { id: 'a1', title: 'editor' },
+          { id: 'a2', title: 'shell', minimized: true },
+        ],
+      },
+    ])
+
+    it('shrinks to the bar height the layout gives it', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      expect(pane.classList.contains('pane--folded')).toBe(true)
+      expect(pane.style.height).toBe(`${String(FOLD_BAR_HEIGHT)}px`)
+    })
+
+    it('shows the bar and keeps the terminal element in place under it', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      const bar = pane.querySelector<HTMLElement>('.pane__fold')!
+      expect(bar.hidden).toBe(false)
+      expect(bar.querySelector('.pane__fold-title')!.textContent).toBe('shell')
+      // The body is hidden by CSS, not removed: the xterm inside must survive.
+      expect(pane.querySelector('.pane__body')).not.toBeNull()
+    })
+
+    it('names what the pane is running, and marks one that rang', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      view.setFoldDetail('a2', { command: 'npm run dev', wants: true })
+      const bar = host.querySelector<HTMLElement>('[data-pane-id="a2"] .pane__fold')!
+      expect(bar.querySelector('.pane__fold-command')!.textContent).toBe('npm run dev')
+      expect(bar.classList.contains('pane__fold--wants')).toBe(true)
+    })
+
+    it('hides the bar again on unfolding, and gives the height back', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      view.render(layout)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      expect(pane.classList.contains('pane--folded')).toBe(false)
+      expect(pane.querySelector<HTMLElement>('.pane__fold')!.hidden).toBe(true)
+      expect(Number.parseInt(pane.style.height)).toBeGreaterThan(FOLD_BAR_HEIGHT)
+    })
   })
 })
