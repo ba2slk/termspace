@@ -113,6 +113,20 @@ describe('createCanvasView', () => {
     expect(scrim.closest('.canvas-track')).not.toBeNull()
   })
 
+  /*
+   * The panes underneath need a layer of their own while a zoom is on, or their
+   * peek labels (z-index 4 inside a pane that has none) draw over it.
+   */
+  it('marks the track while a pane is zoomed, and unmarks it after', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(false)
+    view.setZoom('a1')
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(true)
+    view.setZoom(null)
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(false)
+  })
+
   it('takes the scrim away with the zoom', () => {
     const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
     view.render(layout)

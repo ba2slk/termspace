@@ -440,6 +440,23 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
 }
 
 /**
+ * Press or release the peek modifier: the same key that prefixes the focus
+ * moves, Alt off mac and Cmd on it. Two checks hold it, so it lives out here.
+ */
+function holdPeek(type: 'keydown' | 'keyup'): void {
+  window.dispatchEvent(
+    new KeyboardEvent(type, {
+      code: IS_MAC ? 'MetaLeft' : 'AltLeft',
+      key: IS_MAC ? 'Meta' : 'Alt',
+      bubbles: true,
+      cancelable: true,
+      altKey: !IS_MAC && type === 'keydown',
+      metaKey: IS_MAC && type === 'keydown',
+    }),
+  )
+}
+
+/**
  * Zoom lays the focused pane over the visible canvas, and puts it back exactly.
  *
  * Measured in pixels: the class says only that the app agrees it is zoomed, and
@@ -478,6 +495,41 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   report['paneZoomCoversCanvas'] = covers()
     ? `ok (${boxText()})`
     : `FAIL (${boxText()}, canvas ${String(Math.round(canvas.width))}x${String(Math.round(canvas.height))})`
+
+  /*
+   * Peek while zoomed. A pane sets no z-index, so its label at 4 used to climb
+   * the track's ladder and draw over the scrim and the zoomed pane at 3.
+   * Asked of the compositor rather than of the styles: elementFromPoint at the
+   * label's own centre returns whatever is actually painted on top there, so
+   * anything but the label itself means the zoomed pane covers it.
+   */
+  const hiddenLabels = (): HTMLElement[] =>
+    visiblePanes()
+      .filter((other) => other !== pane)
+      .flatMap((other) => [...other.querySelectorAll<HTMLElement>('.pane__label')])
+      .filter((label) => getComputedStyle(label).display !== 'none')
+  if (typeof document.elementFromPoint !== 'function') {
+    report['paneZoomHidesOtherLabels'] = 'skipped: elementFromPoint is unavailable'
+  } else if (visiblePanes().length < 2) {
+    report['paneZoomHidesOtherLabels'] = 'skipped: nothing is behind the zoomed pane'
+  } else {
+    holdPeek('keydown')
+    await waitFor(() => hiddenLabels().length > 0)
+    const behind = hiddenLabels()
+    const onTop = behind.filter((label) => {
+      const box = label.getBoundingClientRect()
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return hit === label
+    })
+    report['paneZoomHidesOtherLabels'] =
+      behind.length === 0
+        ? 'skipped: no other pane is labelled on screen'
+        : onTop.length === 0
+          ? `ok (${String(behind.length)} behind the zoom)`
+          : `FAIL (${String(onTop.length)} of ${String(behind.length)} labels drawn over the zoomed pane)`
+    holdPeek('keyup')
+    await waitFor(() => hiddenLabels().length === 0)
+  }
 
   const restored = (): boolean => {
     const box = pane.getBoundingClientRect()
@@ -652,31 +704,17 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
     report['peekLabels'] = 'FAIL (no canvas)'
     return
   }
-  // The same key that prefixes the focus moves: Alt off mac, Cmd on it.
-  const code = IS_MAC ? 'MetaLeft' : 'AltLeft'
-  const hold = (type: 'keydown' | 'keyup'): void => {
-    window.dispatchEvent(
-      new KeyboardEvent(type, {
-        code,
-        key: IS_MAC ? 'Meta' : 'Alt',
-        bubbles: true,
-        cancelable: true,
-        altKey: !IS_MAC && type === 'keydown',
-        metaKey: IS_MAC && type === 'keydown',
-      }),
-    )
-  }
 
   const shown = (): HTMLElement[] =>
     visiblePanes()
       .flatMap((pane) => [...pane.querySelectorAll<HTMLElement>('.pane__label')])
       .filter((label) => getComputedStyle(label).display !== 'none')
 
-  hold('keydown')
+  holdPeek('keydown')
   await waitFor(() => shown().length > 0)
   const labels = shown()
   if (labels.length === 0) {
-    hold('keyup')
+    holdPeek('keyup')
     report['peekLabels'] = 'FAIL (holding the modifier showed none)'
     return
   }
@@ -741,7 +779,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
         ? `ok (${bar})`
         : `FAIL (bar reads "${bar}", pane is "${focusedLabel}")`
 
-  hold('keyup')
+  holdPeek('keyup')
   await waitFor(() => shown().length === 0)
   report['peekLabelsGoOnRelease'] =
     shown().length === 0 ? 'ok' : `FAIL (${String(shown().length)} left on screen)`

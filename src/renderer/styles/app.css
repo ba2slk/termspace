@@ -793,6 +793,19 @@ body {
   z-index: 3;
 }
 
+/*
+ * While a zoom is on, every other pane becomes its own stacking context.
+ *
+ * A pane sets no z-index, so its children climb the track's ladder directly:
+ * the peek label at 4 and the search bar at 3 would land above the scrim at 1
+ * and the zoomed pane at 3, floating over the thing that covers them. z-index 0
+ * is the cheapest layer that keeps them inside the pane, still below the scrim.
+ * The zoomed pane needs no rule — its own 3 already traps its label.
+ */
+.canvas-track--zoomed .pane:not(.pane--zoomed) {
+  z-index: 0;
+}
+
 /* Outside the active region: the browser skips layout and paint for this subtree. */
 .pane--frozen .pane__body {
   content-visibility: hidden;

@@ -112,6 +112,12 @@ English copy.
   back where it was** (measured as pixels against the canvas host, insets included: the
   class saying "zoomed" was never the promise, the box is. The restore is compared with
   the rect the pane held before the zoom, since the layout behind it never changed)
+- **Holding the peek modifier while zoomed shows no label from the panes
+  underneath** (asked of `elementFromPoint` at each label's centre: a pane sets no
+  z-index, so its label at 4 climbed the track's ladder and drew over the zoom)
+- **Canvas background covers the whole visible area behind the zoomed pane** (the box
+  is rounded to whole pixels and the track's transform snaps to device ones, so the
+  two can disagree by a fraction and the pane behind showed through that sliver)
 
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)

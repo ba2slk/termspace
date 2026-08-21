@@ -512,6 +512,10 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         const rect = rects.find((r) => r.paneId === previous)
         if (view !== undefined && rect !== undefined) view.setRect(rect)
       }
+      // Panes set no z-index of their own, so nothing inside one is trapped by
+      // it: a peeked label at 4 would draw over the scrim and the zoomed pane.
+      // The class gives every other pane a layer to hold its children in.
+      track.classList.toggle('canvas-track--zoomed', paneId !== null)
       if (paneId !== null) {
         track.append(scrim)
         views.get(paneId)?.setZoomed(true)
