@@ -92,6 +92,13 @@ const RESIZE_STEP_PX = 40
 const SIZE_SETTLE_MS = 90
 /** How long the view must hold still before WebGL contexts are taken. */
 const ATTACH_SETTLE_MS = 120
+/**
+ * How long a folded pane's output must go quiet before its bar asks again what
+ * is running. Output is the only sign a command started or finished, and a
+ * command that has exited must not go on being advertised as live. Coalesced
+ * across every folded pane, so a chatty one costs one question, not a stream.
+ */
+const FOLD_REFRESH_MS = 500
 
 /**
  * Ids must be unique across sessions: pty-host keys on paneId globally and
@@ -319,6 +326,20 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       foldCommands.set(paneId, commands[paneId] ?? '')
       refreshFoldDetail(paneId)
     })
+  }
+
+  /**
+   * Output arrived somewhere; any bar on screen may now be naming a command
+   * that has already exited. One timer for all of them, and only while a bar is
+   * actually up.
+   */
+  let foldRefreshTimer: number | null = null
+  function scheduleFoldRefresh(): void {
+    if (foldRefreshTimer !== null) return
+    foldRefreshTimer = window.setTimeout(() => {
+      foldRefreshTimer = null
+      for (const pane of allPanes(layout)) if (pane.minimized === true) loadFoldDetail(pane.id)
+    }, FOLD_REFRESH_MS)
   }
 
   const overview = createOverviewView(host, {
@@ -980,7 +1001,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── External events ──────────────────────────────────
 
-  const offData = api.onData((paneId, data) => records.get(paneId)?.terminal.write(data))
+  const offData = api.onData((paneId, data) => {
+    records.get(paneId)?.terminal.write(data)
+    // A prompt coming back is how a finished command announces itself.
+    if (isFolded(paneId)) scheduleFoldRefresh()
+  })
 
   const offExit = api.onExit(({ paneId, exitCode, signal }) => {
     if (!records.has(paneId)) return
@@ -1148,6 +1173,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       window.removeEventListener('keydown', onKeyDown, true)
       if (settleTimer !== null) window.clearTimeout(settleTimer)
       if (attachTimer !== null) window.clearTimeout(attachTimer)
+      if (foldRefreshTimer !== null) window.clearTimeout(foldRefreshTimer)
       resizeObserver.disconnect()
       detachDrag()
       offData()
