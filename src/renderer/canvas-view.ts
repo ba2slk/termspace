@@ -40,6 +40,16 @@ export interface CanvasHooks {
    * starts the same way, and moving the canvas mid-drag would tear it.
    */
   readonly onPaneClick?: (paneId: string) => void
+  /**
+   * A folded pane's bar was double-clicked.
+   *
+   * Scoped to the bar element rather than to the pane, which is what keeps a
+   * double-click inside an open pane out of this entirely: there it selects a
+   * word, and the bar of an open pane is not on screen to be hit. Whether the
+   * pane is really folded is still the caller's to check — the view reports the
+   * event, the layout decides.
+   */
+  readonly onFoldDoubleClick?: (paneId: string) => void
   /** Called on every scroll change; the renderer budget hangs off this. */
   readonly onScroll?: () => void
   /**
@@ -201,6 +211,24 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     }
     press = { paneId, x: event.clientX, y: event.clientY }
     hooks.onPaneMouseDown(paneId)
+  })
+
+  /*
+   * A double-click on the bar opens the pane.
+   *
+   * Separate from the press/click pair above rather than counted out of it: the
+   * slop and same-pane rules there exist to protect a selection drag, and this
+   * needs none of that. The listener asks for the bar, so nothing on an open
+   * pane can reach it and word selection in a terminal is untouched.
+   */
+  host.addEventListener('dblclick', (event) => {
+    const bar = (event.target as HTMLElement).closest('.pane__fold')
+    if (bar === null) return
+    const paneId = paneIdAt(event)
+    if (paneId === undefined) return
+    // The bar is chrome; a double-click there is a command, not a text selection.
+    event.preventDefault()
+    hooks.onFoldDoubleClick?.(paneId)
   })
 
   host.addEventListener('mouseup', (event) => {

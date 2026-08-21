@@ -286,6 +286,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // focused already would otherwise sit half off screen with nothing to do.
       if (paneId === layout.focusedPaneId) revealFocused()
     },
+    onFoldDoubleClick: (paneId) => {
+      // The mousedown that opened the double-click already focused it; say so
+      // anyway, since the unfold below is the focused pane's. From there it is
+      // the same unfold Enter and Alt+D use, caret and all.
+      if (paneId !== layout.focusedPaneId) setLayout({ ...layout, focusedPaneId: paneId })
+      unfoldFocused()
+    },
     onScroll: () => {
       updateBudget()
       // The canvas can be wheeled under the open map; the marker must follow.

@@ -960,7 +960,10 @@ body {
   padding: 0 calc(var(--fold-h) / 3);
   overflow: hidden;
   font-size: var(--fs-ui-sm);
-  /* The bar is chrome, not terminal output, so it takes the chrome colours. */
+  /* The bar is chrome, not terminal output, so it takes the chrome colours —
+     and none of the body's user-select: text. Double-clicking it opens the
+     pane, which should not flash a selected word on the way. */
+  user-select: none;
   white-space: nowrap;
 }
 

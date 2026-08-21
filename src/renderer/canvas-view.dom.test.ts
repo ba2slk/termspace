@@ -429,6 +429,43 @@ describe('createCanvasView', () => {
       expect(targets).toEqual(['a2'])
     })
 
+    it('reports a double-click on the bar, which is what opens the pane', () => {
+      const onFoldDoubleClick = vi.fn()
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn(), onFoldDoubleClick })
+      view.render(folded)
+      host
+        .querySelector('[data-pane-id="a2"] .pane__fold-title')!
+        .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      expect(onFoldDoubleClick).toHaveBeenCalledWith('a2')
+    })
+
+    /* A terminal uses the double-click to select a word; nothing may take it. */
+    it('says nothing about a double-click inside an open pane', () => {
+      const onFoldDoubleClick = vi.fn()
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn(), onFoldDoubleClick })
+      view.render(folded)
+      host
+        .querySelector('[data-pane-id="a1"] .pane__body')!
+        .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      expect(onFoldDoubleClick).not.toHaveBeenCalled()
+    })
+
+    it('leaves a single click on the bar to the press and click hooks', () => {
+      const onFoldDoubleClick = vi.fn()
+      const onPaneClick = vi.fn()
+      const view = createCanvasView(host, {
+        onPaneMouseDown: vi.fn(),
+        onPaneClick,
+        onFoldDoubleClick,
+      })
+      view.render(folded)
+      const bar = host.querySelector('[data-pane-id="a2"] .pane__fold')!
+      bar.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 40, clientY: 20 }))
+      bar.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 41, clientY: 20 }))
+      expect(onPaneClick).toHaveBeenCalledWith('a2')
+      expect(onFoldDoubleClick).not.toHaveBeenCalled()
+    })
+
     it('hides the bar again on unfolding, and gives the height back', () => {
       const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
       view.render(folded)
