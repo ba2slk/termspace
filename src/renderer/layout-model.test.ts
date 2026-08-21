@@ -176,6 +176,42 @@ describe('splitDown', () => {
   })
 
   /*
+   * Splitting the bar itself. Folding is a deliberate choice and a split is not
+   * a request to undo it, so the runtime hands the folded pane straight to this
+   * function: the bar keeps its flag and half of its dormant ratio, and the new
+   * pane arrives open beside it with the other half.
+   */
+  it('splitting a folded pane leaves it folded and opens only the new one', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    const next = splitDown(folded, 'b', 1000, { id: 'n', title: 'n' })
+    const panes = next.columns[0]!.panes
+    expect(panes.map((p) => p.id)).toEqual(['a', 'b', 'n'])
+    expect(findPane(next, 'b')!.pane.minimized).toBe(true)
+    expect(findPane(next, 'n')!.pane.minimized).toBeUndefined()
+    // Half each, exactly as a split of an open pane divides it.
+    expect(findPane(next, 'b')!.pane.heightRatio).toBeCloseTo(0.25, 9)
+    expect(findPane(next, 'n')!.pane.heightRatio).toBeCloseTo(0.25, 9)
+    expect(next.focusedPaneId).toBe('n')
+    expect(layoutViolations(next)).toEqual([])
+  })
+
+  it('refuses to split a bar whose half could not be opened again', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    /*
+     * As drawn this split fits: the bar costs 30px and the new pane clears the
+     * minimum in what is left. It is refused on the other geometry alone —
+     * opening the bar afterwards would put its own quarter under the minimum.
+     */
+    expect(splitDown(folded, 'b', 250, { id: 'n', title: 'n' })).toBe(folded)
+  })
+
+  /*
    * The bar's 30px is on loan. A split that only fits while a neighbour is
    * folded would come apart the moment it opens, so both geometries have to
    * hold before the pane is cut in half.

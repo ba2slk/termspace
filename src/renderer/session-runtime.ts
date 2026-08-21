@@ -808,8 +808,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function splitFocused(side: 'up' | 'down'): void {
     exitZoom()
-    // Splitting a bar would halve a height nobody can see; open it first.
-    unfoldFocused()
+    /*
+     * A folded pane stays folded through a split. Folding it was a deliberate
+     * choice and asking for another pane is not a request to undo it: the bar
+     * keeps half of the height it is holding, and the new pane opens beside it
+     * with the other half. Zoom is the opposite case and still opens first —
+     * there is nothing to blow up about a bar.
+     */
     const id = newId('p')
     const cwd = focusedCwd() // read before focus moves away
     const next = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, side)
