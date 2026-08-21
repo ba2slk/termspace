@@ -140,21 +140,44 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   const baseBoostOf = (): number => Math.max(1, hooks.scrollBoost?.() ?? 1)
 
   /**
+   * Where the visible area starts, in track coordinates.
+   *
+   * The transform below snaps, so anything laid over the viewport has to read
+   * the same snapped value: against the raw scroll the box lands up to a device
+   * pixel away from the screen, and a wheel glide leaves the scroll fractional
+   * often enough for that to be the normal case.
+   */
+  const trackLeft = (): number => snapToDevicePixels(scrollX, window.devicePixelRatio)
+
+  /**
    * The zoomed pane's box, in track coordinates.
    *
-   * The track is translated by -scrollX, so the visible area starts at scrollX;
-   * the insets are the ones every pane already keeps against the canvas edge.
+   * The insets are the ones every pane already keeps against the canvas edge.
    */
   const zoomRect = (): Rect => ({
-    x: scrollX + CANVAS_EDGE,
+    x: trackLeft() + CANVAS_EDGE,
     y: CANVAS_EDGE,
     width: host.clientWidth - CANVAS_EDGE * 2,
     height: host.clientHeight - CANVAS_EDGE - CANVAS_BOTTOM,
   })
 
-  /** Lay the zoom box over whatever the layout just gave the pane. */
+  /*
+   * Behind the zoomed pane, over everything else.
+   *
+   * Boxes are rounded to whole CSS pixels, so the zoomed pane's edge can still
+   * miss the snapped viewport edge by a fraction, and that sliver showed the
+   * live pane underneath. Behind a normal pane the same hairline shows canvas
+   * background, which is exactly what this paints.
+   */
+  const scrim = document.createElement('div')
+  scrim.className = 'zoom-scrim'
+
+  /** Lay the zoom box, and the scrim under it, over the visible area. */
   function applyZoom(): void {
     if (zoomedPaneId === null) return
+    scrim.style.left = `${String(trackLeft())}px`
+    scrim.style.width = `${String(host.clientWidth)}px`
+    scrim.style.height = `${String(host.clientHeight)}px`
     views.get(zoomedPaneId)?.setRect(zoomRect())
   }
 
@@ -490,8 +513,11 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         if (view !== undefined && rect !== undefined) view.setRect(rect)
       }
       if (paneId !== null) {
+        track.append(scrim)
         views.get(paneId)?.setZoomed(true)
         applyZoom()
+      } else {
+        scrim.remove()
       }
     },
 

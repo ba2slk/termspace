@@ -15,6 +15,8 @@ beforeEach(() => {
   // happy-dom computes no layout, so sizes are planted directly.
   Object.defineProperty(host, 'clientWidth', { value: 800, configurable: true })
   Object.defineProperty(host, 'clientHeight', { value: 600, configurable: true })
+  // A test that wants a fractional snap sets its own scale.
+  Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true })
 })
 
 describe('createCanvasView', () => {
@@ -72,6 +74,51 @@ describe('createCanvasView', () => {
       '584px',
     ])
     expect(pane.classList.contains('pane--zoomed')).toBe(true)
+  })
+
+  /*
+   * The track's transform snaps to device pixels; a wheel glide can stop the
+   * scroll between them. Read raw, the zoom box would sit a fraction off the
+   * screen and the pane behind it would show through at the edge.
+   */
+  it('places the zoom box at the scroll the transform actually used', () => {
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.scrollByExact(100.4) // within the 418px range this canvas has
+    expect(view.root.style.transform).toBe('translateX(-100.5px)')
+    view.setZoom('a1')
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    // 100.5 snapped + the 6px edge, rounded as every pane box is.
+    expect(pane.style.left).toBe('107px')
+  })
+
+  it('covers the visible area behind the zoomed pane', () => {
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.scrollByExact(100.4)
+    view.setZoom('a1')
+    const scrim = host.querySelector<HTMLElement>('.zoom-scrim')!
+    expect(scrim).not.toBeNull()
+    expect([scrim.style.left, scrim.style.width, scrim.style.height]).toEqual([
+      '100.5px',
+      '800px',
+      '600px',
+    ])
+    // Not a pane: the budget, the rects and every pane query must miss it.
+    expect(scrim.classList.contains('pane')).toBe(false)
+    expect(host.querySelectorAll('.pane')).toHaveLength(3)
+    expect(view.getRects()).toHaveLength(3)
+    expect(scrim.closest('.canvas-track')).not.toBeNull()
+  })
+
+  it('takes the scrim away with the zoom', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    view.setZoom(null)
+    expect(host.querySelector('.zoom-scrim')).toBeNull()
   })
 
   it('leaves every other pane where the layout put it', () => {

@@ -768,10 +768,26 @@ body {
 }
 
 /*
+ * The layer behind a zoomed pane: canvas background over the whole visible
+ * area, so no seam of the panes underneath shows around it.
+ *
+ * Rung 1 inside the track: above the panes (which set no z-index), below the
+ * resize handles at 2 (they paint nothing) and the zoomed pane at 3.
+ */
+.zoom-scrim {
+  position: absolute;
+  top: 0;
+  background: var(--bg-canvas);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
  * Zoomed: one pane laid over the visible canvas. Only the box changes — the
  * layout still holds the pane's real rect, which is what a save writes.
- * Above the neighbouring panes and the resize handles, which sit at 2 inside
- * the same track; the side gutters still cover the canvas inset.
+ * Above the scrim at 1, the neighbouring panes and the resize handles, which
+ * sit at 2 inside the same track; the side gutters still cover the canvas
+ * inset.
  */
 .pane--zoomed {
   z-index: 3;
