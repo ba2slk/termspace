@@ -21,11 +21,13 @@ import {
   resolveColor,
   selectedCard,
   SKIPPED,
+  sleep,
   termOf,
   trackOffset,
   trackSettles,
   visiblePanes,
   waitFor,
+  waitForAsync,
   wheel,
 } from './harness'
 
@@ -721,6 +723,61 @@ export async function checkPaneFold(report: Report): Promise<void> {
     : selection().includes(BLIND)
       ? `FAIL (${BLIND} reached the shell while the pane was folded)`
       : 'ok'
+
+  /*
+   * Paste has a second door: on mac the Edit menu delivers Cmd+V straight to
+   * the runtime without a keydown, so the guard cannot live on the key path.
+   * Checked through the same shortcut a Linux user presses, which reaches the
+   * same function. The clipboard is shared with the desktop, so a write that
+   * does not come back makes this unmeasurable rather than failed.
+   */
+  const PASTED = 'zzpasted'
+  const original = await api.readClipboard()
+  const primed = await waitForAsync(
+    async () => {
+      api.writeClipboard(PASTED)
+      return (await api.readClipboard()) === PASTED
+    },
+    2000,
+    350,
+  )
+  if (!primed) {
+    report['paneFoldSwallowsPaste'] = 'skipped: the clipboard could not be primed here'
+  } else {
+    press('KeyD', { altKey: true })
+    await waitFor(isBar)
+    press('KeyV', { ctrlKey: true, shiftKey: true })
+    // Nothing to wait for when it works, so give the paste every chance to land.
+    await sleep(500)
+    press('Enter')
+    await waitFor(() => height() === before)
+    report['paneFoldSwallowsPaste'] = selection().includes(PASTED)
+      ? `FAIL (${PASTED} reached the shell while the pane was folded)`
+      : 'ok'
+    api.writeClipboard(original)
+  }
+
+  /*
+   * Search on a folded pane opens the pane first. The bar lives inside the
+   * body, which is not drawn while folded, so a search box opened there would
+   * take the keys and show nothing.
+   */
+  press('KeyD', { altKey: true })
+  await waitFor(isBar)
+  press('KeyF', { ctrlKey: true, shiftKey: true })
+  const searchBar = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.pane--focused .search-bar')
+  const opened = await waitFor(() => !isBar() && searchBar() !== null)
+  report['paneFoldSearchUnfoldsFirst'] = opened
+    ? 'ok'
+    : `FAIL (${isBar() ? 'still a bar' : 'no search bar'})`
+  press('Escape')
+  await waitFor(() => searchBar() === null)
+  // Whatever the search did, the pane must be left open and its height back.
+  if (isBar()) {
+    press('Enter')
+    await waitFor(() => height() === before)
+  }
 
   // Leave the prompt as it was found.
   if (paneId !== undefined) api.write(paneId, '\u0015')

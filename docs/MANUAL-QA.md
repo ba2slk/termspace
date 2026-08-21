@@ -145,6 +145,14 @@ English copy.
   again** (the same keystrokes are typed twice through the same route, once at the bar
   and once at the open pane; only the second may appear in the buffer. A shell that
   echoes neither is reported as unmeasurable rather than as a pass)
+- **A paste aimed at a folded pane never reaches its shell** (the guard lives in the
+  paste itself rather than on the key path: on macOS the Edit menu delivers `Cmd+V`
+  without a keydown ever reaching the page, so a keyboard-only guard would have two
+  doors and one of them open. The clipboard is shared with the desktop, so a priming
+  write that does not come back is reported as unmeasurable)
+- **Search on a folded pane opens the pane before it opens the bar** (the search box
+  lives inside the pane body, which is not drawn while folded — opened there it would
+  take the keys and show nothing)
 
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
