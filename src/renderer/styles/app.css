@@ -1152,14 +1152,44 @@ body {
 }
 
 /*
- * A row with no room for text: a folded pane's bar, shrunk to map scale.
+ * How much of a card a row can afford, in three steps.
  *
  * The padding and border come to about 14px and border-box will not compress
  * below them, so a row the map made 5px tall rendered at 14px — over the row
- * beneath it, and past the bottom of the map onto the session behind. Dropping
- * the padding and the text lets the row be exactly as tall as the layout says,
- * which is the only honest thing for a map to draw. See MIN_OVERVIEW_LABEL_PX.
+ * beneath it, and past the bottom of the map onto the session behind. The row
+ * keeps its true height, which is the only honest thing for a map to draw, and
+ * gives up whatever it has no room for instead.
+ *
+ * A folded pane's bar is a fixed 30px and the map never scales past a half, so
+ * its row is at most 15px: it can never afford the stack, and asking only that
+ * question left every folded pane on the map anonymous. One line it can afford,
+ * and one line is exactly what the bar shows on the canvas.
+ * See MIN_OVERVIEW_LABEL_PX and MIN_OVERVIEW_ROW_PX.
  */
+
+/* Name only: the row as the canvas draws it, laid along a single line. */
+.overview__card--name-only {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding: 0 3px;
+}
+
+.overview__card--name-only .overview__title {
+  overflow: hidden;
+  font-size: var(--fs-map-row);
+  /* The line box must not outgrow the row it is centred in. */
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+/* Only the name fits, so the command and the reported title stand down. */
+.overview__card--name-only .overview__command,
+.overview__card--name-only .overview__reported {
+  display: none;
+}
+
+/* Not even one line: the bare row, and nothing inside it. */
 .overview__card--squat {
   padding: 0;
   /* Nothing inside would fit; keeping it would only reintroduce the floor. */
@@ -1170,7 +1200,7 @@ body {
   display: none;
 }
 
-/* At this size the whole row has to carry what a dot normally would. */
+/* At that size the whole row has to carry what a dot normally would. */
 .overview__card--squat.overview__card--wants {
   background: var(--wants);
 }

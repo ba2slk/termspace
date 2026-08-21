@@ -718,8 +718,33 @@ describe('createOverviewView — a folded pane\'s row', () => {
   it('strips the chrome a row that short cannot afford', () => {
     const view = createOverviewView(host, foldedHooks())
     view.open()
+    expect(cardOf('a2').classList.contains('overview__card--stacked')).toBe(false)
+    expect(cardOf('a1').classList.contains('overview__card--stacked')).toBe(true)
+  })
+
+  /*
+   * The row is 15px and a stacked card needs 28, but the pane it stands for is
+   * one line on the canvas and one line fits here. Leaving it blank is what
+   * made the map unreadable: five of six rows in the reported session are
+   * folded, so five of six had no name at all.
+   */
+  it('keeps the name, which is the whole reason to look at the map', () => {
+    const view = createOverviewView(host, foldedHooks())
+    view.open()
+    const card = cardOf('a2')
+    expect(card.classList.contains('overview__card--name-only')).toBe(true)
+    expect(card.classList.contains('overview__card--squat')).toBe(false)
+    expect(card.querySelector('.overview__title')!.textContent).toBe('shell')
+  })
+
+  it('gives the name up only where even one line will not fit', () => {
+    const view = createOverviewView(
+      host,
+      foldedHooks({ viewport: () => ({ width: 300, height: 600, scrollX: 0 }) }),
+    )
+    view.open()
     expect(cardOf('a2').classList.contains('overview__card--squat')).toBe(true)
-    expect(cardOf('a1').classList.contains('overview__card--squat')).toBe(false)
+    expect(cardOf('a2').classList.contains('overview__card--name-only')).toBe(false)
   })
 
   it('still draws the row, at the height the layout gave it', () => {

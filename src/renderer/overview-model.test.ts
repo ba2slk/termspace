@@ -11,7 +11,9 @@ import {
   MAX_OVERVIEW_SCALE,
   MIN_OVERVIEW_COLUMN_PX,
   MIN_OVERVIEW_LABEL_PX,
+  MIN_OVERVIEW_ROW_PX,
   fitsALabel,
+  fitsAName,
   moveSelection,
   overviewLayout,
   paneNearestY,
@@ -312,13 +314,32 @@ describe('overviewLayout — folded panes', () => {
     expect(card('a2').y).toBeGreaterThan(card('a1').y + card('a1').height - 1)
   })
 
-  it('reports the row as one that cannot carry text', () => {
+  it('reports the row as one that cannot carry the full card', () => {
     expect(fitsALabel(card('a2').height)).toBe(false)
     expect(fitsALabel(card('a1').height)).toBe(true)
   })
 
   it('does not inflate the row to fit a label', () => {
     expect(card('a2').height).toBeLessThan(MIN_OVERVIEW_LABEL_PX)
+  })
+
+  /*
+   * The bar is a fixed 30px and the map never scales past a half, so a folded
+   * row is at most 15px — it can never reach the height a stacked card needs.
+   * Measuring it against that height alone left every folded pane anonymous at
+   * every scale, which is what made the map useless. A folded pane is one line
+   * on the canvas, and one line is what its row has to carry here too.
+   */
+  it('still has room for the pane\'s name, which is all the bar carries anyway', () => {
+    expect(FOLD_BAR_HEIGHT * MAX_OVERVIEW_SCALE).toBeLessThan(MIN_OVERVIEW_LABEL_PX)
+    expect(fitsAName(card('a2').height)).toBe(true)
+  })
+
+  it('gives up the name only where even one line will not fit', () => {
+    expect(fitsAName(MIN_OVERVIEW_ROW_PX - 1)).toBe(false)
+    const tiny = overviewLayout(folded, { width: 300, height: 600, scrollX: 0 })
+    const row = tiny.cards.find((c) => c.paneId === 'a2')!
+    expect(fitsAName(row.height)).toBe(false)
   })
 })
 

@@ -43,9 +43,29 @@ export const MIN_OVERVIEW_COLUMN_PX = 110
  */
 export const MIN_OVERVIEW_LABEL_PX = 28
 
-/** Whether a card that tall has the room to print anything. */
+/**
+ * A row shorter than this cannot carry even one line of text.
+ *
+ * There are two different questions here, and asking only the first one is what
+ * left the map unreadable. A stacked card needs room for three lines and its
+ * padding, which is MIN_OVERVIEW_LABEL_PX. But a folded pane is a fixed 30px
+ * bar and the map never scales past a half, so its row is at most 15px and can
+ * never reach that — every folded pane came out anonymous, at every scale.
+ *
+ * A folded pane is one line on the canvas, so one line is what its row has to
+ * carry here. That fits: the row keeps its true height and gives up only the
+ * padding and the two lines under the name.
+ */
+export const MIN_OVERVIEW_ROW_PX = 12
+
+/** Room for the full stacked card: a name with its command underneath. */
 export function fitsALabel(cardHeight: number): boolean {
   return cardHeight >= MIN_OVERVIEW_LABEL_PX
+}
+
+/** Room for a single line: the pane's name, and nothing else. */
+export function fitsAName(cardHeight: number): boolean {
+  return cardHeight >= MIN_OVERVIEW_ROW_PX
 }
 
 export interface OverviewCard extends Rect {

@@ -3,7 +3,7 @@ import { IS_MAC } from '../platform'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
 import { CANVAS_BOTTOM, CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, FOLD_BAR_HEIGHT, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
-import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
+import { MIN_OVERVIEW_COLUMN_PX, MIN_OVERVIEW_ROW_PX } from '../overview-model'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
 import {
   animationRuns,
@@ -897,6 +897,102 @@ export async function checkOverviewWithFoldedPanes(report: Report): Promise<void
   await waitFor(() => barHeight() !== FOLD_BAR_HEIGHT)
   press('KeyW', { altKey: true, shiftKey: true })
   await waitFor(() => paneCount() === before)
+}
+
+/**
+ * The overview on the shape a user reported it breaking on: a column whose
+ * first pane is folded over one that is not, beside a column folded all the way
+ * down. Five of its six panes are folded.
+ *
+ * Runs last in its group, because it opens a session of its own.
+ *
+ * The fault it pins is that a folded row could never be named. A bar is a fixed
+ * FOLD_BAR_HEIGHT and the map never scales past MAX_OVERVIEW_SCALE, so its row
+ * is at most 15px — under the height a stacked card needs, at every scale. Five
+ * of six rows came out anonymous and the map stopped being a map.
+ */
+export async function checkOverviewFoldedShape(report: Report): Promise<void> {
+  await openSession('folded')
+  const folded = visiblePanes().filter((p) => p.classList.contains('pane--folded'))
+  if (folded.length === 0) {
+    report['overviewFoldedShape'] = 'skipped: the fixture opened with nothing folded'
+    return
+  }
+  report['overviewFoldedShapePanes'] = `ok (${String(folded.length)} of ${String(visiblePanes().length)} folded)`
+
+  press('KeyM', { altKey: true })
+  await waitFor(() => overlay() !== null)
+  const ov = overlay()
+  const map = ov?.querySelector<HTMLElement>('.overview__map')
+  const cards = [...(ov?.querySelectorAll<HTMLElement>('.overview__card') ?? [])]
+  if (ov === null || map === null || map === undefined || cards.length === 0) {
+    report['overviewFoldedShape'] = 'FAIL (the map drew no cards)'
+    return
+  }
+  const box = (el: HTMLElement): DOMRect => el.getBoundingClientRect()
+  const mapBox = box(map)
+
+  /*
+   * Every row that has the room says which pane it is. Asked of the computed
+   * style and the text together: a title that is present but display:none is
+   * exactly the state that made the map unreadable.
+   */
+  const named = (c: HTMLElement): boolean => {
+    const title = c.querySelector<HTMLElement>('.overview__title')
+    return (
+      title !== null &&
+      getComputedStyle(title).display !== 'none' &&
+      (title.textContent ?? '') !== ''
+    )
+  }
+  const shouldName = cards.filter((c) => box(c).height >= MIN_OVERVIEW_ROW_PX)
+  const anonymous = shouldName.filter((c) => !named(c))
+  report['overviewFoldedShapeRowsAreNamed'] =
+    anonymous.length === 0
+      ? `ok (${String(shouldName.length)} of ${String(cards.length)} rows named)`
+      : `FAIL (${String(anonymous.length)} of ${String(shouldName.length)} rows tall enough to name are blank)`
+
+  // Nothing painted outside the map it belongs to.
+  const escaped = cards.filter(
+    (c) => box(c).bottom > mapBox.bottom + 1 || box(c).right > mapBox.right + 1,
+  )
+  report['overviewFoldedShapeRowsInsideMap'] =
+    escaped.length === 0
+      ? `ok (map ${String(Math.round(mapBox.width))}x${String(Math.round(mapBox.height))})`
+      : `FAIL (${String(escaped.length)} of ${String(cards.length)} outside the map)`
+
+  // And no row over its neighbour, grouped by left edge, which is the column.
+  const columns = new Map<number, HTMLElement[]>()
+  for (const c of cards) {
+    const left = Math.round(box(c).left)
+    columns.set(left, [...(columns.get(left) ?? []), c])
+  }
+  let overlaps = 0
+  for (const column of columns.values()) {
+    const sorted = [...column].sort((a, b) => box(a).top - box(b).top)
+    for (let i = 1; i < sorted.length; i++) {
+      if (box(sorted[i]!).top + 1 < box(sorted[i - 1]!).bottom) overlaps++
+    }
+  }
+  report['overviewFoldedShapeNoOverlap'] =
+    overlaps === 0 ? 'ok' : `FAIL (${String(overlaps)} rows drawn over the one above)`
+
+  /*
+   * The viewport marker frames a region of the map, so it has to be a region of
+   * the map: one that runs off the side says the wrong thing about where you are.
+   */
+  const marker = ov.querySelector<HTMLElement>('.overview__viewport')
+  const mk = marker === null ? undefined : box(marker)
+  report['overviewFoldedShapeMarker'] =
+    mk === undefined
+      ? 'FAIL (no viewport marker)'
+      : mk.left >= mapBox.left - 1 && mk.right <= mapBox.right + 1 && mk.width > 0
+        ? `ok (${String(Math.round(mk.width))}px of ${String(Math.round(mapBox.width))}px)`
+        : `FAIL (marker ${String(Math.round(mk.left))}..${String(Math.round(mk.right))} vs map ${String(Math.round(mapBox.left))}..${String(Math.round(mapBox.right))})`
+
+  await capture(report, 'overview-folded-shape')
+  press('Escape')
+  await waitFor(() => overlay() === null)
 }
 
 export function checkRendererBudget(report: Report): void {

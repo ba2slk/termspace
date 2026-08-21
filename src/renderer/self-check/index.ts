@@ -25,6 +25,7 @@ import {
   checkOverview,
   checkOverviewScaleFloor,
   checkOverviewWithFoldedPanes,
+  checkOverviewFoldedShape,
   checkPaneTitlePeek,
   checkPaneFold,
   checkPaneZoom,
@@ -100,6 +101,8 @@ const GROUPS: Readonly<
     checkRendererBudget(report)
     await checkGridFillsPane(report)
     await checkClickableLinks(report)
+    // Last: it opens a session of its own and does not put the previous one back.
+    await checkOverviewFoldedShape(report)
   },
 
   // Anything that needs frames or the clipboard, which need an active window.

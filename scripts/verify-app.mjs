@@ -113,6 +113,41 @@ columns:
 `
 
 /**
+ * The shape a user reported the overview breaking on: a column whose first pane
+ * is folded over one that is not, beside a column that is folded all the way
+ * down. Written for the core group only, and last, so it never takes a row
+ * position another check counts on.
+ */
+const FOLDED_SESSION = `name: folded
+cwd: "~"
+
+columns:
+  - width: 1098
+    panes:
+      - title: Adversarial Review
+        command: echo FOLDED_REVIEW
+        height: 0.5
+        minimized: true
+      - title: Main
+        command: echo FOLDED_MAIN
+        height: 0.5
+  - width: 733
+    panes:
+      - title: backend-server-logs
+        height: 0.176
+        minimized: true
+      - title: qatn
+        height: 0.294
+        minimized: true
+      - title: catchup-graph-view-server
+        height: 0.353
+        minimized: true
+      - title: ec2
+        height: 0.176
+        minimized: true
+`
+
+/**
  * A session the schema refuses — `columns: []` fails `columns.min(1)` in
  * `session-schema.ts` — so the sidebar renders it as an error row. The error
  * row is a real state the sidebar has to handle, and `checkErrorRowStaysDraggable`
@@ -150,6 +185,9 @@ async function ensureSession(group) {
   // Written last so it never takes a row position another check assumes.
   if (group === 'sessions' || group === 'all') {
     await writeFile(join(dir, 'zselfcheck-broken.yaml'), BROKEN_SESSION, 'utf8')
+  }
+  if (group === 'core' || group === 'all') {
+    await writeFile(join(dir, 'zzfolded.yaml'), FOLDED_SESSION, 'utf8')
   }
 }
 
