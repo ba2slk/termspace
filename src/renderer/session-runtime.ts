@@ -541,6 +541,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     const paneId = layout.focusedPaneId
     const folding = !isFolded(paneId)
     setLayout(toggleMinimized(layout, paneId))
+    /*
+     * Folding changes what is being watched without moving the focus, so the
+     * one place that normally reports it — a focus change — never fires. main
+     * decides desktop notifications from this, and a stale answer would keep
+     * suppressing them for the pane that has just gone out of sight.
+     */
+    options.onWatchedPaneChanged()
     if (folding) {
       /*
        * Nothing of the pane is on screen any more, so it must not hold the
