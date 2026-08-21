@@ -17,6 +17,7 @@ import {
   press,
   RENDERER_CANVAS,
   type Report,
+  resolveColor,
   selectedCard,
   SKIPPED,
   termOf,
@@ -473,6 +474,16 @@ export async function checkPaneZoom(report: Report): Promise<void> {
 
   const before = pane.getBoundingClientRect()
   const canvas = host.getBoundingClientRect()
+  const paneBorder = (): string => getComputedStyle(pane).borderTopColor
+  const focusedBorder = paneBorder()
+  /*
+   * The bright end of the pair, resolved through the very expression the zoom
+   * rule uses. Naming a colour would only pin one mode: white rests at full and
+   * steps up by mixing white in, a tint rests held back and steps up to whole.
+   */
+  const zoomedBorder = resolveColor(
+    'color-mix(in srgb, var(--focus-border, var(--border-active)) var(--focus-zoom), white)',
+  )
   // A pixel of tolerance: the rects are rounded, and a fractional scale rounds
   // the window's own edges too.
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
@@ -495,6 +506,36 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   report['paneZoomCoversCanvas'] = covers()
     ? `ok (${boxText()})`
     : `FAIL (${boxText()}, canvas ${String(Math.round(canvas.width))}x${String(Math.round(canvas.height))})`
+
+  /*
+   * The scrim behind the zoomed pane. Its rung is what hides the panes it
+   * covers; read from the computed styles, since only the real stylesheet has
+   * them.
+   */
+  const scrim = document.querySelector<HTMLElement>('.zoom-scrim')
+  const scrimBox = scrim?.getBoundingClientRect()
+  const stacked =
+    scrim !== null &&
+    Number(getComputedStyle(scrim).zIndex) < Number(getComputedStyle(pane).zIndex)
+  report['paneZoomScrim'] =
+    scrimBox !== undefined && stacked && near(scrimBox.width, canvas.width) && near(scrimBox.height, canvas.height)
+      ? 'ok'
+      : `FAIL (${scrim === null ? 'absent' : `${String(Math.round(scrimBox?.width ?? 0))}x${String(Math.round(scrimBox?.height ?? 0))}, stacked ${String(stacked)}`})`
+
+  /*
+   * The zoom has no chrome of its own; the border is the whole signal, and it
+   * says "zoomed" by being one step brighter than the resting focus. Both
+   * halves are asserted: the resolved colour is what the rule promises, and
+   * differing from the resting one is the promise the user can actually see —
+   * a pair of knobs set to the same share would satisfy the first alone.
+   */
+  await waitFor(() => paneBorder() === zoomedBorder)
+  report['paneZoomBorder'] =
+    paneBorder() !== zoomedBorder
+      ? `FAIL (${paneBorder()}, expected ${zoomedBorder})`
+      : zoomedBorder === focusedBorder
+        ? `FAIL (zoomed and resting both ${zoomedBorder})`
+        : `ok (${focusedBorder} → ${zoomedBorder})`
 
   /*
    * Peek while zoomed. A pane sets no z-index, so its label at 4 used to climb
@@ -542,6 +583,11 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   }
   press('KeyZ', { altKey: true })
   await waitFor(restored)
+  // Back to the resting strength it was read at, not merely off the full one.
+  report['paneZoomBorderRestores'] =
+    paneBorder() === focusedBorder
+      ? 'ok'
+      : `FAIL (${paneBorder()}, expected ${focusedBorder})`
   report['paneZoomRestores'] = restored()
     ? 'ok'
     : `MISMATCH (${boxText()}, was ${String(Math.round(before.width))}x${String(Math.round(before.height))} at ${String(Math.round(before.left))},${String(Math.round(before.top))})`

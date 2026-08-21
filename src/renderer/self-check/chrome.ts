@@ -9,6 +9,7 @@ import {
   panes,
   press,
   type Report,
+  resolveColor,
   SKIPPED,
   sleep,
   termOf,
@@ -422,11 +423,24 @@ export async function checkSettings(report: Report): Promise<void> {
       typed.dispatchEvent(new Event('input', { bubbles: true }))
       typed.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    await waitFor(() => focusedBorder() === 'rgb(255, 0, 0)')
+    /*
+     * Not rgb(255, 0, 0): a chosen colour rests held back to --focus-rest, so
+     * the pane paints the mix, not the hex. Resolved through the expression the
+     * rule uses rather than spelled out, and read fresh on every poll — the
+     * settings commit is a round trip, and --focus-rest changes with the mode
+     * on the way through.
+     */
+    const tinted = (): boolean => document.documentElement.classList.contains('focus-tinted')
+    const restingRed = (): string =>
+      resolveColor('color-mix(in srgb, #ff0000 var(--focus-rest), transparent)')
+    await waitFor(() => focusedBorder() === restingRed())
     report['focusBorderCustomPaintsThePane'] =
-      focusedBorder() === 'rgb(255, 0, 0)'
+      focusedBorder() === restingRed()
         ? `ok (${whiteBorder} → ${String(focusedBorder())})`
-        : `FAIL (${whiteBorder} → ${String(focusedBorder())})`
+        : `FAIL (${whiteBorder} → ${String(focusedBorder())}, expected ${restingRed()})`
+    // The class is what picks the tinted pair of knobs; without it the pane
+    // would take the white mode's steps while wearing the user's colour.
+    report['focusBorderCustomMarksTheRoot'] = tinted() ? 'ok' : 'FAIL (root is not focus-tinted)'
 
     // Restore — the check must not alter the user's settings.
     const back = focusRow()
@@ -434,9 +448,10 @@ export async function checkSettings(report: Report): Promise<void> {
       back.select.value = 'white'
       back.select.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    await waitFor(() => focusedBorder() === whiteBorder)
+    await waitFor(() => focusedBorder() === whiteBorder && !tinted())
     report['focusBorderWhiteRestoresTheToken'] =
       focusedBorder() === whiteBorder ? 'ok' : `FAIL (${String(focusedBorder())})`
+    report['focusBorderWhiteClearsTheRoot'] = tinted() ? 'FAIL (root stayed focus-tinted)' : 'ok'
   }
 
   /*

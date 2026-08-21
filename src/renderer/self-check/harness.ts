@@ -153,6 +153,24 @@ export function press(code: string, mods: Partial<KeyboardEventInit> = {}): void
  */
 export const RENDERER_CANVAS = '.xterm-screen > canvas:not([class])'
 
+/**
+ * What a CSS colour expression actually paints, as a computed colour string.
+ *
+ * A throwaway element is painted with the expression and read back, rather than
+ * the declared text compared: `color-mix()` and a custom property resolve to
+ * something the stylesheet never spells, and even a plain token would differ by
+ * whitespace alone. It lives on the body, where the runtime custom properties
+ * the settings write onto the root are in scope.
+ */
+export function resolveColor(expression: string): string {
+  const probe = document.createElement('div')
+  probe.style.color = expression
+  document.body.append(probe)
+  const value = getComputedStyle(probe).color
+  probe.remove()
+  return value
+}
+
 export const panes = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.pane')]
 export const visiblePanes = (): HTMLElement[] => [
   ...document.querySelectorAll<HTMLElement>('.session-host:not([hidden]) .pane'),

@@ -106,8 +106,13 @@ function applyTerminalBackground(theme: TerminalTheme): void {
  * itself.
  */
 function applyFocusBorder(next: AppSettings, theme: TerminalTheme): void {
-  const style = document.documentElement.style
+  const root = document.documentElement
+  const style = root.style
   const resolved = resolveFocusBorder(next, theme)
+  // Which way the resting border and the zoomed one step apart: the tokens hold
+  // both pairs and this class picks one. Set here so the two cannot disagree —
+  // the same call decides the colour and how far the zoom is from it.
+  root.classList.toggle('focus-tinted', resolved !== null)
   if (resolved === null) {
     style.removeProperty('--focus-border')
     style.removeProperty('--focus-ring')

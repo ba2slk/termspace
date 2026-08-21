@@ -691,8 +691,14 @@ body {
  */
 .pane--focused {
   /* The setting sets --focus-border at runtime; with it unset the token stands,
-     which is what "white" means. */
-  border-color: var(--focus-border, var(--border-active));
+     which is what "white" means. --focus-rest is the resting end of the pair
+     the zoom steps up from: the whole colour in white mode, held back in the
+     tinted ones, which is where the room to move is. */
+  border-color: color-mix(
+    in srgb,
+    var(--focus-border, var(--border-active)) var(--focus-rest),
+    transparent
+  );
   /* A hard 1px ring outside the border, not a blur. It ends inside the 6px gap,
      so it neither reaches the neighbour nor changes the layout. */
   box-shadow: 0 0 0 1px var(--focus-ring, var(--ring-active));
@@ -791,6 +797,19 @@ body {
  */
 .pane--zoomed {
   z-index: 3;
+  /*
+   * The zoomed pane is always the focused one, so this has to beat
+   * .pane--focused's border-color. Same specificity, so it wins by coming
+   * later in the file — keep it below that rule. The ring stays the focused
+   * one. The colour is the bright end of the same pair --focus-rest opens: the
+   * colour whole in the tinted modes, and white mixed into it in white mode,
+   * which is already at full and can only step up by going whiter.
+   */
+  border-color: color-mix(
+    in srgb,
+    var(--focus-border, var(--border-active)) var(--focus-zoom),
+    white
+  );
 }
 
 /*
