@@ -14,6 +14,8 @@ import {
 import type { LoadSessionResult, SaveSessionResult, SessionSummary } from '../shared/protocol'
 import { stringsFor } from '../shared/ui-strings'
 import { configDir } from './config-dir'
+import { markArchived, withArchived, withoutArchived } from './session-archive'
+import { readArchive, writeArchive } from './session-archive-file'
 import { applyOrder, moveTo, renameInOrder } from './session-order'
 import { readOrder, writeOrder } from './session-order-file'
 import { parseSession, resolveCwd } from './session-schema'
@@ -112,7 +114,10 @@ columns:
 `
 }
 
-async function summarize(dir: string, file: string): Promise<SessionSummary> {
+/** The archive file, not the session file, says what is archived. */
+type SessionEntry = Omit<SessionSummary, 'archived'>
+
+async function summarize(dir: string, file: string): Promise<SessionEntry> {
   const path = join(dir, file)
   const id = basename(file).replace(/\.ya?ml$/, '')
 
@@ -163,7 +168,11 @@ async function summarize(dir: string, file: string): Promise<SessionSummary> {
 }
 
 /** orderPath is the app's order file; the listing follows it and keeps it true. */
-export async function listSessions(dir: string, orderPath: string): Promise<SessionSummary[]> {
+export async function listSessions(
+  dir: string,
+  orderPath: string,
+  archivePath: string,
+): Promise<SessionSummary[]> {
   let files: string[]
   try {
     files = (await readdir(dir)).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
@@ -180,7 +189,35 @@ export async function listSessions(dir: string, orderPath: string): Promise<Sess
   if (resolved.length !== order.length || resolved.some((id, i) => order[i] !== id)) {
     await writeOrder(orderPath, resolved)
   }
-  return listed
+  return markArchived(listed, await readArchive(archivePath))
+}
+
+/** Put a session away. Archiving twice is the same as archiving once. */
+export async function archiveSession(
+  dir: string,
+  orderPath: string,
+  archivePath: string,
+  id: string,
+): Promise<SessionSummary[]> {
+  await writeArchive(archivePath, withArchived(await readArchive(archivePath), id))
+  return listSessions(dir, orderPath, archivePath)
+}
+
+/**
+ * Bring a session back. It lands last: the position it held before it was put
+ * away means nothing to someone who is looking for what just came back.
+ */
+export async function restoreSession(
+  dir: string,
+  orderPath: string,
+  archivePath: string,
+  id: string,
+): Promise<SessionSummary[]> {
+  await writeArchive(archivePath, withoutArchived(await readArchive(archivePath), id))
+  // Seeds the order first, so a restore before any listing still has ids to move.
+  const seeded = (await listSessions(dir, orderPath, archivePath)).map((s) => s.id)
+  await writeOrder(orderPath, moveTo(seeded, id, seeded.length))
+  return listSessions(dir, orderPath, archivePath)
 }
 
 /** id is the file name without extension, not the display name. */
@@ -381,13 +418,14 @@ export async function renameSessionName(
 export async function reorderSession(
   dir: string,
   orderPath: string,
+  archivePath: string,
   id: string,
   toIndex: number,
 ): Promise<SessionSummary[]> {
   // Seeds the order first, so a drag before any listing still has ids to move.
-  const seeded = (await listSessions(dir, orderPath)).map((s) => s.id)
+  const seeded = (await listSessions(dir, orderPath, archivePath)).map((s) => s.id)
   await writeOrder(orderPath, moveTo(seeded, id, toIndex))
-  return listSessions(dir, orderPath)
+  return listSessions(dir, orderPath, archivePath)
 }
 
 /**

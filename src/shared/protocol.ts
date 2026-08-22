@@ -161,6 +161,8 @@ export interface SessionSummary {
   readonly createdMs: number
   /** Why it can't be opened, or null. */
   readonly error: string | null
+  /** Put away by the user: out of the main list and the shortcuts, file untouched. */
+  readonly archived: boolean
 }
 
 /**
@@ -315,6 +317,10 @@ export interface TermspaceApi {
   renameSession(id: string, newName: string): Promise<SaveSessionResult>
   /** Move a session to an index in the list; returns the list as it now stands. */
   reorderSession(id: string, toIndex: number): Promise<readonly SessionSummary[]>
+  /** Put a session away; returns the list as it now stands. */
+  archiveSession(id: string): Promise<readonly SessionSummary[]>
+  /** Bring a session back, at the end of the available list. */
+  restoreSession(id: string): Promise<readonly SessionSummary[]>
   /** Full editor invocation for this session's file, or null when it is missing. */
   editorCommandFor(id: string): Promise<string | null>
   /** Open the session file with the OS default app — for when no session is on screen. */

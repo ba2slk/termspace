@@ -6,10 +6,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_BINDINGS, DEFAULT_BINDINGS_MAC, formatChord } from '../shared/keybindings'
 import { stringsFor } from '../shared/ui-strings'
 import {
+  archiveSession,
   listSessions,
   loadSession,
   renameSessionName,
   reorderSession,
+  restoreSession,
   saveSession,
   seedFirstRun,
   sessionsDir,
@@ -25,6 +27,7 @@ beforeEach(async () => {
 })
 
 const orderPath = (): string => join(dir, 'order.json')
+const archivePath = (): string => join(dir, 'archive.json')
 
 describe('sessionsDir', () => {
   it('follows XDG_CONFIG_HOME when set', () => {
@@ -41,13 +44,13 @@ describe('sessionsDir', () => {
 
 describe('listSessions', () => {
   it('returns an empty list with no directory; a first run is not an error', async () => {
-    expect(await listSessions(join(dir, 'nope'), orderPath())).toEqual([])
+    expect(await listSessions(join(dir, 'nope'), orderPath(), archivePath())).toEqual([])
   })
 
   it('reads yaml files and counts panes', async () => {
     await writeFile(join(dir, 'b.yaml'), 'name: beta\ncolumns:\n  - panes:\n      - {}\n')
     await writeFile(join(dir, 'a.yaml'), 'name: alpha\ncolumns:\n  - panes:\n      - {}\n      - {}\n')
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect([...list].map((s) => s.name).sort()).toEqual(['alpha', 'beta'])
     expect(list.find((s) => s.name === 'alpha')!.paneCount).toBe(2)
     expect(list[0]!.error).toBeNull()
@@ -55,12 +58,12 @@ describe('listSessions', () => {
 
   it('ignores non-yaml files', async () => {
     await writeFile(join(dir, 'README.md'), '# 메모')
-    expect(await listSessions(dir, orderPath())).toEqual([])
+    expect(await listSessions(dir, orderPath(), archivePath())).toEqual([])
   })
 
   it('keeps an unopenable session in the list with its error', async () => {
     await writeFile(join(dir, 'broken.yaml'), 'columns: []\n')
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list).toHaveLength(1)
     expect(list[0]!.error).not.toBeNull()
   })
@@ -68,14 +71,14 @@ describe('listSessions', () => {
   it('survives malformed YAML', async () => {
     await writeFile(join(dir, 'bad.yaml'), 'name: [불균형\n')
     await writeFile(join(dir, 'good.yaml'), 'name: ok\ncolumns:\n  - panes:\n      - {}\n')
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list).toHaveLength(2)
     expect(list.find((s) => s.name === 'bad')!.error).toContain('YAML')
   })
 
   it('defaults the session name to the file name', async () => {
     await writeFile(join(dir, 'noname.yaml'), 'columns: []\n')
-    expect((await listSessions(dir, orderPath()))[0]!.name).toBe('noname')
+    expect((await listSessions(dir, orderPath(), archivePath()))[0]!.name).toBe('noname')
   })
 })
 
@@ -88,7 +91,7 @@ describe('listSessions ordering', () => {
     await write('b')
     await write('c')
     await writeFile(orderPath(), JSON.stringify(['c', 'a', 'b']))
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list.map((s) => s.id)).toEqual(['c', 'a', 'b'])
   })
 
@@ -96,28 +99,28 @@ describe('listSessions ordering', () => {
     await write('a')
     await write('b')
     await writeFile(orderPath(), JSON.stringify(['b']))
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list.map((s) => s.id)).toEqual(['b', 'a'])
   })
 
   it('writes the resolved order back so the first run seeds the file', async () => {
     await write('a')
     await write('b')
-    await listSessions(dir, orderPath())
+    await listSessions(dir, orderPath(), archivePath())
     expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a', 'b'])
   })
 
   it('prunes an id whose file is gone', async () => {
     await write('a')
     await writeFile(orderPath(), JSON.stringify(['gone', 'a']))
-    await listSessions(dir, orderPath())
+    await listSessions(dir, orderPath(), archivePath())
     expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a'])
   })
 
   it('treats a corrupt order file as no order and rewrites it', async () => {
     await write('a')
     await writeFile(orderPath(), 'not json at all')
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list.map((s) => s.id)).toEqual(['a'])
     expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a'])
   })
@@ -125,7 +128,7 @@ describe('listSessions ordering', () => {
   it('reports a creation time for every session, error or not', async () => {
     await write('a')
     await writeFile(join(dir, 'broken.yaml'), 'columns: []\n')
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list).toHaveLength(2)
     for (const s of list) expect(s.createdMs).toBeGreaterThan(0)
   })
@@ -271,7 +274,7 @@ describe('saveSession', () => {
   it('keeps backups out of the session list', async () => {
     await saveSession(dir, 'demo', draft('first'), false, '/home/u')
     await saveSession(dir, 'demo', draft('second'), true, '/home/u')
-    expect((await listSessions(dir, orderPath())).map((s) => s.id)).toEqual(['demo'])
+    expect((await listSessions(dir, orderPath(), archivePath())).map((s) => s.id)).toEqual(['demo'])
   })
 })
 
@@ -357,8 +360,8 @@ describe('reorderSession', () => {
     await write('a')
     await write('b')
     await write('c')
-    await listSessions(dir, orderPath())
-    const list = await reorderSession(dir, orderPath(), 'a', 2)
+    await listSessions(dir, orderPath(), archivePath())
+    const list = await reorderSession(dir, orderPath(), archivePath(), 'a', 2)
     expect(list.map((s) => s.id)).toEqual(['b', 'c', 'a'])
     expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['b', 'c', 'a'])
   })
@@ -366,8 +369,60 @@ describe('reorderSession', () => {
   it('moves a session the order file has never seen', async () => {
     await write('a')
     await write('b')
-    const list = await reorderSession(dir, orderPath(), 'b', 0)
+    const list = await reorderSession(dir, orderPath(), archivePath(), 'b', 0)
     expect(list.map((s) => s.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('archiveSession and restoreSession', () => {
+  const write = (name: string) =>
+    writeFile(join(dir, `${name}.yaml`), `name: ${name}\ncolumns:\n  - panes:\n      - {}\n`)
+
+  const archivedIds = (list: readonly { id: string; archived: boolean }[]) =>
+    list.filter((s) => s.archived).map((s) => s.id)
+
+  it('nothing is archived until the user says so', async () => {
+    await write('a')
+    expect(archivedIds(await listSessions(dir, orderPath(), archivePath()))).toEqual([])
+  })
+
+  it('flags the archived session and leaves its file alone', async () => {
+    await write('a')
+    await write('b')
+    const list = await archiveSession(dir, orderPath(), archivePath(), 'b')
+    expect(archivedIds(list)).toEqual(['b'])
+    expect(list.map((s) => s.id).sort()).toEqual(['a', 'b'])
+    expect(JSON.parse(await readFile(archivePath(), 'utf8'))).toEqual(['b'])
+  })
+
+  it('archiving twice records the id once', async () => {
+    await write('a')
+    await archiveSession(dir, orderPath(), archivePath(), 'a')
+    await archiveSession(dir, orderPath(), archivePath(), 'a')
+    expect(JSON.parse(await readFile(archivePath(), 'utf8'))).toEqual(['a'])
+  })
+
+  it('ignores an archived id with no session file', async () => {
+    await write('a')
+    await archiveSession(dir, orderPath(), archivePath(), 'gone')
+    const list = await listSessions(dir, orderPath(), archivePath())
+    expect(list.map((s) => s.id)).toEqual(['a'])
+  })
+
+  it('restores a session to the end of the list', async () => {
+    for (const n of ['a', 'b', 'c']) await write(n)
+    await listSessions(dir, orderPath(), archivePath())
+    await archiveSession(dir, orderPath(), archivePath(), 'a')
+    const list = await restoreSession(dir, orderPath(), archivePath(), 'a')
+    expect(archivedIds(list)).toEqual([])
+    expect(list.map((s) => s.id)).toEqual(['b', 'c', 'a'])
+    expect(JSON.parse(await readFile(archivePath(), 'utf8'))).toEqual([])
+  })
+
+  it('restoring one the user never archived changes nothing but the order', async () => {
+    await write('a')
+    const list = await restoreSession(dir, orderPath(), archivePath(), 'zz')
+    expect(list.map((s) => s.id)).toEqual(['a'])
   })
 })
 
@@ -375,15 +430,15 @@ describe('renameSessionName and the order', () => {
   it('keeps the session where it was when the file moves', async () => {
     for (const n of ['a', 'b', 'c'])
       await writeFile(join(dir, `${n}.yaml`), `name: ${n}\ncolumns:\n  - panes:\n      - {}\n`)
-    await listSessions(dir, orderPath())
+    await listSessions(dir, orderPath(), archivePath())
     await renameSessionName(dir, 'b', 'zulu', orderPath())
-    const list = await listSessions(dir, orderPath())
+    const list = await listSessions(dir, orderPath(), archivePath())
     expect(list.map((s) => s.id)).toEqual(['a', 'zulu', 'c'])
   })
 
   it('leaves the order alone when the file name does not change', async () => {
     await writeFile(join(dir, 'a.yaml'), 'name: a\ncolumns:\n  - panes:\n      - {}\n')
-    await listSessions(dir, orderPath())
+    await listSessions(dir, orderPath(), archivePath())
     await renameSessionName(dir, 'a', 'a but nicer', orderPath())
     expect(JSON.parse(await readFile(orderPath(), 'utf8'))).toEqual(['a-but-nicer'])
   })

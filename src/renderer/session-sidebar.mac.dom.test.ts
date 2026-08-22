@@ -18,6 +18,7 @@ function summary(over: Partial<SessionSummary> = {}): SessionSummary {
     paneCount: 1,
     createdMs: 0,
     error: null,
+    archived: false,
     ...over,
   }
 }
