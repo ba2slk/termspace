@@ -558,6 +558,14 @@ body {
   flex: 1;
 }
 
+/* The same number as a row's pane count, so the two read as one system: the
+   small size, and a colour of its own so the header's hover cannot lift it —
+   the pane count does not brighten when its row is hovered either. */
+.sidebar__dock-count {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
 /* Archived rows are readable, not addressable: no dot, no count, no power. */
 .sidebar__row--archived {
   padding: 6px 8px;
