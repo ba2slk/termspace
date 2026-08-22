@@ -98,6 +98,7 @@ const en = {
     wants: 'A pane here rang',
     endSession: 'End session',
     endSessionNamed: (name: string) => `End the ${name} session`,
+    archive: 'Archive',
   },
 
   /** session-runtime.ts: in-session notices. */
@@ -427,6 +428,7 @@ const ko: Catalog = {
     wants: '알림이 온 pane 있음',
     endSession: '세션 끝내기',
     endSessionNamed: (name: string) => `${name} 세션 끝내기`,
+    archive: '아카이브',
   },
 
   runtime: {
