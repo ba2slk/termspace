@@ -471,6 +471,48 @@ These can't be replaced by automated judgment. They're matters of impression, no
       appear as typed (both English and Korean), Enter commits, and the session file has the
       new title without pressing save. Escape leaves the card as it was
 
+### Session archive (no self-check covers these)
+
+The dock, its drag target and the confirm dialog are all pointer work over a live list,
+and archiving a running session ends real ptys. Unit and dom tests pin the decisions
+(which rows are reachable, where a drop lands, what the menu offers); what is left here is
+whether the pointer can actually reach those places on screen, and whether the shells
+really die.
+
+- [ ] **Archive an idle session.** Right-click a session that is not running › Archive
+      session. The row leaves the list at once and appears in the dock at the sidebar's
+      bottom, whose count goes up by one. The session file in
+      `~/.config/termspace/sessions/` is untouched, and the archive survives a restart
+- [ ] **Archive a running session.** Right-click a session with panes open › Archive
+      session. A dialog appears first, naming the session and its **live** pane count (open
+      a split beforehand, so the number differs from the file's). Confirm: the panes go,
+      and the shells they held are gone — check with `ps` that no child of the app is left
+      from that session. Cancel: nothing is archived and the session keeps running
+- [ ] **Archive the session on screen.** Same as above for the session currently shown.
+      Afterwards the canvas falls back to another session, or to the empty placeholder with
+      the sidebar revealed — the same aftermath as closing it
+- [ ] **Restore.** Right-click a row in the dock › Restore session. It reappears **at the
+      end** of the list, not where it used to sit, and opens normally with a click. Its
+      `Alt+N` number is the last one
+- [ ] **Drag onto the archive.** Press a row and drag down onto the dock header: the header
+      lights up, the list preview settles back to rest (aiming at the archive is visibly
+      not aiming at a slot), and releasing archives instead of reordering. Dragging back up
+      off the header reorders as before, and `Esc` mid-drag archives nothing
+- [ ] **Drag with nothing archived yet.** With an empty archive the dock is not on screen
+      at all. Start dragging a row: the header appears while the drag is live, so there is
+      something to aim at, and it goes away again if the drag is cancelled. This is the case
+      a human has to look at — the header is borrowed for the duration of one drag, and on
+      an idle session it blinks out for a frame before the real dock arrives (longer, while
+      the confirm is up, for a running one)
+- [ ] **Archived sessions are unreachable by keyboard.** With one session archived:
+      `Alt`+`1`–`9` numbers only the rows still in the list (nothing is skipped or
+      off-by-one), `Alt+Shift+<` / `>` never step onto it, and rolling the wheel over the
+      sidebar previews past it. Archiving is the one way a session leaves the list without
+      being deleted, so every list-shaped feed has to agree
+- [ ] **The dock scrolls.** Archive enough sessions that the open dock would grow past
+      160px: it stops there and scrolls inside itself, and the list above keeps its own
+      space rather than being pushed off screen
+
 ### Update check (no self-check covers this)
 
 - [ ] **Update chip.** Run the previous release (`~/Applications/Termspace.AppImage`
