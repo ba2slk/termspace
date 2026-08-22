@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropIndexAt, rowShift, type RowBox } from './sidebar-reorder'
+import { dropIndexAt, dropTargetAt, rowShift, type RowBox } from './sidebar-reorder'
 
 // Three 40px rows stacked from y=100.
 const rows: RowBox[] = [
@@ -31,6 +31,32 @@ describe('dropIndexAt', () => {
 
   it('handles an empty list', () => {
     expect(dropIndexAt(10, [], 0)).toBe(0)
+  })
+})
+
+describe('dropTargetAt', () => {
+  // The archive header, 30px tall, sits under the three rows.
+  const header: RowBox = { top: 240, height: 30 }
+
+  it('reads as a slot while the pointer is over the list', () => {
+    expect(dropTargetAt(165, rows, 0, header)).toEqual({ kind: 'index', index: 1 })
+  })
+
+  it('reads as the archive over the header, not as the last slot', () => {
+    expect(dropIndexAt(250, rows, 0)).toBe(2) // What the list alone would say.
+    expect(dropTargetAt(250, rows, 0, header)).toEqual({ kind: 'archive' })
+  })
+
+  it('stays the archive below the header, where nothing else sits', () => {
+    expect(dropTargetAt(999, rows, 0, header)).toEqual({ kind: 'archive' })
+  })
+
+  it('is a slot again just above the header', () => {
+    expect(dropTargetAt(239, rows, 0, header)).toEqual({ kind: 'index', index: 2 })
+  })
+
+  it('without a header every position is a slot', () => {
+    expect(dropTargetAt(999, rows, 0, null)).toEqual({ kind: 'index', index: 2 })
   })
 })
 
