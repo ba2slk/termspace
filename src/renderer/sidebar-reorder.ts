@@ -49,6 +49,15 @@ export function dropTargetAt(
 }
 
 /**
+ * A row dragged out of the archive: above the dock's top edge is the session
+ * list, and dropping there puts the session back. The dock is one zone, header
+ * and rows alike — a drag that stays inside it is a drag that changed its mind.
+ */
+export function isRestoreDrop(pointerY: number, dock: RowBox | null): boolean {
+  return dock !== null && pointerY < dock.top
+}
+
+/**
  * How far a row that is not being dragged has to move, in slots, for the list
  * to look as it will after the drop: rows between the origin and the target
  * step one slot toward the hole the dragged row left. Post-removal `dropIndex`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropIndexAt, dropTargetAt, rowShift, type RowBox } from './sidebar-reorder'
+import { dropIndexAt, dropTargetAt, isRestoreDrop, rowShift, type RowBox } from './sidebar-reorder'
 
 // Three 40px rows stacked from y=100.
 const rows: RowBox[] = [
@@ -57,6 +57,24 @@ describe('dropTargetAt', () => {
 
   it('without a header every position is a slot', () => {
     expect(dropTargetAt(999, rows, 0, null)).toEqual({ kind: 'index', index: 2 })
+  })
+})
+
+describe('isRestoreDrop', () => {
+  const dock = { top: 240, height: 120 }
+
+  it('is a restore once the pointer is above the dock', () => {
+    expect(isRestoreDrop(200, dock)).toBe(true)
+  })
+
+  it('is not a restore anywhere inside the dock, top edge included', () => {
+    expect(isRestoreDrop(240, dock)).toBe(false)
+    expect(isRestoreDrop(300, dock)).toBe(false)
+    expect(isRestoreDrop(999, dock)).toBe(false)
+  })
+
+  it('an unmeasurable dock restores nothing', () => {
+    expect(isRestoreDrop(0, null)).toBe(false)
   })
 })
 
