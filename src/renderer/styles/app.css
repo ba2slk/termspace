@@ -536,7 +536,8 @@ body {
   border: none;
   color: var(--fg-faint);
   font: inherit;
-  font-size: var(--fs-ui-sm);
+  /* Reads at the same size as the session names it sits under. */
+  font-size: var(--fs-ui-lg);
   text-align: left;
   cursor: default;
 }

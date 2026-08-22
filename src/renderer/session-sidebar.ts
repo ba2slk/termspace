@@ -158,7 +158,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   const dockLabel = document.createElement('span')
   dockLabel.className = 'sidebar__dock-label'
   dockLabel.textContent = t.sidebar.archive
-  dockHeader.append(icon(ARCHIVE_PATHS, 13), dockLabel, dockCount)
+  dockHeader.append(icon(ARCHIVE_PATHS), dockLabel, dockCount)
 
   // Runtime only: every start opens with the archive out of the way.
   let dockOpen = false
