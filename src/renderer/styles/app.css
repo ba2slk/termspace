@@ -373,6 +373,18 @@ body {
   cursor: grabbing;
   /* Without this the drag paints a text selection across the names it passes. */
   user-select: none;
+  /* The bar that was on screen when the drag began, handed back to the rows:
+     Chromium's is a classic bar, so hiding it returns its width to the content
+     box and every row would grow by it mid-drag. */
+  padding-right: calc(6px + var(--drag-bar-w, 0px));
+}
+
+/* The dragged row rides on a transform, and a transform past the last row is
+   scrollable overflow: the list would flip a scrollbar on for the drag and off
+   again on the drop. Hide it instead of touching `overflow`, which would move
+   the rows and could reset the scroll position. */
+.sidebar__list--dragging::-webkit-scrollbar {
+  display: none;
 }
 
 /* A session with a bad file is still a session: its row must drag. The button is

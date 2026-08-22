@@ -491,6 +491,33 @@ describe('reordering by drag', () => {
     expect(host.querySelector('.sidebar__dock')).toBeNull()
   })
 
+  it('the drag hides the list scrollbar and puts its width back as padding', () => {
+    const { rows } = renderThreeSessions()
+    stubBoxes(rows)
+    const list = host.querySelector<HTMLElement>('.sidebar__list')!
+    // A bar is already on screen: hiding it hands its width back to the rows.
+    Object.defineProperty(list, 'offsetWidth', { value: 210, configurable: true })
+    Object.defineProperty(list, 'clientWidth', { value: 200, configurable: true })
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    expect(list.classList.contains('sidebar__list--dragging')).toBe(true)
+    expect(list.style.getPropertyValue('--drag-bar-w')).toBe('10px')
+    press(rows[0]!, 210, 'pointerup')
+    expect(list.style.getPropertyValue('--drag-bar-w')).toBe('')
+  })
+
+  it('a cancelled drag hands the scrollbar width back too', () => {
+    const { rows } = renderThreeSessions()
+    stubBoxes(rows)
+    const list = host.querySelector<HTMLElement>('.sidebar__list')!
+    Object.defineProperty(list, 'offsetWidth', { value: 210, configurable: true })
+    Object.defineProperty(list, 'clientWidth', { value: 200, configurable: true })
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    press(rows[0]!, 210, 'pointercancel')
+    expect(list.style.getPropertyValue('--drag-bar-w')).toBe('')
+  })
+
   it('the wheel dial does not run while a drag is live', () => {
     const { hooks: h, rows } = renderThreeSessions()
     stubBoxes(rows)

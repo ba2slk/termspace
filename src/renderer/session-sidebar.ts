@@ -326,8 +326,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.row.style.transform = ''
     }
     for (const row of shownRows) row.style.transform = ''
-    list.classList.remove('sidebar__list--dragging')
+    endListDragStyles()
     endDockTarget()
+  }
+
+  /** The drag's own list styling: the grab cursor and the hidden scrollbar. */
+  function endListDragStyles(): void {
+    list.classList.remove('sidebar__list--dragging')
+    list.style.removeProperty('--drag-bar-w')
   }
 
   function endDockTarget(): void {
@@ -395,6 +401,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.boxes = rowBoxes()
       drag.headerBox = headerBox()
       drag.row.classList.add('sidebar__row--dragging')
+      // Measured before the class hides the bar, which is what makes it 0.
+      list.style.setProperty('--drag-bar-w', `${String(list.offsetWidth - list.clientWidth)}px`)
       list.classList.add('sidebar__list--dragging')
       list.setPointerCapture(event.pointerId)
     }
@@ -422,7 +430,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
     row.style.transform = `translateY(${String((dropIndex - fromIndex) * slot)}px)`
     row.classList.remove('sidebar__row--dragging')
-    list.classList.remove('sidebar__list--dragging')
+    endListDragStyles()
     endDockTarget()
   }
 
