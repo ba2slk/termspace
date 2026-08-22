@@ -20,6 +20,20 @@ export function stepSession(
   return ids[(at + delta + ids.length) % ids.length] ?? null
 }
 
+/**
+ * The sessions a shortcut may land on.
+ *
+ * An archived session is off every ring and every numbered key, running or not:
+ * the sidebar hides it in the dock, and a key that opened something invisible
+ * would be a way out of the archive nobody asked for. Order is kept, because
+ * Alt+N counts the rows the list shows.
+ */
+export function reachableSessions<T extends { readonly archived: boolean }>(
+  sessions: readonly T[],
+): readonly T[] {
+  return sessions.filter((session) => !session.archived)
+}
+
 /** A row of the session list, as far as a shortcut is concerned. */
 export interface Reachable {
   readonly id: string

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gotoTarget, stepSession } from './session-ring'
+import { gotoTarget, reachableSessions, stepSession } from './session-ring'
 
 describe('stepSession', () => {
   const ring = ['api', 'web', 'logs']
@@ -68,5 +68,31 @@ describe('the session a numbered key opens', () => {
 
   it('opens the first row with nothing on the canvas', () => {
     expect(gotoTarget(rows, 0, null, null)).toBe('work')
+  })
+})
+
+describe('reachableSessions', () => {
+  const sessions = [
+    { id: 'api', archived: false },
+    { id: 'old', archived: true },
+    { id: 'web', archived: false },
+  ]
+
+  it('drops the archived ones', () => {
+    expect(reachableSessions(sessions).map((s) => s.id)).toEqual(['api', 'web'])
+  })
+
+  /*
+   * The sidebar numbers the same list, so Alt+N and the row it points at have to
+   * skip the same sessions.
+   */
+  it('keeps the order of what is left, so Alt+N still counts rows', () => {
+    expect(reachableSessions([{ id: 'old', archived: true }, ...sessions]).map((s) => s.id))
+      .toEqual(['api', 'web'])
+  })
+
+  it('passes an unarchived list through', () => {
+    const open = [{ id: 'api', archived: false }]
+    expect(reachableSessions(open)).toEqual(open)
   })
 })

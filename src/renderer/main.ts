@@ -19,7 +19,7 @@ import {
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
-import { gotoTarget, stepSession } from './session-ring'
+import { gotoTarget, reachableSessions, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
@@ -431,6 +431,15 @@ function toggleSidebar(): void {
 let knownSessions: readonly SessionSummary[] = []
 
 /**
+ * The same list without the archived ones — everything a shortcut, or a screen
+ * that offers "pick a session", is allowed to see. The sidebar takes the whole
+ * list instead: the dock is where the archived ones are meant to show.
+ */
+function available(): readonly SessionSummary[] {
+  return reachableSessions(knownSessions)
+}
+
+/**
  * The session we were on before this one.
  *
  * Alt+N on the session you are already in goes back here. Switching between two
@@ -465,7 +474,9 @@ function renderSidebar(): void {
     [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
-  placeholder.setHasSessions(knownSessions.length > 0)
+  // What the empty canvas offers is "open one", so an archive-only workspace
+  // has nothing to offer.
+  placeholder.setHasSessions(available().length > 0)
 }
 
 /**
@@ -810,7 +821,7 @@ window.addEventListener('keydown', onAppKeyDown, true)
  * sees. Beyond the ninth there is no shortcut — the list is right there.
  */
 function gotoSession(index: number): void {
-  const rows = knownSessions.map((s) => ({ id: s.id, broken: s.error !== null }))
+  const rows = available().map((s) => ({ id: s.id, broken: s.error !== null }))
   const target = gotoTarget(rows, index, currentName, previousName)
   if (target !== null) void openSession(target)
 }
@@ -822,7 +833,7 @@ function gotoSession(index: number): void {
  * between the ones you are working in, the way a tab strip does.
  */
 function stepToSession(delta: 1 | -1): void {
-  const running = knownSessions.filter((s) => runtimes.has(s.id)).map((s) => s.id)
+  const running = available().filter((s) => runtimes.has(s.id)).map((s) => s.id)
   const target = stepSession(running, currentName, delta)
   if (target !== null) void openSession(target)
 }
