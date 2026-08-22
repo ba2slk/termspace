@@ -238,9 +238,9 @@ const sidebar = createSessionSidebar(workspace, {
     const chord = bindings['goto-session'][0]
     return chord === undefined ? '' : formatChord(chord, IS_MAC).replace('1~9', String(index + 1))
   },
-  onContextMenu: (at, sessionId) => {
+  onContextMenu: (at, sessionId, archived) => {
     appBar.closeMenus()
-    sidebarMenu.open(at, sidebarMenuItems(sessionId))
+    sidebarMenu.open(at, sidebarMenuItems(sessionId, archived))
   },
   onRename: (id, newName) => void renameSession(id, newName),
   onReorder: (id, toIndex) => {
@@ -254,12 +254,13 @@ const sidebar = createSessionSidebar(workspace, {
 /** The sidebar's right-click menu; menu-model decides what is in it. */
 const sidebarMenu = createCommandMenu()
 
-function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
+function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly CommandItem[] {
   return buildSidebarMenuItems(
     {
       sessionId,
       running: sessionId !== null && runtimes.has(sessionId),
       isCurrent: sessionId === currentName,
+      archived,
     },
     {
       open: () => {
@@ -281,8 +282,61 @@ function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
       deleteSession: () => {
         if (sessionId !== null) confirmDelete(sessionId)
       },
+      archiveSession: () => {
+        if (sessionId !== null) archiveSession(sessionId)
+      },
+      restoreSession: () => {
+        if (sessionId !== null) void restoreSession(sessionId)
+      },
     },
   )
+}
+
+/**
+ * Archive a session: it leaves the list for the dock, and every shortcut that
+ * could reach it.
+ *
+ * Running is the only case worth a dialog. Archiving ends the processes inside,
+ * which is the same loss closing the window asks about — the shelving itself is
+ * one right-click away from being undone.
+ */
+function archiveSession(id: string): void {
+  if (!runtimes.has(id)) {
+    void applyArchive(id)
+    return
+  }
+  const runtime = runtimes.get(id)
+  const summary = knownSessions.find((s) => s.id === id)
+  askConfirm(
+    {
+      title: t.firstRun.archiveTitle,
+      items: [
+        {
+          name: summary?.name ?? id,
+          paneCount: runtime === undefined ? 0 : livePaneCount(runtime),
+        },
+      ],
+      lead: t.firstRun.archiveLead,
+      confirmLabel: t.firstRun.archiveConfirm,
+    },
+    () => {
+      confirmView.close()
+      // The same end as the sidebar's power button, aftermath included.
+      endSession(id)
+      void applyArchive(id)
+    },
+  )
+}
+
+async function applyArchive(id: string): Promise<void> {
+  knownSessions = await api.archiveSession(id)
+  renderSidebar()
+}
+
+/** Back into the list, at its end — main decides where. */
+async function restoreSession(id: string): Promise<void> {
+  knownSessions = await api.restoreSession(id)
+  renderSidebar()
 }
 
 /** Rename a session. The file follows the name, so the id can change under us. */

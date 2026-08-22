@@ -42,7 +42,14 @@ const en = {
     endSession: 'End session',
     deleteSession: 'Delete session',
     renameSession: 'Rename session',
+    archiveSession: 'Archive session',
+    restoreSession: 'Restore session',
     renameFailedToast: 'Could not rename',
+
+    // Archive confirmation, only for a session that is still running
+    archiveTitle: 'Archive this session?',
+    archiveLead: 'It is running. Archiving ends it first, and everything inside stops.',
+    archiveConfirm: 'End and archive',
 
     // Delete confirmation
     deleteTitle: 'Delete this session?',
@@ -379,7 +386,13 @@ const ko: Catalog = {
     endSession: '세션 끝내기',
     deleteSession: '세션 지우기',
     renameSession: '세션 이름 바꾸기',
+    archiveSession: '아카이브로 보내기',
+    restoreSession: '세션 되살리기',
     renameFailedToast: '이름을 바꾸지 못했습니다',
+
+    archiveTitle: '세션을 아카이브로 보낼까요?',
+    archiveLead: '지금 실행 중입니다. 보내기 전에 세션을 끝내므로 안에서 돌던 작업도 함께 멈춥니다.',
+    archiveConfirm: '끝내고 보내기',
 
     deleteTitle: '세션을 지울까요?',
     deleteLead: (id: string) => `${id}.yaml을 휴지통으로 보냅니다. 열려 있는 세션이면 함께 닫힙니다.`,
