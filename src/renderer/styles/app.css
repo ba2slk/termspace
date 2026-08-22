@@ -519,6 +519,11 @@ body {
 .sidebar__dock--open .sidebar__dock-list {
   /* About four rows: enough to see the archive, never enough to become it. */
   max-height: 160px;
+}
+
+/* Only once the height has arrived: mid-open the rows overflow a cap they are
+ * about to fit under, and the scrollbar would appear for the animation alone. */
+.sidebar__dock--settled .sidebar__dock-list {
   overflow-y: auto;
 }
 

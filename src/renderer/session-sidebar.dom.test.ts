@@ -131,6 +131,10 @@ describe('the archive dock', () => {
 
   const header = (): HTMLElement | null => host.querySelector('.sidebar__dock-header')
 
+  // happy-dom's TransitionEvent drops propertyName, which is what is read here.
+  const transitionEnd = (propertyName: string): Event =>
+    Object.assign(new Event('transitionend'), { propertyName })
+
   it('is not there at all while nothing is archived', () => {
     const { sidebar } = open()
     sidebar.render([summary()], new Map(), null)
@@ -156,6 +160,25 @@ describe('the archive dock', () => {
     expect(dock.classList.contains('sidebar__dock--open')).toBe(true)
     header()!.click()
     expect(dock.classList.contains('sidebar__dock--open')).toBe(false)
+  })
+
+  it('scrolls only once the opening height has arrived, and never while closed', () => {
+    const { sidebar } = open()
+    sidebar.render([summary(), summary({ id: 'old', archived: true })], new Map(), null)
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    const dockList = host.querySelector<HTMLElement>('.sidebar__dock-list')!
+    header()!.click()
+    expect(dock.classList.contains('sidebar__dock--settled')).toBe(false)
+    // Another property finishing first is not the height arriving.
+    dockList.dispatchEvent(transitionEnd('opacity'))
+    expect(dock.classList.contains('sidebar__dock--settled')).toBe(false)
+    dockList.dispatchEvent(transitionEnd('max-height'))
+    expect(dock.classList.contains('sidebar__dock--settled')).toBe(true)
+    header()!.click()
+    expect(dock.classList.contains('sidebar__dock--settled')).toBe(false)
+    // The closing transition ends too, and must not hand scrolling back.
+    dockList.dispatchEvent(transitionEnd('max-height'))
+    expect(dock.classList.contains('sidebar__dock--settled')).toBe(false)
   })
 
   it('archived rows stay out of the list the dial and the drag walk', () => {

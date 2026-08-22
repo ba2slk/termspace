@@ -166,7 +166,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     dockOpen = next
     dock.classList.toggle('sidebar__dock--open', next)
     dockHeader.setAttribute('aria-expanded', String(next))
+    // Scrolling waits for the height to arrive; closing gives it up at once, so
+    // no scrollbar can flash over the rows on the way past the cap.
+    if (!next) dock.classList.remove('sidebar__dock--settled')
   }
+  dockList.addEventListener('transitionend', (event) => {
+    if (event.propertyName !== 'max-height') return
+    if (dockOpen) dock.classList.add('sidebar__dock--settled')
+  })
   setDockOpen(false)
   dockHeader.addEventListener('click', () => setDockOpen(!dockOpen))
 
