@@ -373,10 +373,10 @@ body {
   cursor: grabbing;
   /* Without this the drag paints a text selection across the names it passes. */
   user-select: none;
-  /* The bar that was on screen when the drag began, handed back to the rows:
-     Chromium's is a classic bar, so hiding it returns its width to the content
-     box and every row would grow by it mid-drag. */
-  padding-right: calc(6px + var(--drag-bar-w, 0px));
+  /* The width of the bar that was on screen when the drag began, held open in
+     its place: Chromium's is a classic bar, so hiding it hands its width to the
+     content box and every row would grow by it mid-drag. */
+  border-right: var(--drag-bar-w, 0px) solid transparent;
 }
 
 /* The dragged row rides on a transform, and a transform past the last row is
