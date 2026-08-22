@@ -440,6 +440,25 @@ describe('reordering by drag', () => {
     expect(host.querySelector('.sidebar__dock')).toBeNull()
   })
 
+  it('a dock emptied by a restore lends nothing of the old archive to the next drag', () => {
+    const { sidebar } = renderThreeSessions({ archived: true })
+    host.querySelector<HTMLElement>('.sidebar__dock-header')!.click()
+    // Everything restored: the dock leaves the screen and must go empty with it.
+    sidebar.render(
+      ['a', 'b', 'c'].map((id) => summary({ id, name: id, paneCount: 1, createdMs: 1 })),
+      new Map(),
+      null,
+    )
+    const rows = [...host.querySelectorAll<HTMLElement>('.sidebar__list .sidebar__row')]
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    expect(dock.querySelectorAll('.sidebar__row')).toHaveLength(0)
+    expect(dock.querySelector('.sidebar__dock-count')?.textContent).toBe('')
+    expect(dock.classList.contains('sidebar__dock--open')).toBe(false)
+  })
+
   it('the temporary header also leaves after a plain drop', () => {
     const { rows } = renderThreeSessions()
     stubBoxes(rows)

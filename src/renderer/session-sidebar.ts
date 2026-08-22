@@ -678,8 +678,17 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       shown = active
       currentId = current
 
-      if (archived.length === 0) dock.remove()
-      else {
+      if (archived.length === 0) {
+        dock.remove()
+        /*
+         * The next drag lends this same dock back, so an emptied archive must
+         * leave nothing behind: a stale row is a live session offering Restore.
+         * Closing it costs a refill its open state, which is the cheaper loss.
+         */
+        dockList.replaceChildren()
+        dockCount.textContent = ''
+        setDockOpen(false)
+      } else {
         dockCount.textContent = String(archived.length)
         dockList.replaceChildren(...archived.map(archivedRow))
         aside.append(dock)
