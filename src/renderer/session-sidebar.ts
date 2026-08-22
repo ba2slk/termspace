@@ -10,7 +10,13 @@
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
-import { dropTargetAt, REORDER_THRESHOLD, rowShift, type RowBox } from './sidebar-reorder'
+import {
+  dropTargetAt,
+  isRestoreDrop,
+  REORDER_THRESHOLD,
+  rowShift,
+  type RowBox,
+} from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
@@ -42,6 +48,11 @@ export interface SidebarHooks {
    * a running session has to end first — so only the id travels.
    */
   readonly onArchive: (id: string) => void
+  /**
+   * The user dragged an archived row back out onto the list. Where it lands is
+   * main's to say — the end of the list, as the menu's Restore does.
+   */
+  readonly onRestore: (id: string) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -468,8 +479,133 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     true,
   )
 
+  // ── Drag out of the archive ──────────────────────────
+  //
+  // The reverse of dropping a row on the dock. A release above the dock's top
+  // edge is on the list, and that restores the session.
+  let dockDrag: {
+    readonly id: string
+    readonly startY: number
+    readonly row: HTMLElement
+    readonly pointerId: number
+    moved: boolean
+    /** The whole dock, header and rows: leaving it is what reads as a restore. */
+    dockBox: RowBox | null
+    restoring: boolean
+  } | null = null
+
+  function dockBox(): RowBox | null {
+    if (!dock.isConnected) return null
+    const box = dock.getBoundingClientRect()
+    // Nothing laid out (hidden sidebar, headless test): nothing to leave.
+    return box.height === 0 ? null : { top: box.top, height: box.height }
+  }
+
+  /**
+   * Out of flow for the drag. The dock is a capped, scrolling box, so a row
+   * moving up out of it would be cut off at its edge; fixed escapes that clip,
+   * and the viewport coordinates it needs are the ones the row already has.
+   */
+  function liftRow(row: HTMLElement): void {
+    const box = row.getBoundingClientRect()
+    row.style.left = `${String(box.left)}px`
+    row.style.top = `${String(box.top)}px`
+    row.style.width = `${String(box.width)}px`
+    row.classList.add('sidebar__row--lifted')
+  }
+
+  function dropRow(row: HTMLElement): void {
+    row.classList.remove('sidebar__row--lifted', 'sidebar__row--restoring')
+    row.style.transform = ''
+    row.style.left = ''
+    row.style.top = ''
+    row.style.width = ''
+  }
+
+  function endDockDragVisuals(): void {
+    if (dockDrag !== null) dropRow(dockDrag.row)
+    dockList.classList.remove('sidebar__dock-list--dragging')
+    list.classList.remove('sidebar__list--restore-target')
+  }
+
+  function cancelDockDrag(): void {
+    if (dockDrag === null) return
+    const { pointerId } = dockDrag
+    endDockDragVisuals()
+    // Cleared before the release: losing capture re-enters here.
+    dockDrag = null
+    if (dockList.hasPointerCapture(pointerId)) dockList.releasePointerCapture(pointerId)
+  }
+
+  dockList.addEventListener('pointerdown', (event) => {
+    cancelDockDrag()
+    if (event.button !== 0) return
+    // On mac Ctrl+click is the right click, and it arrives as button 0.
+    if (IS_MAC && event.ctrlKey) return
+    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sidebar__row')
+    if (row === null || row === undefined) return
+    const id = row.dataset['sessionId']
+    if (id === undefined) return
+    dockDrag = {
+      id,
+      startY: event.clientY,
+      row,
+      pointerId: event.pointerId,
+      moved: false,
+      dockBox: null,
+      restoring: false,
+    }
+  })
+
+  dockList.addEventListener('pointermove', (event) => {
+    if (dockDrag === null) return
+    if (!dockDrag.moved) {
+      if (Math.abs(event.clientY - dockDrag.startY) < REORDER_THRESHOLD) return
+      dockDrag.moved = true
+      // Measured before the lift takes the row out of flow.
+      dockDrag.dockBox = dockBox()
+      liftRow(dockDrag.row)
+      dockList.classList.add('sidebar__dock-list--dragging')
+      dockList.setPointerCapture(event.pointerId)
+    }
+    dockDrag.row.style.transform = `translateY(${String(event.clientY - dockDrag.startY)}px)`
+    const restoring = isRestoreDrop(event.clientY, dockDrag.dockBox)
+    dockDrag.restoring = restoring
+    dockDrag.row.classList.toggle('sidebar__row--restoring', restoring)
+    list.classList.toggle('sidebar__list--restore-target', restoring)
+  })
+
+  const finishDockDrag = (event: PointerEvent): void => {
+    if (dockDrag === null || event.pointerId !== dockDrag.pointerId) return
+    const { id, moved, restoring, pointerId } = dockDrag
+    /*
+     * A restore keeps the row where the pointer left it: the list it is joining
+     * arrives with the next render, and putting the row back in the dock until
+     * then would show it returning to the archive it just left. That render
+     * rebuilds the dock's rows, this one included.
+     */
+    if (moved && restoring) {
+      dockList.classList.remove('sidebar__dock-list--dragging')
+      list.classList.remove('sidebar__list--restore-target')
+    } else endDockDragVisuals()
+    dockDrag = null
+    if (dockList.hasPointerCapture(pointerId)) dockList.releasePointerCapture(pointerId)
+    if (moved && restoring) hooks.onRestore(id)
+  }
+  dockList.addEventListener('pointerup', finishDockDrag)
+  dockList.addEventListener('pointercancel', () => cancelDockDrag())
+  // A press that leaves the dock before it becomes a drag never took capture,
+  // so its pointerup lands elsewhere and would strand the drag forever.
+  dockList.addEventListener('pointerleave', () => {
+    if (dockDrag?.moved === false) cancelDockDrag()
+  })
+  dockList.addEventListener('lostpointercapture', () => cancelDockDrag())
+
   const onDragKey = (event: KeyboardEvent): void => {
-    if (drag === null || event.key !== 'Escape') return
+    // A press that has not travelled yet is not a drag, and this Escape is not
+    // its to eat: whoever else listens for it should still get it.
+    if (drag?.moved !== true && dockDrag?.moved !== true) return
+    if (event.key !== 'Escape') return
     // This Escape belongs to the drag: no menu may close and no terminal may see
     // it. Immediate, because the menus listen on window too and stopPropagation
     // does not stop siblings on the same node. An Escape with no drag under it
@@ -477,6 +613,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     event.preventDefault()
     event.stopImmediatePropagation()
     cancelDrag()
+    cancelDockDrag()
   }
   // Capture: a bubble listener would run after the views that act on Escape.
   window.addEventListener('keydown', onDragKey, true)
@@ -688,6 +825,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       // has a drag: a background pty ringing must not move what it measures.
       clearPreview()
       cancelDrag()
+      cancelDockDrag()
       const active = sessions.filter((s) => !s.archived)
       const archived = sessions.filter((s) => s.archived)
       shown = active

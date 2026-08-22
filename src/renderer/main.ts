@@ -245,6 +245,8 @@ const sidebar = createSessionSidebar(workspace, {
   onRename: (id, newName) => void renameSession(id, newName),
   // The same flow the right-click menu runs: it decides about a running session.
   onArchive: (id) => archiveSession(id),
+  // As the menu's Restore does, landing at the end of the list.
+  onRestore: (id) => void restoreSession(id),
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list

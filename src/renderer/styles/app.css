@@ -585,6 +585,34 @@ body {
   font-size: var(--fs-ui-lg);
 }
 
+.sidebar__dock-list--dragging {
+  cursor: grabbing;
+  /* Without this the drag paints a text selection across the names it passes. */
+  user-select: none;
+}
+
+/* A row on its way out of the archive. Fixed, not translated in place: the dock
+   is a capped scrolling box and would cut the row off at its own top edge.
+   Under the menus and the toast, over everything in the sidebar. */
+.sidebar__row--lifted {
+  position: fixed;
+  z-index: 5;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+}
+
+/* Held over the list, where a release restores it: it stops reading as archived
+   before the drop, not after. */
+.sidebar__row--restoring {
+  color: var(--fg);
+}
+
+/* Where that row would land. The faint hover fill, not the header's --fill-active:
+   spread over the whole list, that reads as a lit block rather than a target. */
+.sidebar__list--restore-target {
+  background: var(--fill-hover-faint);
+}
+
 /* ── Canvas ───────────────────────────────────────────── */
 
 .canvas {

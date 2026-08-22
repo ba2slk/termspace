@@ -35,6 +35,7 @@ const hooks = (): SidebarHooks => ({
   onRename: vi.fn(),
   onReorder: vi.fn(),
   onArchive: vi.fn(),
+  onRestore: vi.fn(),
 })
 
 let host: HTMLElement
@@ -215,6 +216,147 @@ describe('the archive dock', () => {
   })
 })
 
+describe('restoring by drag', () => {
+  const box = (top: number, height: number): DOMRect =>
+    ({
+      top,
+      height,
+      bottom: top + height,
+      left: 0,
+      right: 200,
+      width: 200,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect
+
+  /*
+   * One live session and two archived ones, the dock open. happy-dom measures
+   * everything as zero, so the dock and its rows are given boxes: the dock runs
+   * from y=300 down, and its rows are the 30px bands inside it.
+   */
+  function renderArchive(): {
+    hooks: SidebarHooks
+    sidebar: ReturnType<typeof createSessionSidebar>
+    rows: HTMLElement[]
+  } {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.render(
+      [
+        summary({ id: 'a', name: 'a' }),
+        summary({ id: 'old', name: 'old', archived: true }),
+        summary({ id: 'older', name: 'older', archived: true }),
+      ],
+      new Map(),
+      null,
+    )
+    host.querySelector<HTMLElement>('.sidebar__dock-header')!.click()
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    dock.getBoundingClientRect = () => box(300, 100)
+    const rows = [...host.querySelectorAll<HTMLElement>('.sidebar__dock-list .sidebar__row')]
+    rows.forEach((row, i) => {
+      row.getBoundingClientRect = () => box(300 + i * 30, 30)
+    })
+    return { hooks: h, sidebar, rows }
+  }
+
+  const press = (el: HTMLElement, y: number, type: string): void => {
+    el.dispatchEvent(
+      new PointerEvent(type, { clientX: 20, clientY: y, bubbles: true, cancelable: true, pointerId: 1 }),
+    )
+  }
+
+  it('a drag up out of the dock restores the session', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    const list = host.querySelector<HTMLElement>('.sidebar__list')!
+    expect(rows[0]!.classList.contains('sidebar__row--restoring')).toBe(true)
+    expect(list.classList.contains('sidebar__list--restore-target')).toBe(true)
+    expect(rows[0]!.style.transform).toBe('translateY(-105px)')
+    press(rows[0]!, 200, 'pointerup')
+    expect(h.onRestore).toHaveBeenCalledWith('old')
+    expect(list.classList.contains('sidebar__list--restore-target')).toBe(false)
+  })
+
+  it('a press that barely moves restores nothing and lifts nothing', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 302, 'pointermove')
+    press(rows[0]!, 302, 'pointerup')
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(rows[0]!.style.transform).toBe('')
+  })
+
+  it('a drop back inside the dock restores nothing', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    // Second thoughts: back over the archive it came from.
+    press(rows[0]!, 360, 'pointermove')
+    expect(rows[0]!.classList.contains('sidebar__row--restoring')).toBe(false)
+    press(rows[0]!, 360, 'pointerup')
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(rows[0]!.style.transform).toBe('')
+  })
+
+  it('Escape mid-drag restores nothing and strands no lift', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    press(rows[0]!, 200, 'pointerup')
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(rows[0]!.style.transform).toBe('')
+    expect(
+      host.querySelector('.sidebar__list')!.classList.contains('sidebar__list--restore-target'),
+    ).toBe(false)
+  })
+
+  it('a pointercancel mid-drag puts the row back', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    press(rows[0]!, 200, 'pointercancel')
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+  })
+
+  it('a re-render mid-drag cancels it: the release restores nothing', () => {
+    const { hooks: h, sidebar, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    sidebar.render(
+      [summary({ id: 'a', name: 'a' }), summary({ id: 'old', name: 'old', archived: true })],
+      new Map(),
+      null,
+    )
+    press(rows[0]!, 200, 'pointerup')
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(rows[0]!.style.transform).toBe('')
+  })
+
+  it('a right click on an archived row still reaches the menu', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    rows[0]!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    expect(h.onContextMenu).toHaveBeenLastCalledWith(expect.anything(), 'old', true)
+  })
+
+  it('a second press elsewhere in the dock leaves nothing of the first behind', () => {
+    const { rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    press(rows[1]!, 335, 'pointerdown')
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(rows[0]!.style.transform).toBe('')
+  })
+})
+
 describe('reordering by drag', () => {
   function renderThreeSessions(
     over: { live?: ReadonlyMap<string, number>; broken?: string; archived?: boolean } = {},
@@ -317,10 +459,14 @@ describe('reordering by drag', () => {
       escape()
       expect(other).toHaveBeenCalledTimes(1)
 
+      // A press that has not travelled is not a drag either.
       press(rows[0]!, 110, 'pointerdown')
+      escape()
+      expect(other).toHaveBeenCalledTimes(2)
+
       press(rows[0]!, 210, 'pointermove')
       escape()
-      expect(other).toHaveBeenCalledTimes(1)
+      expect(other).toHaveBeenCalledTimes(2)
       expect(h.onReorder).not.toHaveBeenCalled()
     } finally {
       window.removeEventListener('keydown', other, true)
