@@ -184,9 +184,9 @@ export function sidebarMenuItems(
       run: actions.saveLayout,
     },
     { label: t.firstRun.editSessionFile, run: actions.editSessionFile },
-    // List commands (new session, the folder) belong to the empty-space menu:
-    // this one is about the row under the pointer.
-    // Leaving the list: reversibly first, then not.
+    // Leaving the list, reversibly first, then not. List commands (new session,
+    // the folder) belong to the empty-space menu: this one is about the row
+    // under the pointer.
     { label: t.firstRun.archiveSession, separatorBefore: true, run: actions.archiveSession },
     {
       label: t.firstRun.deleteSession,

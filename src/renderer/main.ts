@@ -301,21 +301,16 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
  * one right-click away from being undone.
  */
 function archiveSession(id: string): void {
-  if (!runtimes.has(id)) {
+  const runtime = runtimes.get(id)
+  if (runtime === undefined) {
     void applyArchive(id)
     return
   }
-  const runtime = runtimes.get(id)
   const summary = knownSessions.find((s) => s.id === id)
   askConfirm(
     {
       title: t.firstRun.archiveTitle,
-      items: [
-        {
-          name: summary?.name ?? id,
-          paneCount: runtime === undefined ? 0 : livePaneCount(runtime),
-        },
-      ],
+      items: [{ name: summary?.name ?? id, paneCount: livePaneCount(runtime) }],
       lead: t.firstRun.archiveLead,
       confirmLabel: t.firstRun.archiveConfirm,
     },
