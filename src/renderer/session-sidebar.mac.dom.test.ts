@@ -28,6 +28,7 @@ const hooks = (): SidebarHooks => ({
   onClose: vi.fn(),
   onRefresh: vi.fn(),
   onWidthChange: vi.fn(),
+  onArchive: vi.fn(),
   gotoHint: (index: number) => `Cmd+${String(index + 1)}`,
   onCreateBlank: vi.fn(),
   onContextMenu: vi.fn(),

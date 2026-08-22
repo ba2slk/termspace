@@ -541,6 +541,13 @@ body {
   color: var(--fg-dim);
 }
 
+/* The row being dragged is aimed here: louder than hover, and it outlives it. */
+.sidebar__dock-header--target,
+.sidebar__dock-header--target:hover {
+  background: var(--fill-active);
+  color: var(--fg);
+}
+
 .sidebar__dock-label {
   flex: 1;
 }

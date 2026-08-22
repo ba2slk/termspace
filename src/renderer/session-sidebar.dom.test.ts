@@ -34,6 +34,7 @@ const hooks = (): SidebarHooks => ({
   onContextMenu: vi.fn(),
   onRename: vi.fn(),
   onReorder: vi.fn(),
+  onArchive: vi.fn(),
 })
 
 let host: HTMLElement
@@ -193,7 +194,7 @@ describe('the archive dock', () => {
 
 describe('reordering by drag', () => {
   function renderThreeSessions(
-    over: { live?: ReadonlyMap<string, number>; broken?: string } = {},
+    over: { live?: ReadonlyMap<string, number>; broken?: string; archived?: boolean } = {},
   ): {
     hooks: SidebarHooks
     sidebar: ReturnType<typeof createSessionSidebar>
@@ -201,21 +202,24 @@ describe('reordering by drag', () => {
   } {
     const h = hooks()
     const sidebar = createSessionSidebar(host, h)
-    sidebar.render(
-      ['a', 'b', 'c'].map((id) =>
-        summary({
-          id,
-          name: id,
-          file: `/s/${id}.yaml`,
-          paneCount: 1,
-          createdMs: 1,
-          error: id === over.broken ? 'bad file' : null,
-        }),
-      ),
-      over.live ?? new Map(),
-      null,
+    const live = ['a', 'b', 'c'].map((id) =>
+      summary({
+        id,
+        name: id,
+        file: `/s/${id}.yaml`,
+        paneCount: 1,
+        createdMs: 1,
+        error: id === over.broken ? 'bad file' : null,
+      }),
     )
-    return { hooks: h, sidebar, rows: [...host.querySelectorAll<HTMLElement>('.sidebar__row')] }
+    // One archived session puts the dock on screen without a drag.
+    const all = over.archived === true ? [...live, summary({ id: 'old', archived: true })] : live
+    sidebar.render(all, over.live ?? new Map(), null)
+    return {
+      hooks: h,
+      sidebar,
+      rows: [...host.querySelectorAll<HTMLElement>('.sidebar__list .sidebar__row')],
+    }
   }
 
   // happy-dom gives every element a zero-size box, so rows need one to drop onto.
@@ -365,6 +369,84 @@ describe('reordering by drag', () => {
       list.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }))
     }
     expect(host.querySelectorAll('.sidebar__row--preview')).toHaveLength(1)
+  })
+
+  // happy-dom gives no boxes, so the dock header needs one to be aimed at.
+  const stubHeader = (top: number): void => {
+    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
+    head.getBoundingClientRect = () =>
+      ({
+        top,
+        height: 30,
+        bottom: top + 30,
+        left: 0,
+        right: 200,
+        width: 200,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect
+  }
+
+  it('a drag over the archive header aims at it, and dropping archives', () => {
+    const { hooks: h, rows } = renderThreeSessions({ archived: true })
+    stubBoxes(rows)
+    stubHeader(300)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 320, 'pointermove')
+    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
+    expect(head.classList.contains('sidebar__dock-header--target')).toBe(true)
+    press(rows[0]!, 320, 'pointerup')
+    expect(h.onArchive).toHaveBeenCalledWith('a')
+    expect(h.onReorder).not.toHaveBeenCalled()
+    expect(head.classList.contains('sidebar__dock-header--target')).toBe(false)
+  })
+
+  it('a drag that leaves the header again drops back into the list', () => {
+    const { hooks: h, rows } = renderThreeSessions({ archived: true })
+    stubBoxes(rows)
+    stubHeader(300)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 320, 'pointermove')
+    press(rows[0]!, 210, 'pointermove')
+    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
+    expect(head.classList.contains('sidebar__dock-header--target')).toBe(false)
+    press(rows[0]!, 210, 'pointerup')
+    expect(h.onReorder).toHaveBeenCalledWith('a', 2)
+    expect(h.onArchive).not.toHaveBeenCalled()
+  })
+
+  it('Escape over the header archives nothing and clears the highlight', () => {
+    const { hooks: h, rows } = renderThreeSessions({ archived: true })
+    stubBoxes(rows)
+    stubHeader(300)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 320, 'pointermove')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    press(rows[0]!, 320, 'pointerup')
+    expect(h.onArchive).not.toHaveBeenCalled()
+    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
+    expect(head.classList.contains('sidebar__dock-header--target')).toBe(false)
+  })
+
+  it('with nothing archived yet the header appears for the drag, and leaves with it', () => {
+    const { rows } = renderThreeSessions()
+    stubBoxes(rows)
+    expect(host.querySelector('.sidebar__dock')).toBeNull()
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    expect(host.querySelector('.sidebar__dock-header')).not.toBeNull()
+    press(rows[0]!, 210, 'pointercancel')
+    expect(host.querySelector('.sidebar__dock')).toBeNull()
+  })
+
+  it('the temporary header also leaves after a plain drop', () => {
+    const { rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 210, 'pointermove')
+    press(rows[0]!, 210, 'pointerup')
+    expect(host.querySelector('.sidebar__dock')).toBeNull()
   })
 
   it('the wheel dial does not run while a drag is live', () => {

@@ -243,6 +243,8 @@ const sidebar = createSessionSidebar(workspace, {
     sidebarMenu.open(at, sidebarMenuItems(sessionId, archived))
   },
   onRename: (id, newName) => void renameSession(id, newName),
+  // The same flow the right-click menu runs: it decides about a running session.
+  onArchive: (id) => archiveSession(id),
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list

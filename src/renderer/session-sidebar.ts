@@ -10,7 +10,7 @@
 import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
-import { dropIndexAt, REORDER_THRESHOLD, rowShift, type RowBox } from './sidebar-reorder'
+import { dropTargetAt, REORDER_THRESHOLD, rowShift, type RowBox } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
@@ -37,6 +37,11 @@ export interface SidebarHooks {
   readonly onRename: (id: string, newName: string) => void
   /** The user dragged a row to a new index. */
   readonly onReorder: (id: string, toIndex: number) => void
+  /**
+   * The user dropped a row on the archive. The shell decides what that costs —
+   * a running session has to end first — so only the id travels.
+   */
+  readonly onArchive: (id: string) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -256,8 +261,31 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     dropIndex: number
     /** Row positions taken before any row was pushed; a pushed row measures wrong. */
     boxes: readonly RowBox[]
+    /** The archive header's box, or null when it is not on screen to aim at. */
+    headerBox: RowBox | null
+    overArchive: boolean
   } | null = null
   let swallowClick = false
+  /** The dock was put on screen for this drag alone, and goes away with it. */
+  let dockForDrag = false
+
+  /**
+   * An empty archive has no dock at all, so the first session could never be
+   * dragged into it. The drag lends it one — measured only after it is in flow,
+   * because it takes height from the list it sits under.
+   */
+  function showDockForDrag(): void {
+    if (dock.isConnected) return
+    dockForDrag = true
+    aside.append(dock)
+  }
+
+  function headerBox(): RowBox | null {
+    if (!dock.isConnected) return null
+    const box = dockHeader.getBoundingClientRect()
+    // Nothing laid out (hidden sidebar, headless test): nothing to aim at.
+    return box.height === 0 ? null : { top: box.top, height: box.height }
+  }
 
   function rowBoxes(): RowBox[] {
     return shownRows.map((row) => {
@@ -292,6 +320,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     }
     for (const row of shownRows) row.style.transform = ''
     list.classList.remove('sidebar__list--dragging')
+    endDockTarget()
+  }
+
+  function endDockTarget(): void {
+    dockHeader.classList.remove('sidebar__dock-header--target')
+    if (!dockForDrag) return
+    dock.remove()
+    dockForDrag = false
   }
 
   const releaseDragPointer = (pointerId: number): void => {
@@ -336,6 +372,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       moved: false,
       dropIndex: index,
       boxes: [],
+      headerBox: null,
+      overArchive: false,
     }
   })
 
@@ -346,13 +384,19 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       drag.moved = true
       // The wheel dial rebuilds rows; it cannot run under a live drag.
       clearPreview()
+      showDockForDrag()
       drag.boxes = rowBoxes()
+      drag.headerBox = headerBox()
       drag.row.classList.add('sidebar__row--dragging')
       list.classList.add('sidebar__list--dragging')
       list.setPointerCapture(event.pointerId)
     }
     drag.row.style.transform = `translateY(${String(event.clientY - drag.startY)}px)`
-    drag.dropIndex = dropIndexAt(event.clientY, drag.boxes, drag.fromIndex)
+    const target = dropTargetAt(event.clientY, drag.boxes, drag.fromIndex, drag.headerBox)
+    drag.overArchive = target.kind === 'archive'
+    dockHeader.classList.toggle('sidebar__dock-header--target', drag.overArchive)
+    // Aiming at the archive is not aiming at a slot: the list settles back.
+    drag.dropIndex = target.kind === 'index' ? target.index : drag.fromIndex
     markDrop(drag.dropIndex)
   })
 
@@ -372,18 +416,20 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     row.style.transform = `translateY(${String((dropIndex - fromIndex) * slot)}px)`
     row.classList.remove('sidebar__row--dragging')
     list.classList.remove('sidebar__list--dragging')
+    endDockTarget()
   }
 
   const finishDrag = (event: PointerEvent): void => {
     if (drag === null || event.pointerId !== drag.pointerId) return
-    const { id, fromIndex, dropIndex, moved } = drag
+    const { id, fromIndex, dropIndex, moved, overArchive } = drag
     if (moved && dropIndex !== fromIndex) settleIntoSlot()
     else endDragVisuals()
     drag = null
     releaseDragPointer(event.pointerId)
     if (!moved) return
     swallowClick = true
-    if (dropIndex !== fromIndex) hooks.onReorder(id, dropIndex)
+    if (overArchive) hooks.onArchive(id)
+    else if (dropIndex !== fromIndex) hooks.onReorder(id, dropIndex)
   }
   list.addEventListener('pointerup', finishDrag)
   list.addEventListener('pointercancel', () => cancelDrag())
