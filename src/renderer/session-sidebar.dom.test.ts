@@ -340,6 +340,19 @@ describe('restoring by drag', () => {
     expect(rows[0]!.style.transform).toBe('')
   })
 
+  it('the wheel dial does not run while a drag out of the dock is live', () => {
+    const { rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 200, 'pointermove')
+    // The wheel never saw the pointer capture, so it has to be turned away here.
+    const list = host.querySelector<HTMLElement>('.sidebar__list')!
+    for (let i = 0; i < 10; i++) {
+      list.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }))
+    }
+    expect(host.querySelectorAll('.sidebar__row--preview')).toHaveLength(0)
+    press(rows[0]!, 200, 'pointercancel')
+  })
+
   it('a right click on an archived row still reaches the menu', () => {
     const { hooks: h, rows } = renderArchive()
     press(rows[0]!, 305, 'pointerdown')

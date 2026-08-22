@@ -248,7 +248,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   list.addEventListener(
     'wheel',
     (event) => {
-      if (drag !== null) return
+      // Either drag. The wheel ignores pointer capture, so a roll over the list
+      // during a drag out of the archive would still turn the dial — and the
+      // session it opened would render the held row out from under the pointer.
+      if (drag !== null || dockDrag !== null) return
       if (shown.length === 0) return
       event.preventDefault()
       const step = detent.feed(event.deltaY, event.deltaMode, event.timeStamp)
