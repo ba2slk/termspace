@@ -280,6 +280,34 @@ describe('restoring by drag', () => {
     expect(list.classList.contains('sidebar__list--restore-target')).toBe(false)
   })
 
+  it('a restore that fails puts the lifted row back rather than stranding it', async () => {
+    // The restore is refused, so no render will follow to clear the lift.
+    const h: SidebarHooks = { ...hooks(), onRestore: vi.fn(() => Promise.reject(new Error('nope'))) }
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.render(
+      [summary({ id: 'a', name: 'a' }), summary({ id: 'old', name: 'old', archived: true })],
+      new Map(),
+      null,
+    )
+    host.querySelector<HTMLElement>('.sidebar__dock-header')!.click()
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    dock.getBoundingClientRect = () => box(300, 100)
+    const row = host.querySelector<HTMLElement>('.sidebar__dock-list .sidebar__row')!
+    row.getBoundingClientRect = () => box(300, 30)
+
+    press(row, 305, 'pointerdown')
+    press(row, 200, 'pointermove')
+    press(row, 200, 'pointerup')
+    expect(h.onRestore).toHaveBeenCalledWith('old')
+    expect(row.classList.contains('sidebar__row--lifted')).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(row.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(row.classList.contains('sidebar__row--restoring')).toBe(false)
+    expect(row.style.transform).toBe('')
+    expect(row.style.top).toBe('')
+  })
+
   it('a press that barely moves restores nothing and lifts nothing', () => {
     const { hooks: h, rows } = renderArchive()
     press(rows[0]!, 305, 'pointerdown')

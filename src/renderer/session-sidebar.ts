@@ -51,8 +51,11 @@ export interface SidebarHooks {
   /**
    * The user dragged an archived row back out onto the list. Where it lands is
    * main's to say — the end of the list, as the menu's Restore does.
+   *
+   * A promise that rejects says the session stayed archived: the row it left
+   * held over the list goes back to the dock, since no render is coming.
    */
-  readonly onRestore: (id: string) => void
+  readonly onRestore: (id: string) => void | Promise<void>
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -580,7 +583,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   const finishDockDrag = (event: PointerEvent): void => {
     if (dockDrag === null || event.pointerId !== dockDrag.pointerId) return
-    const { id, moved, restoring, pointerId } = dockDrag
+    const { id, moved, restoring, row, pointerId } = dockDrag
     /*
      * A restore keeps the row where the pointer left it: the list it is joining
      * arrives with the next render, and putting the row back in the dock until
@@ -593,7 +596,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     } else endDockDragVisuals()
     dockDrag = null
     if (dockList.hasPointerCapture(pointerId)) dockList.releasePointerCapture(pointerId)
-    if (moved && restoring) hooks.onRestore(id)
+    if (!(moved && restoring)) return
+    // A refused restore renders nothing, and by then the drag state that would
+    // have put the row down is gone — so the row is the promise's to put back.
+    void Promise.resolve(hooks.onRestore(id)).catch(() => dropRow(row))
   }
   dockList.addEventListener('pointerup', finishDockDrag)
   dockList.addEventListener('pointercancel', () => cancelDockDrag())

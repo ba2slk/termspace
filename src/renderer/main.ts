@@ -245,8 +245,9 @@ const sidebar = createSessionSidebar(workspace, {
   onRename: (id, newName) => void renameSession(id, newName),
   // The same flow the right-click menu runs: it decides about a running session.
   onArchive: (id) => archiveSession(id),
-  // As the menu's Restore does, landing at the end of the list.
-  onRestore: (id) => void restoreSession(id),
+  // As the menu's Restore does, landing at the end of the list. The sidebar
+  // waits on this one: a refusal is how the row it is holding gets put back.
+  onRestore: (id) => restoreSession(id),
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list
@@ -290,7 +291,8 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
         if (sessionId !== null) archiveSession(sessionId)
       },
       restoreSession: () => {
-        if (sessionId !== null) void restoreSession(sessionId)
+        // The toast has already said so; the menu has nothing left to do with it.
+        if (sessionId !== null) void restoreSession(sessionId).catch(() => undefined)
       },
     },
   )
@@ -332,9 +334,19 @@ async function applyArchive(id: string): Promise<void> {
   renderSidebar()
 }
 
-/** Back into the list, at its end — main decides where. */
+/**
+ * Back into the list, at its end — main decides where.
+ *
+ * A refusal is rethrown as well as told: the drag that dropped the row holds it
+ * over the list until this render arrives, and it has to hear that none will.
+ */
 async function restoreSession(id: string): Promise<void> {
-  knownSessions = await api.restoreSession(id)
+  try {
+    knownSessions = await api.restoreSession(id)
+  } catch (error) {
+    toast.show(t.firstRun.restoreFailedToast)
+    throw error
+  }
   renderSidebar()
 }
 

@@ -45,6 +45,7 @@ const en = {
     archiveSession: 'Archive session',
     restoreSession: 'Restore session',
     renameFailedToast: 'Could not rename',
+    restoreFailedToast: 'Could not restore',
 
     // Archive confirmation, only for a session that is still running
     archiveTitle: 'Archive this session?',
@@ -389,6 +390,7 @@ const ko: Catalog = {
     archiveSession: '아카이브로 보내기',
     restoreSession: '세션 되살리기',
     renameFailedToast: '이름을 바꾸지 못했습니다',
+    restoreFailedToast: '되살리지 못했습니다',
 
     archiveTitle: '세션을 아카이브로 보낼까요?',
     archiveLead: '지금 실행 중입니다. 보내기 전에 세션을 끝내므로 안에서 돌던 작업도 함께 멈춥니다.',
