@@ -504,6 +504,16 @@ really die.
       a human has to look at — the header is borrowed for the duration of one drag, and on
       an idle session it blinks out for a frame before the real dock arrives (longer, while
       the confirm is up, for a running one)
+- [ ] **Drag out of the archive.** Open the dock, press an archived row and drag it up over
+      the session list: the row rides the pointer out of the dock rather than being cut off
+      at its edge, it stops looking dimmed, and the list takes a faint fill. Releasing there
+      restores it to the **end** of the list, the same place the menu's Restore uses.
+      Releasing back inside the dock, `Esc`, and a click that never moves all restore
+      nothing, and the right-click menu on an archived row still opens
+- [ ] **No scrollbar for the drag itself.** With few enough sessions that the list does not
+      scroll, drag a row down toward the archive: no scrollbar appears beside the list on
+      the way and none flickers away on the drop. With enough sessions that the list already
+      scrolls, the same drag must not shift any row sideways as it starts
 - [ ] **Archived sessions are unreachable by keyboard.** With one session archived:
       `Alt`+`1`–`9` numbers only the rows still in the list (nothing is skipped or
       off-by-one), `Alt+Shift+<` / `>` never step onto it, and rolling the wheel over the
