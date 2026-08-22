@@ -16,7 +16,7 @@ import { stringsFor } from '../shared/ui-strings'
 import { configDir } from './config-dir'
 import { markArchived, withArchived, withoutArchived } from './session-archive'
 import { readArchive, writeArchive } from './session-archive-file'
-import { applyOrder, moveTo, renameInOrder } from './session-order'
+import { applyOrder, moveTo, moveToVisible, renameInOrder } from './session-order'
 import { readOrder, writeOrder } from './session-order-file'
 import { parseSession, resolveCwd } from './session-schema'
 import {
@@ -423,8 +423,11 @@ export async function reorderSession(
   toIndex: number,
 ): Promise<SessionSummary[]> {
   // Seeds the order first, so a drag before any listing still has ids to move.
-  const seeded = (await listSessions(dir, orderPath, archivePath)).map((s) => s.id)
-  await writeOrder(orderPath, moveTo(seeded, id, toIndex))
+  const seeded = await listSessions(dir, orderPath, archivePath)
+  // toIndex counts the rows the sidebar draws, and it draws no archived row.
+  const archived = new Set(seeded.filter((s) => s.archived).map((s) => s.id))
+  const order = seeded.map((s) => s.id)
+  await writeOrder(orderPath, moveToVisible(order, archived, id, toIndex))
   return listSessions(dir, orderPath, archivePath)
 }
 

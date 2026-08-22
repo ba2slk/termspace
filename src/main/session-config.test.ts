@@ -372,6 +372,15 @@ describe('reorderSession', () => {
     const list = await reorderSession(dir, orderPath(), archivePath(), 'b', 0)
     expect(list.map((s) => s.id)).toEqual(['b', 'a'])
   })
+
+  it('counts the target slot over the visible rows, past an archived id', async () => {
+    for (const n of ['old', 'a', 'b', 'c']) await write(n)
+    await writeFile(orderPath(), JSON.stringify(['old', 'a', 'b', 'c']))
+    await archiveSession(dir, orderPath(), archivePath(), 'old')
+    // The sidebar shows a b c, so index 2 is the bottom of what the user saw.
+    const list = await reorderSession(dir, orderPath(), archivePath(), 'a', 2)
+    expect(list.filter((s) => !s.archived).map((s) => s.id)).toEqual(['b', 'c', 'a'])
+  })
 })
 
 describe('archiveSession and restoreSession', () => {

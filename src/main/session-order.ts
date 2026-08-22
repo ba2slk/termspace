@@ -47,6 +47,26 @@ export function moveTo(order: readonly string[], id: string, toIndex: number): s
   return [...rest.slice(0, at), id, ...rest.slice(at)]
 }
 
+/**
+ * Move within the ids the user can see. The sidebar counts slots over the rows
+ * it draws, so a hidden id earlier in the order would otherwise shift the
+ * landing slot by one. Hidden ids keep their absolute places; the rest close up
+ * around the move.
+ */
+export function moveToVisible(
+  order: readonly string[],
+  hidden: ReadonlySet<string>,
+  id: string,
+  toIndex: number,
+): string[] {
+  // A hidden row has no slot of its own to be dropped into.
+  if (hidden.has(id)) return [...order]
+  const visible = order.filter((entry) => !hidden.has(entry))
+  const moved = moveTo(visible, id, toIndex)
+  let next = 0
+  return order.map((entry) => (hidden.has(entry) ? entry : (moved[next++] as string)))
+}
+
 /** A rename moves the file, so the id changes while the position must not. */
 export function renameInOrder(
   order: readonly string[],
