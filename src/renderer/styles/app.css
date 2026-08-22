@@ -500,6 +500,58 @@ body {
   line-height: 1.6;
 }
 
+/* The archive dock, pinned under the list. It sits in the flow and pushes the
+   list up when it opens: no overlay, no shadow, nothing covering live rows. */
+.sidebar__dock {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar__dock-list {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 6px;
+  transition: max-height var(--dur) ease;
+}
+
+.sidebar__dock--open .sidebar__dock-list {
+  /* About four rows: enough to see the archive, never enough to become it. */
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sidebar__dock-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--fs-ui-sm);
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar__dock-header:hover {
+  background: var(--fill-hover-faint);
+  color: var(--fg-dim);
+}
+
+.sidebar__dock-label {
+  flex: 1;
+}
+
+/* Archived rows are readable, not addressable: no dot, no count, no power. */
+.sidebar__row--archived {
+  padding: 6px 8px;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-lg);
+}
+
 /* ── Canvas ───────────────────────────────────────────── */
 
 .canvas {

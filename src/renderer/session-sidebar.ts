@@ -26,8 +26,13 @@ export interface SidebarHooks {
   readonly onCreateBlank: () => void
   /**
    * Reports what was right-clicked; the shell decides which commands to offer.
+   * An archived row carries none of the live commands, so it is flagged here.
    */
-  readonly onContextMenu: (at: { x: number; y: number }, sessionId: string | null) => void
+  readonly onContextMenu: (
+    at: { x: number; y: number },
+    sessionId: string | null,
+    archived: boolean,
+  ) => void
   /** The user typed a new display name for a session. */
   readonly onRename: (id: string, newName: string) => void
   /** The user dragged a row to a new index. */
@@ -42,6 +47,9 @@ export interface SessionSidebar {
    * live: pane count per running session — its keys are which sessions run.
    * The file's own count is stale the moment a pane is split, and splits are
    * never written back. current: the one on screen.
+   *
+   * Archived sessions arrive in the same list, flagged; they are split off into
+   * the dock and never reach the dial or the drag.
    */
   render(
     sessions: readonly SessionSummary[],
@@ -84,6 +92,8 @@ const PLUS_PATH = 'M8 3.5v9M3.5 8h9'
 /* IEC 5009: a broken ring with the line breaking out of the top. */
 const POWER_PATH = 'M8 2.6v5'
 const POWER_RING = 'M4.2 6.2A4.6 4.6 0 1 0 11.8 6.2'
+/* A box with its lid on: the archive. */
+const ARCHIVE_PATHS = ['M2.5 3.5h11v2.5h-11z', 'M3.5 6v6.5h9V6', 'M6.5 8.6h3']
 
 export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): SessionSidebar {
   const aside = document.createElement('aside')
@@ -123,6 +133,40 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   const list = document.createElement('div')
   list.className = 'sidebar__list'
 
+  /*
+   * The archive dock: a header pinned under the list, and the archived rows
+   * expanding in flow above it. In flow, not over the list, because the list is
+   * resident furniture — anything that covers it hides what you came to read.
+   */
+  const dock = document.createElement('div')
+  dock.className = 'sidebar__dock'
+
+  const dockList = document.createElement('div')
+  dockList.className = 'sidebar__dock-list'
+
+  const dockCount = document.createElement('span')
+  dockCount.className = 'sidebar__dock-count'
+
+  const dockHeader = document.createElement('button')
+  dockHeader.type = 'button'
+  dockHeader.className = 'sidebar__dock-header'
+  const dockLabel = document.createElement('span')
+  dockLabel.className = 'sidebar__dock-label'
+  dockLabel.textContent = t.sidebar.archive
+  dockHeader.append(icon(ARCHIVE_PATHS, 13), dockLabel, dockCount)
+
+  // Runtime only: every start opens with the archive out of the way.
+  let dockOpen = false
+  function setDockOpen(next: boolean): void {
+    dockOpen = next
+    dock.classList.toggle('sidebar__dock--open', next)
+    dockHeader.setAttribute('aria-expanded', String(next))
+  }
+  setDockOpen(false)
+  dockHeader.addEventListener('click', () => setDockOpen(!dockOpen))
+
+  dock.append(dockList, dockHeader)
+
   // The gap is the resize handle, same rule as between panes.
   const grip = document.createElement('div')
   grip.className = 'sidebar__grip'
@@ -131,7 +175,11 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   aside.addEventListener('contextmenu', (event) => {
     event.preventDefault()
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sidebar__row')
-    hooks.onContextMenu({ x: event.clientX, y: event.clientY }, row?.dataset['sessionId'] ?? null)
+    hooks.onContextMenu(
+      { x: event.clientX, y: event.clientY },
+      row?.dataset['sessionId'] ?? null,
+      row?.dataset['archived'] !== undefined,
+    )
   })
 
   aside.append(header, list)
@@ -517,6 +565,21 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     return item
   }
 
+  /** Name only: an archived session has no panes running and nothing to do. */
+  function archivedRow(session: SessionSummary): HTMLElement {
+    const item = document.createElement('div')
+    item.className = 'sidebar__row sidebar__row--archived'
+    item.dataset['sessionId'] = session.id
+    // What the right-click handler reads to know it may only offer Restore.
+    item.dataset['archived'] = ''
+
+    const name = document.createElement('span')
+    name.className = 'sidebar__name'
+    name.textContent = session.name
+    item.append(name)
+    return item
+  }
+
   function startRename(sessionId: string): void {
     const index = shown.findIndex((s) => s.id === sessionId)
     const rowEl = shownRows[index]
@@ -564,14 +627,24 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       // has a drag: a background pty ringing must not move what it measures.
       clearPreview()
       cancelDrag()
-      shown = sessions
+      const active = sessions.filter((s) => !s.archived)
+      const archived = sessions.filter((s) => s.archived)
+      shown = active
       currentId = current
-      if (sessions.length === 0) {
+
+      if (archived.length === 0) dock.remove()
+      else {
+        dockCount.textContent = String(archived.length)
+        dockList.replaceChildren(...archived.map(archivedRow))
+        aside.append(dock)
+      }
+
+      if (active.length === 0) {
         shownRows = []
         list.replaceChildren(emptyState())
         return
       }
-      const rows = sessions.map((s, i) => row(s, live.get(s.id), s.id === current, i))
+      const rows = active.map((s, i) => row(s, live.get(s.id), s.id === current, i))
       shownRows = rows
       list.replaceChildren(...rows)
       fitHints()

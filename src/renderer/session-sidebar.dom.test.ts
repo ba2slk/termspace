@@ -122,6 +122,75 @@ describe('inline rename', () => {
   })
 })
 
+describe('the archive dock', () => {
+  const open = (): { h: SidebarHooks; sidebar: ReturnType<typeof createSessionSidebar> } => {
+    const h = hooks()
+    return { h, sidebar: createSessionSidebar(host, h) }
+  }
+
+  const header = (): HTMLElement | null => host.querySelector('.sidebar__dock-header')
+
+  it('is not there at all while nothing is archived', () => {
+    const { sidebar } = open()
+    sidebar.render([summary()], new Map(), null)
+    expect(host.querySelector('.sidebar__dock')).toBeNull()
+  })
+
+  it('appears with the archived count once something is archived', () => {
+    const { sidebar } = open()
+    sidebar.render(
+      [summary(), summary({ id: 'old', archived: true }), summary({ id: 'older', archived: true })],
+      new Map(),
+      null,
+    )
+    expect(host.querySelector('.sidebar__dock-count')?.textContent).toBe('2')
+  })
+
+  it('starts closed and the header toggles it', () => {
+    const { sidebar } = open()
+    sidebar.render([summary(), summary({ id: 'old', archived: true })], new Map(), null)
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    expect(dock.classList.contains('sidebar__dock--open')).toBe(false)
+    header()!.click()
+    expect(dock.classList.contains('sidebar__dock--open')).toBe(true)
+    header()!.click()
+    expect(dock.classList.contains('sidebar__dock--open')).toBe(false)
+  })
+
+  it('archived rows stay out of the list the dial and the drag walk', () => {
+    const { sidebar } = open()
+    sidebar.render([summary(), summary({ id: 'old', archived: true })], new Map(), null)
+    expect(host.querySelectorAll('.sidebar__list .sidebar__row')).toHaveLength(1)
+    expect(host.querySelectorAll('.sidebar__dock-list .sidebar__row')).toHaveLength(1)
+  })
+
+  it('an archived row is a name and nothing else, and does not open', () => {
+    const { h, sidebar } = open()
+    sidebar.render([summary({ id: 'old', name: 'old', archived: true })], new Map([['old', 1]]), null)
+    const row = host.querySelector<HTMLElement>('.sidebar__row--archived')!
+    expect(row.querySelector('.sidebar__name')?.textContent).toBe('old')
+    expect(row.querySelector('.sidebar__dot')).toBeNull()
+    expect(row.querySelector('.sidebar__meta')).toBeNull()
+    expect(row.querySelector('.sidebar__hint')).toBeNull()
+    expect(row.querySelector('.sidebar__close')).toBeNull()
+    row.click()
+    expect(h.onOpen).not.toHaveBeenCalled()
+  })
+
+  it('a right click on an archived row says so, so the shell can offer Restore', () => {
+    const { h, sidebar } = open()
+    sidebar.render([summary({ id: 'a' }), summary({ id: 'old', archived: true })], new Map(), null)
+    host
+      .querySelector('.sidebar__row--archived')!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    expect(h.onContextMenu).toHaveBeenLastCalledWith(expect.anything(), 'old', true)
+    host
+      .querySelector('.sidebar__list .sidebar__row')!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    expect(h.onContextMenu).toHaveBeenLastCalledWith(expect.anything(), 'a', false)
+  })
+})
+
 describe('reordering by drag', () => {
   function renderThreeSessions(
     over: { live?: ReadonlyMap<string, number>; broken?: string } = {},
