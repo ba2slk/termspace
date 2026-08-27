@@ -237,17 +237,11 @@ export function columnSnapOffset(
   return OVERVIEW_MARGIN + centres[next]!.centre - lens.x - lens.width / 2
 }
 
-/** The pane in this column whose middle sits closest to a remembered height. */
-export function paneNearestY(
-  cards: readonly OverviewCard[],
-  columnId: string,
-  y: number,
-): string | null {
+/** The top pane of this column — the canvas's rule for arriving at a column. */
+export function topPaneOf(cards: readonly OverviewCard[], columnId: string): string | null {
   const inColumn = cards.filter((c) => c.columnId === columnId)
   if (inColumn.length === 0) return null
-  return inColumn.reduce((best, card) =>
-    Math.abs(card.y + card.height / 2 - y) < Math.abs(best.y + best.height / 2 - y) ? card : best,
-  ).paneId
+  return inColumn.reduce((best, card) => (card.y < best.y ? card : best)).paneId
 }
 
 /**

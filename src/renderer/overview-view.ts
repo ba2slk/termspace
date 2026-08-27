@@ -19,8 +19,8 @@ import {
   moveSelection,
   type OverviewCard,
   overviewLayout,
-  paneNearestY,
   stripOffsetFor,
+  topPaneOf,
 } from './overview-model'
 import { wheelPixels } from './wheel-physics'
 import { t } from './i18n'
@@ -155,8 +155,6 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let lens: Lens = { x: 0, width: 0 }
   let lastCards: readonly OverviewCard[] = []
   let pannable = false
-  /** The height the selection keeps as it crosses columns — the canvas's rule. */
-  let desiredY = 0
   /** Where the canvas was when the map opened, for a cancel to put it back. */
   let openedAtScrollX = 0
   let scrubbed = false
@@ -175,17 +173,12 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     hooks.onScrub(landingScrollX(offset, scale, canvasWidth(snapshot), hooks.viewport(), lens))
   }
 
-  /** The selection follows the lens: whichever column it frames, at desiredY. */
+  /** The selection follows the lens: whichever column it frames, at its top. */
   const trackSelection = (): void => {
     const columnId = columnAtLensCenter(lastCards, offset, lens)
     if (columnId === null) return
-    const paneId = paneNearestY(lastCards, columnId, desiredY)
+    const paneId = topPaneOf(lastCards, columnId)
     if (paneId !== null) selectCard(paneId)
-  }
-
-  const rememberY = (): void => {
-    const card = lastCards.find((c) => c.paneId === selectedId)
-    if (card !== undefined) desiredY = card.y + card.height / 2
   }
 
   // Vertical wheel pans horizontally, exactly like the canvas; both axes
@@ -411,7 +404,6 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     scrubbed = false
     offset = 0
     render()
-    rememberY()
     if (pannable) {
       // Align the strip so the canvas region you are looking at sits in the lens.
       offset = clampStripOffset(
@@ -467,13 +459,12 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
           scrub()
           return true
         }
-        // Vertical stays inside the framed column, and sets the height to keep.
+        // Vertical stays inside the framed column; a horizontal step resets it.
         const stepped = moveSelection(snapshot, selectedId, dir)
         snapshot = stepped
         const framed = columnAtLensCenter(lastCards, offset, lens)
         const moved = lastCards.find((c) => c.paneId === stepped.focusedPaneId)
         if (moved !== undefined && moved.columnId === framed) selectCard(stepped.focusedPaneId)
-        rememberY()
         return true
       }
       if (event.key === 'Enter') {

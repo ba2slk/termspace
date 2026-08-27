@@ -16,8 +16,8 @@ import {
   fitsAName,
   moveSelection,
   overviewLayout,
-  paneNearestY,
   stripOffsetFor,
+  topPaneOf,
 } from './overview-model'
 
 /** Two columns, three panes; wider than the 800px viewport below. */
@@ -104,13 +104,13 @@ describe('moveSelection', () => {
     expect(moveSelection(layout, 'b1', 'right').focusedPaneId).toBe('b1')
   })
 
-  it('down, right, left comes back, because desiredY survives the steps', () => {
-    // Same rule as the canvas: vertical moves set desiredY, horizontal ones keep it.
+  it('a horizontal step lands on the top of the next column, as the canvas does', () => {
     const down = moveSelection(layout, 'a1', 'down')
     expect(down.focusedPaneId).toBe('a2')
     const right = moveSelection(down, 'a2', 'right')
+    expect(right.focusedPaneId).toBe('b1')
     const back = moveSelection(right, right.focusedPaneId, 'left')
-    expect(back.focusedPaneId).toBe('a2')
+    expect(back.focusedPaneId).toBe('a1')
   })
 })
 
@@ -264,20 +264,20 @@ describe('column snap and the centred column', () => {
   })
 })
 
-describe('paneNearestY', () => {
+describe('topPaneOf', () => {
   const cards = [
-    { paneId: 'top', columnId: 'c1', x: 0, y: 0, width: 100, height: 40 },
     { paneId: 'bottom', columnId: 'c1', x: 0, y: 50, width: 100, height: 40 },
+    { paneId: 'top', columnId: 'c1', x: 0, y: 0, width: 100, height: 40 },
     { paneId: 'only', columnId: 'c2', x: 150, y: 0, width: 100, height: 90 },
   ]
 
-  it('keeps the vertical place when the column changes', () => {
-    expect(paneNearestY(cards, 'c1', 70)).toBe('bottom')
-    expect(paneNearestY(cards, 'c1', 5)).toBe('top')
+  it('picks the highest card, whatever order the cards arrive in', () => {
+    expect(topPaneOf(cards, 'c1')).toBe('top')
+    expect(topPaneOf(cards, 'c2')).toBe('only')
   })
 
   it('is null for a column that is not there', () => {
-    expect(paneNearestY(cards, 'gone', 0)).toBeNull()
+    expect(topPaneOf(cards, 'gone')).toBeNull()
   })
 })
 
