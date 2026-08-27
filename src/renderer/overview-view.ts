@@ -5,7 +5,7 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
-import { canvasWidth } from './layout-geometry'
+import { canvasWidth, columnHeightIn } from './layout-geometry'
 import {
   clampStripOffset,
   columnAtLensCenter,
@@ -19,8 +19,8 @@ import {
   moveSelection,
   type OverviewCard,
   overviewLayout,
+  paneNearestY,
   stripOffsetFor,
-  topPaneOf,
 } from './overview-model'
 import { wheelPixels } from './wheel-physics'
 import { t } from './i18n'
@@ -173,11 +173,19 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     hooks.onScrub(landingScrollX(offset, scale, canvasWidth(snapshot), hooks.viewport(), lens))
   }
 
-  /** The selection follows the lens: whichever column it frames, at its top. */
+  /** The canvas's own column height, so a step on the map measures what it draws. */
+  const columnHeight = (): number => columnHeightIn(hooks.viewport().height)
+
+  /**
+   * The selection follows the lens: whichever column it frames, at the card
+   * facing the selected one — the canvas's rule, read off the map's own
+   * geometry rather than a remembered height.
+   */
   const trackSelection = (): void => {
     const columnId = columnAtLensCenter(lastCards, offset, lens)
     if (columnId === null) return
-    const paneId = topPaneOf(lastCards, columnId)
+    const from = lastCards.find((c) => c.paneId === selectedId)
+    const paneId = paneNearestY(lastCards, columnId, from === undefined ? 0 : from.y + from.height / 2)
     if (paneId !== null) selectCard(paneId)
   }
 
@@ -447,7 +455,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       if (dir !== undefined) {
         if (!pannable) {
           // Fit mode: nothing slides, so a step is the canvas's own focus move.
-          snapshot = moveSelection(snapshot, selectedId, dir)
+          snapshot = moveSelection(snapshot, selectedId, dir, columnHeight())
           selectCard(snapshot.focusedPaneId)
           return true
         }
@@ -460,7 +468,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
           return true
         }
         // Vertical stays inside the framed column; a horizontal step resets it.
-        const stepped = moveSelection(snapshot, selectedId, dir)
+        const stepped = moveSelection(snapshot, selectedId, dir, columnHeight())
         snapshot = stepped
         const framed = columnAtLensCenter(lastCards, offset, lens)
         const moved = lastCards.find((c) => c.paneId === stepped.focusedPaneId)

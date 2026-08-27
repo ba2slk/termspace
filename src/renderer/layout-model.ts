@@ -200,6 +200,26 @@ function paneCenters(panes: readonly Pane[]): number[] {
   return out
 }
 
+/**
+ * Vertical centre of each pane in pixels, as the column is actually drawn — the
+ * same rule as paneRects, for one column. Ratios alone are not enough: a folded
+ * pane is a fixed bar whatever share it holds, so the two disagree wherever a
+ * bar is in the way, and a move across columns must follow what is on screen.
+ */
+function drawnCenters(panes: readonly Pane[], columnHeight: number): number[] {
+  const room = expandedRoom(columnHeight, panes)
+  const sum = expandedRatioSum(panes)
+  const out: number[] = []
+  let y = 0
+  for (const p of panes) {
+    const height =
+      p.minimized === true ? FOLD_BAR_HEIGHT : sum <= 0 ? 0 : room * (p.heightRatio / sum)
+    out.push(y + height / 2)
+    y += height + PANE_GAP
+  }
+  return out
+}
+
 /** The pane whose centre is nearest the target; ties go to the upper one. */
 function nearestTo(panes: readonly Pane[], y: number): Pane {
   const centers = paneCenters(panes)
@@ -595,7 +615,7 @@ function shedPane(column: Column, paneId: string): Column {
   return { ...column, panes: remaining.map((p, i) => ({ ...p, heightRatio: ratios[i]! })) }
 }
 
-export function focusDir(layout: Layout, dir: Direction): Layout {
+export function focusDir(layout: Layout, dir: Direction, columnHeight: number): Layout {
   const found = findPane(layout, layout.focusedPaneId)
   if (found === null) return layout
 
@@ -615,12 +635,18 @@ export function focusDir(layout: Layout, dir: Direction): Layout {
   const neighbour = layout.columns[columnIndex + (dir === 'right' ? 1 : -1)]
   if (neighbour === undefined) return layout
 
-  // Always the top pane, so a press has one visible outcome. The old rule read
-  // desiredY, which nothing on screen showed; ←→ no longer returns to the pane
-  // it left, and that is the trade the rule accepts.
+  // The pane drawn across from this one. The anchor is where the focused pane
+  // actually sits, not a remembered height nothing on screen shows, so a press
+  // has an outcome the user can read off the canvas.
+  const from = drawnCenters(column.panes, columnHeight)[paneIndex]!
+  const centers = drawnCenters(neighbour.panes, columnHeight)
+  let best = 0
+  for (let i = 1; i < centers.length; i++) {
+    if (Math.abs(centers[i]! - from) < Math.abs(centers[best]! - from)) best = i
+  }
   return {
     ...layout,
-    focusedPaneId: neighbour.panes[0]!.id,
-    desiredY: paneCenters(neighbour.panes)[0]!,
+    focusedPaneId: neighbour.panes[best]!.id,
+    desiredY: paneCenters(neighbour.panes)[best]!,
   }
 }

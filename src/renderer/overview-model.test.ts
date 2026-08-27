@@ -16,8 +16,8 @@ import {
   fitsAName,
   moveSelection,
   overviewLayout,
+  paneNearestY,
   stripOffsetFor,
-  topPaneOf,
 } from './overview-model'
 
 /** Two columns, three panes; wider than the 800px viewport below. */
@@ -93,23 +93,30 @@ describe('overviewLayout — viewport marker', () => {
 })
 
 describe('moveSelection', () => {
+  const COLUMN_H = 600
+
   it('moves exactly as canvas focus movement does', () => {
     for (const dir of ['left', 'right', 'up', 'down'] as const) {
-      const expected = focusDir({ ...layout, focusedPaneId: 'a1' }, dir)
-      expect(moveSelection(layout, 'a1', dir)).toEqual(expected)
+      const expected = focusDir({ ...layout, focusedPaneId: 'a1' }, dir, COLUMN_H)
+      expect(moveSelection(layout, 'a1', dir, COLUMN_H)).toEqual(expected)
     }
   })
 
   it('stays put at an edge', () => {
-    expect(moveSelection(layout, 'b1', 'right').focusedPaneId).toBe('b1')
+    expect(moveSelection(layout, 'b1', 'right', COLUMN_H).focusedPaneId).toBe('b1')
   })
 
-  it('a horizontal step lands on the top of the next column, as the canvas does', () => {
-    const down = moveSelection(layout, 'a1', 'down')
+  it('crosses to the facing pane, as the canvas does', () => {
+    /*
+     * c2 is one pane spanning the column, so it faces both halves of c1 from
+     * exactly the same distance. Coming back cannot pick the half it came from,
+     * and the tie goes to the upper pane — an unequal split has no round trip.
+     */
+    const down = moveSelection(layout, 'a1', 'down', COLUMN_H)
     expect(down.focusedPaneId).toBe('a2')
-    const right = moveSelection(down, 'a2', 'right')
+    const right = moveSelection(down, 'a2', 'right', COLUMN_H)
     expect(right.focusedPaneId).toBe('b1')
-    const back = moveSelection(right, right.focusedPaneId, 'left')
+    const back = moveSelection(right, right.focusedPaneId, 'left', COLUMN_H)
     expect(back.focusedPaneId).toBe('a1')
   })
 })
@@ -264,20 +271,20 @@ describe('column snap and the centred column', () => {
   })
 })
 
-describe('topPaneOf', () => {
+describe('paneNearestY', () => {
   const cards = [
     { paneId: 'bottom', columnId: 'c1', x: 0, y: 50, width: 100, height: 40 },
     { paneId: 'top', columnId: 'c1', x: 0, y: 0, width: 100, height: 40 },
     { paneId: 'only', columnId: 'c2', x: 150, y: 0, width: 100, height: 90 },
   ]
 
-  it('picks the highest card, whatever order the cards arrive in', () => {
-    expect(topPaneOf(cards, 'c1')).toBe('top')
-    expect(topPaneOf(cards, 'c2')).toBe('only')
+  it('picks the card drawn across from a height on the map', () => {
+    expect(paneNearestY(cards, 'c1', 70)).toBe('bottom')
+    expect(paneNearestY(cards, 'c1', 5)).toBe('top')
   })
 
   it('is null for a column that is not there', () => {
-    expect(topPaneOf(cards, 'gone')).toBeNull()
+    expect(paneNearestY(cards, 'gone', 0)).toBeNull()
   })
 })
 

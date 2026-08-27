@@ -643,6 +643,7 @@ describe('resizePane', () => {
 })
 
 describe('focusDir', () => {
+  const COLUMN_H = 900
   // c1 has two panes (centres 0.25 / 0.75), c2 has three (1/6, 1/2, 5/6)
   const grid = createLayout([
     { id: 'c1', panes: [{ id: 'a1', title: 'a1' }, { id: 'a2', title: 'a2' }] },
@@ -657,71 +658,93 @@ describe('focusDir', () => {
   ])
 
   it('down moves to the next pane in the column', () => {
-    expect(focusDir(grid, 'down').focusedPaneId).toBe('a2')
+    expect(focusDir(grid, 'down', COLUMN_H).focusedPaneId).toBe('a2')
   })
 
   it('down at the bottom does nothing', () => {
     const atBottom = { ...grid, focusedPaneId: 'a2' }
-    expect(focusDir(atBottom, 'down')).toBe(atBottom)
+    expect(focusDir(atBottom, 'down', COLUMN_H)).toBe(atBottom)
   })
 
   it('up at the top does nothing', () => {
-    expect(focusDir(grid, 'up')).toBe(grid)
+    expect(focusDir(grid, 'up', COLUMN_H)).toBe(grid)
   })
 
   it('vertical movement updates desiredY', () => {
-    expect(focusDir(grid, 'down').desiredY).toBeCloseTo(0.75, 9)
+    expect(focusDir(grid, 'down', COLUMN_H).desiredY).toBeCloseTo(0.75, 9)
   })
 
-  it('right lands on the top pane of the neighbouring column', () => {
-    expect(focusDir(grid, 'right').focusedPaneId).toBe('b1')
+  it('right lands on the pane facing the one it left', () => {
+    // a1 covers the upper half; b1 is the pane drawn across from it.
+    expect(focusDir(grid, 'right', COLUMN_H).focusedPaneId).toBe('b1')
+    const fromBottom = { ...grid, focusedPaneId: 'a2' }
+    expect(focusDir(fromBottom, 'right', COLUMN_H).focusedPaneId).toBe('b3')
   })
 
-  it('lands on the top pane whatever height the move started from', () => {
-    const fromBottom = { ...grid, focusedPaneId: 'a2', desiredY: 0.75 }
-    expect(focusDir(fromBottom, 'right').focusedPaneId).toBe('b1')
+  it('left lands on the pane facing the one it left', () => {
+    const atTop = { ...grid, focusedPaneId: 'b1' }
+    expect(focusDir(atTop, 'left', COLUMN_H).focusedPaneId).toBe('a1')
+    const atBottom = { ...grid, focusedPaneId: 'b3' }
+    expect(focusDir(atBottom, 'left', COLUMN_H).focusedPaneId).toBe('a2')
+    // b2 straddles the middle, equally far from both; a tie goes to the upper.
+    const inMiddle = { ...grid, focusedPaneId: 'b2' }
+    expect(focusDir(inMiddle, 'left', COLUMN_H).focusedPaneId).toBe('a1')
   })
 
-  it('right moves desiredY onto the pane it landed on', () => {
-    expect(focusDir(grid, 'right').desiredY).toBeCloseTo(1 / 6, 9)
+  it('ignores a stale desiredY: only the pane on screen decides', () => {
+    const lying = { ...grid, focusedPaneId: 'a2', desiredY: 0 }
+    expect(focusDir(lying, 'right', COLUMN_H).focusedPaneId).toBe('b3')
   })
 
-  it('left lands on the top pane too', () => {
-    const inSecond = { ...grid, focusedPaneId: 'b3', desiredY: 5 / 6 }
-    expect(focusDir(inSecond, 'left').focusedPaneId).toBe('a1')
+  it('moves desiredY onto the pane it landed on', () => {
+    expect(focusDir(grid, 'right', COLUMN_H).desiredY).toBeCloseTo(1 / 6, 9)
   })
 
-  it('right then left lands on the top of the starting column', () => {
-    const fromBottom = { ...grid, focusedPaneId: 'a2', desiredY: 0.75 }
-    const round = focusDir(focusDir(fromBottom, 'right'), 'left')
-    expect(round.focusedPaneId).toBe('a1')
-    expect(round.desiredY).toBeCloseTo(0.25, 9)
+  it('right then left returns to the pane it left', () => {
+    for (const paneId of ['a1', 'a2']) {
+      const start = { ...grid, focusedPaneId: paneId }
+      const round = focusDir(focusDir(start, 'right', COLUMN_H), 'left', COLUMN_H)
+      expect(round.focusedPaneId).toBe(paneId)
+    }
   })
 
-  it('a folded top pane still takes the focus', () => {
-    const folded = setMinimized(grid, 'b1', true)
-    expect(focusDir(folded, 'right').focusedPaneId).toBe('b1')
+  it('measures the drawn column, not the ratios, when a bar is in the way', () => {
+    /*
+     * c1: a1 folded to a bar at the top, so a2 fills nearly the whole column
+     * and faces every pane of c2. By ratio alone a2's centre would be 0.75 and
+     * b3 would win; on screen a2's centre sits near the middle, at b2.
+     */
+    const folded = { ...setMinimized(grid, 'a1', true), focusedPaneId: 'b2' }
+    expect(focusDir(folded, 'left', COLUMN_H).focusedPaneId).toBe('a2')
+    const fromA2 = { ...folded, focusedPaneId: 'a2' }
+    expect(focusDir(fromA2, 'right', COLUMN_H).focusedPaneId).toBe('b2')
+  })
+
+  it('a folded pane can still be the one facing you', () => {
+    // c2 is two bars over one tall pane; a1's centre sits beside the lower bar.
+    const bars = setMinimized(setMinimized(grid, 'b1', true), 'b2', true)
+    expect(focusDir(bars, 'right', COLUMN_H).focusedPaneId).toBe('b2')
   })
 
   it('left at the first column does nothing', () => {
-    expect(focusDir(grid, 'left')).toBe(grid)
+    expect(focusDir(grid, 'left', COLUMN_H)).toBe(grid)
   })
 
   it('right at the last column does nothing', () => {
     const atRight = { ...grid, focusedPaneId: 'b1' }
-    expect(focusDir(atRight, 'right')).toBe(atRight)
+    expect(focusDir(atRight, 'right', COLUMN_H)).toBe(atRight)
   })
 
   it('horizontal movement does nothing with one column', () => {
     const single = createLayout([{ id: 'c1', panes: [{ id: 'a', title: 'a' }] }])
-    expect(focusDir(single, 'left')).toBe(single)
-    expect(focusDir(single, 'right')).toBe(single)
+    expect(focusDir(single, 'left', COLUMN_H)).toBe(single)
+    expect(focusDir(single, 'right', COLUMN_H)).toBe(single)
   })
 
   it('invariants hold after every movement', () => {
     let layout = grid
     for (const dir of ['down', 'right', 'up', 'left', 'right', 'down'] as const) {
-      layout = focusDir(layout, dir)
+      layout = focusDir(layout, dir, COLUMN_H)
       expect(layoutViolations(layout)).toEqual([])
     }
   })
