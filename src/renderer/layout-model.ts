@@ -615,6 +615,12 @@ export function focusDir(layout: Layout, dir: Direction): Layout {
   const neighbour = layout.columns[columnIndex + (dir === 'right' ? 1 : -1)]
   if (neighbour === undefined) return layout
 
-  // Leave desiredY alone, or → then ← stops returning to where it started.
-  return { ...layout, focusedPaneId: nearestTo(neighbour.panes, layout.desiredY).id }
+  // Always the top pane, so a press has one visible outcome. The old rule read
+  // desiredY, which nothing on screen showed; ←→ no longer returns to the pane
+  // it left, and that is the trade the rule accepts.
+  return {
+    ...layout,
+    focusedPaneId: neighbour.panes[0]!.id,
+    desiredY: paneCenters(neighbour.panes)[0]!,
+  }
 }

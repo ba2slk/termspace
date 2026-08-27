@@ -434,20 +434,6 @@ describe('closePane', () => {
     expect(next.focusedPaneId).toBe('c')
     expect(next.desiredY).toBeCloseTo(0.75, 9) // 3개 중 세 번째(5/6) → 2개 중 두 번째(3/4)
   })
-
-  it('the horizontal round trip still returns after a close', () => {
-    const layout = createLayout([
-      {
-        id: 'c1',
-        panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }, { id: 'c', title: 'c' }],
-      },
-      { id: 'c2', panes: [{ id: 'x', title: 'x' }, { id: 'y', title: 'y' }] },
-    ])
-    const focused = { ...layout, focusedPaneId: 'c', desiredY: 5 / 6 }
-    const afterClose = closePane(focused, 'a')!
-    const round = focusDir(focusDir(afterClose, 'right'), 'left')
-    expect(round.focusedPaneId).toBe('c')
-  })
 })
 
 describe('resizeColumn', () => {
@@ -687,46 +673,34 @@ describe('focusDir', () => {
     expect(focusDir(grid, 'down').desiredY).toBeCloseTo(0.75, 9)
   })
 
-  it('right picks the pane nearest desiredY', () => {
-    // desiredY 0.25 is nearer c2's 1/6 than its 1/2
+  it('right lands on the top pane of the neighbouring column', () => {
     expect(focusDir(grid, 'right').focusedPaneId).toBe('b1')
   })
 
-  it('right leaves desiredY unchanged', () => {
-    const moved = focusDir(grid, 'right')
-    expect(moved.desiredY).toBe(grid.desiredY)
+  it('lands on the top pane whatever height the move started from', () => {
+    const fromBottom = { ...grid, focusedPaneId: 'a2', desiredY: 0.75 }
+    expect(focusDir(fromBottom, 'right').focusedPaneId).toBe('b1')
   })
 
-  it('down then right lands at the matching height', () => {
-    // ↓ sets desiredY 0.75, nearest c2's 5/6
-    const moved = focusDir(focusDir(grid, 'down'), 'right')
-    expect(moved.focusedPaneId).toBe('b3')
+  it('right moves desiredY onto the pane it landed on', () => {
+    expect(focusDir(grid, 'right').desiredY).toBeCloseTo(1 / 6, 9)
   })
 
-  it('invariant: right then left returns to the start', () => {
-    for (const settled of [grid, { ...grid, focusedPaneId: 'a2', desiredY: 0.75 }]) {
-      const round = focusDir(focusDir(settled, 'right'), 'left')
-      expect(round.focusedPaneId).toBe(settled.focusedPaneId)
-    }
+  it('left lands on the top pane too', () => {
+    const inSecond = { ...grid, focusedPaneId: 'b3', desiredY: 5 / 6 }
+    expect(focusDir(inSecond, 'left').focusedPaneId).toBe('a1')
   })
 
-  it('invariant: two out and two back returns to the start', () => {
-    const three = createLayout([
-      { id: 'c1', panes: [{ id: 'a1', title: 'x' }, { id: 'a2', title: 'x' }] },
-      { id: 'c2', panes: [{ id: 'b1', title: 'x' }] },
-      {
-        id: 'c3',
-        panes: [
-          { id: 'c1p', title: 'x' },
-          { id: 'c2p', title: 'x' },
-          { id: 'c3p', title: 'x' },
-        ],
-      },
-    ])
-    const start = { ...three, focusedPaneId: 'a2', desiredY: 0.75 }
-    const there = focusDir(focusDir(start, 'right'), 'right')
-    const back = focusDir(focusDir(there, 'left'), 'left')
-    expect(back.focusedPaneId).toBe('a2')
+  it('right then left lands on the top of the starting column', () => {
+    const fromBottom = { ...grid, focusedPaneId: 'a2', desiredY: 0.75 }
+    const round = focusDir(focusDir(fromBottom, 'right'), 'left')
+    expect(round.focusedPaneId).toBe('a1')
+    expect(round.desiredY).toBeCloseTo(0.25, 9)
+  })
+
+  it('a folded top pane still takes the focus', () => {
+    const folded = setMinimized(grid, 'b1', true)
+    expect(focusDir(folded, 'right').focusedPaneId).toBe('b1')
   })
 
   it('left at the first column does nothing', () => {
