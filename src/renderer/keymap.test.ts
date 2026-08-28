@@ -123,6 +123,12 @@ describe('resolveAction — other bindings', () => {
     expect(resolveAction(chord('KeyD', { altKey: true }))).toEqual({ t: 'fold' })
   })
 
+  it('Alt+Shift+D folds the other panes in the column', () => {
+    expect(resolveAction(chord('KeyD', { altKey: true, shiftKey: true }))).toEqual({
+      t: 'fold-others',
+    })
+  })
+
   it('folding acts on the focused pane, so it is not an app action', () => {
     expect(isAppAction({ t: 'fold' })).toBe(false)
   })

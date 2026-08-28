@@ -29,6 +29,7 @@ export interface CommandState {
 export interface CommandActions {
   readonly zoomPane: () => void
   readonly foldPane: () => void
+  readonly foldOthers: () => void
   readonly closePane: () => void
   readonly newSession: () => void
   readonly saveLayout: () => void
@@ -64,6 +65,12 @@ export function commandItems(
       hint: state.hint('minimize-pane'),
       disabled: !state.hasSession,
       run: actions.foldPane,
+    },
+    {
+      label: t.firstRun.foldOthers,
+      hint: state.hint('fold-others'),
+      disabled: !state.hasSession,
+      run: actions.foldOthers,
     },
     {
       label: t.firstRun.closePane,

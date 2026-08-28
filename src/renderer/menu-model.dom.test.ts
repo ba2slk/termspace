@@ -18,7 +18,7 @@ function spyActions<T extends string>(names: readonly T[]): Record<T, () => void
 }
 
 const COMMAND_ACTIONS: readonly (keyof CommandActions)[] = [
-  'zoomPane', 'foldPane', 'closePane', 'newSession', 'saveLayout', 'saveLayoutAs', 'editSessionFile',
+  'zoomPane', 'foldPane', 'foldOthers', 'closePane', 'newSession', 'saveLayout', 'saveLayoutAs', 'editSessionFile',
   'toggleSidebar', 'settings', 'openSessionsDir', 'fullscreen', 'devTools', 'quit',
 ]
 
@@ -64,7 +64,7 @@ const groups = (
 describe('the ☰ menu', () => {
   it('is grouped by what each command acts on', () => {
     expect(groups(command({ sidebarVisible: true }).items)).toEqual([
-      [t.firstRun.zoomPane, t.firstRun.foldPane, t.firstRun.closePane],
+      [t.firstRun.zoomPane, t.firstRun.foldPane, t.firstRun.foldOthers, t.firstRun.closePane],
       [t.firstRun.saveLayout, t.firstRun.saveLayoutAs, t.firstRun.editSessionFile],
       [t.firstRun.newSession, t.firstRun.openSessionsDir],
       [t.firstRun.hideSessionList, t.firstRun.fullscreen],
@@ -77,6 +77,7 @@ describe('the ☰ menu', () => {
     expect(disabled(command({ hasSession: false, hasSessionId: false }).items)).toEqual([
       t.firstRun.zoomPane,
       t.firstRun.foldPane,
+      t.firstRun.foldOthers,
       t.firstRun.closePane,
       t.firstRun.saveLayout,
       t.firstRun.saveLayoutAs,

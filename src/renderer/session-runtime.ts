@@ -30,6 +30,7 @@ import {
   resizeColumn,
   resizePane,
   splitPane,
+  toggleFoldOthers as foldOthersInLayout,
   toggleMinimized,
   type ColumnSeed,
   type Direction,
@@ -62,6 +63,7 @@ const EXITS_ZOOM: readonly Action['t'][] = [
   // Folding rearranges the column, so the zoom goes first and the bar appears
   // where the layout really puts it.
   'fold',
+  'fold-others',
 ]
 
 /**
@@ -161,6 +163,8 @@ export interface SessionRuntime {
   toggleZoom(): void
   /** Fold the focused pane to a bar, or open it again. */
   toggleFold(): void
+  /** Fold every other pane in the focused pane's column, or open them all. */
+  toggleFoldOthers(): void
   /**
    * The clipboard actions for callers that are not the keymap: on mac the
    * application menu owns Cmd+C/V, so the keydown never reaches the page.
@@ -598,6 +602,32 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (isFolded(layout.focusedPaneId)) toggleFold()
   }
 
+  function toggleFoldOthers(): void {
+    const paneId = layout.focusedPaneId
+    const found = findPane(layout, paneId)
+    if (found === null) return
+    const wasFolded = new Map(found.column.panes.map((p) => [p.id, p.minimized === true]))
+    const next = foldOthersInLayout(layout, paneId)
+    if (next === layout) return
+    setLayout(next)
+    // Same reason as toggleFold: what is watched changes with no focus move.
+    options.onWatchedPaneChanged()
+    for (const pane of findPane(next, paneId)!.column.panes) {
+      const folded = pane.minimized === true
+      if (folded === wasFolded.get(pane.id)) continue
+      if (folded) {
+        // A pane nobody can see must not hold the keyboard either.
+        records.get(pane.id)?.terminal.setFocused(false)
+        loadFoldDetail(pane.id)
+      } else {
+        records.get(pane.id)?.terminal.setSize()
+      }
+    }
+    const record = records.get(paneId)
+    record?.terminal.setFocused(true)
+    record?.terminal.focus()
+  }
+
   function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
     const focusChanged = next.focusedPaneId !== layout.focusedPaneId
     const previousFocus = layout.focusedPaneId
@@ -1010,6 +1040,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       case 'fold':
         toggleFold()
         break
+      case 'fold-others':
+        toggleFoldOthers()
+        break
     }
   }
 
@@ -1114,6 +1147,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     closeFocusedPane: () => removePane(layout.focusedPaneId),
     toggleZoom,
     toggleFold,
+    toggleFoldOthers,
     copySelection,
     pasteIntoFocused,
     canSplit,
