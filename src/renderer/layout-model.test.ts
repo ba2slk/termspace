@@ -20,6 +20,7 @@ import {
   setMinimized,
   splitDown,
   splitPane,
+  toggleFoldOthers,
   toggleMinimized,
   type ColumnSeed,
 } from './layout-model'
@@ -999,6 +1000,73 @@ describe('toggleMinimized', () => {
     ])
     expect(findPane(seeded, 'a')?.pane.minimized).toBeUndefined()
     expect(findPane(seeded, 'b')?.pane.minimized).toBe(true)
+  })
+})
+
+describe('toggleFoldOthers', () => {
+  const base = createLayout([
+    {
+      id: 'c1',
+      panes: [
+        { id: 'a', title: 'a' },
+        { id: 'b', title: 'b' },
+        { id: 'c', title: 'c' },
+      ],
+    },
+    { id: 'c2', panes: [{ id: 'd', title: 'd' }] },
+  ])
+
+  it('folds every other pane in the column and unfolds the focused one', () => {
+    const next = toggleFoldOthers(setMinimized(base, 'b', true), 'b')
+    expect(next.columns[0]!.panes.map((p) => p.minimized === true)).toEqual([true, false, true])
+  })
+
+  it('leaves the other columns alone', () => {
+    const next = toggleFoldOthers(base, 'b')
+    expect(next.columns[1]).toBe(base.columns[1])
+  })
+
+  it('unfolds the whole column once every other pane is already folded', () => {
+    const solo = toggleFoldOthers(base, 'b')
+    const next = toggleFoldOthers(solo, 'b')
+    expect(next.columns[0]!.panes.every((p) => p.minimized !== true)).toBe(true)
+  })
+
+  it('unfolds the column even when the focused pane is folded too', () => {
+    let layout = base
+    for (const id of ['a', 'b', 'c']) layout = setMinimized(layout, id, true)
+    const next = toggleFoldOthers(layout, 'b')
+    expect(next.columns[0]!.panes.every((p) => p.minimized !== true)).toBe(true)
+  })
+
+  it('leaves every height ratio where it was', () => {
+    const ratios = base.columns[0]!.panes.map((p) => p.heightRatio)
+    const solo = toggleFoldOthers(base, 'b')
+    expect(solo.columns[0]!.panes.map((p) => p.heightRatio)).toEqual(ratios)
+    expect(layoutViolations(solo)).toEqual([])
+    const back = toggleFoldOthers(solo, 'b')
+    expect(back.columns[0]!.panes.map((p) => p.heightRatio)).toEqual(ratios)
+    expect(layoutViolations(back)).toEqual([])
+  })
+
+  it('touches neither the focus nor the remembered height', () => {
+    const next = toggleFoldOthers(base, 'b')
+    expect(next.focusedPaneId).toBe(base.focusedPaneId)
+    expect(next.desiredY).toBe(base.desiredY)
+  })
+
+  it('does not mutate its input', () => {
+    const before = JSON.stringify(base)
+    toggleFoldOthers(base, 'b')
+    expect(JSON.stringify(base)).toBe(before)
+  })
+
+  it('is a no-op in a column of one', () => {
+    expect(toggleFoldOthers(base, 'd')).toBe(base)
+  })
+
+  it('is a no-op for an unknown pane', () => {
+    expect(toggleFoldOthers(base, 'nope')).toBe(base)
   })
 })
 

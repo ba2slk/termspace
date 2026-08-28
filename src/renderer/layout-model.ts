@@ -402,6 +402,28 @@ export function toggleMinimized(layout: Layout, paneId: string): Layout {
 }
 
 /**
+ * Fold everything in the column but this pane, or open the column back up.
+ *
+ * The second press has to undo the first, so "any other pane is still open"
+ * is what picks the direction: once the focused pane stands alone, the same
+ * key gives the whole column back. Ratios stay untouched, as in setMinimized.
+ */
+export function toggleFoldOthers(layout: Layout, paneId: string): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null) return layout
+
+  const { column, columnIndex, paneIndex } = found
+  if (column.panes.length < 2) return layout
+
+  const anyOtherOpen = column.panes.some((p, i) => i !== paneIndex && p.minimized !== true)
+  const panes = column.panes.map((p, i) => {
+    const minimized = anyOtherOpen && i !== paneIndex
+    return (p.minimized === true) === minimized ? p : { ...p, minimized }
+  })
+  return { ...layout, columns: withColumn(layout, columnIndex, { ...column, panes }) }
+}
+
+/**
  * dy is what the pane gains, not which way a seam moves — the same reading as
  * dx in resizeColumn, where a column widens wherever it sits. The seam that
  * gives way is normally the one below; the last pane in a column has none, so
