@@ -531,6 +531,13 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
 
+### Fold the other panes (no self-check covers this)
+
+- [ ] In a column of three panes, focus one and press `Alt+Shift+D`: the other two become
+      bars, the focused pane takes the room they gave up, and focus has not moved. Press
+      it again and the whole column opens back up at the heights it had. In a column of
+      one pane nothing happens
+
 ### Renaming (no self-check covers these)
 
 - [ ] Right-click a session row › Rename session, type a new name and press Enter. The row
