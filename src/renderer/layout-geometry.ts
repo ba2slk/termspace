@@ -6,7 +6,13 @@
  *
  * Canvas coordinates: x = 0 is the canvas's left edge, independent of scrollX.
  */
-import { columnContentHeight, PANE_GAP, type Layout } from './layout-model'
+import {
+  expandedRatioSum,
+  expandedRoom,
+  FOLD_BAR_HEIGHT,
+  PANE_GAP,
+  type Layout,
+} from './layout-model'
 
 /** Canvas edge inset; mirrors the --edge token. */
 export const CANVAS_EDGE = 6
@@ -62,10 +68,18 @@ export function paneRects(layout: Layout, canvasHeight: number): PaneRect[] {
   let x = CANVAS_EDGE
 
   for (const column of layout.columns) {
-    const content = columnContentHeight(columnHeight, column.panes.length)
+    /*
+     * A folded pane is a bar of a fixed height; the rest of the column is shared
+     * out among the expanded panes in proportion to the ratios they still hold.
+     * A column that is all bars stacks them from the top and leaves the floor
+     * below empty — nothing is stretched to fill a space nobody asked for.
+     */
+    const room = expandedRoom(columnHeight, column.panes)
+    const sum = expandedRatioSum(column.panes)
     let y = CANVAS_EDGE
     for (const pane of column.panes) {
-      const height = content * pane.heightRatio
+      const height =
+        pane.minimized === true ? FOLD_BAR_HEIGHT : sum <= 0 ? 0 : room * (pane.heightRatio / sum)
       rects.push({ paneId: pane.id, columnId: column.id, x, y, width: column.width, height })
       y += height + PANE_GAP
     }

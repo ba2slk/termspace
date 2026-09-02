@@ -10,6 +10,7 @@ const paneSpec = (over: Partial<PaneSpec> = {}): PaneSpec => ({
   prefill: null,
   cwd: '/home/me/work',
   heightRatio: 1,
+  minimized: false,
   ...over,
 })
 
@@ -73,6 +74,23 @@ describe('the layout a save writes', () => {
     const panes = snapshot.columns.flatMap((c) => c.panes)
     expect(panes.map((p) => p.fallbackCwd)).toEqual(['/root', '/root', '/root'])
     expect(panes.map((p) => p.command)).toEqual([null, null, null])
+  })
+
+  /* Folding is a layout decision like any other, so a save keeps it — and the
+   * ratio it wrote is the height the pane comes back to. */
+  it('records which panes are folded right now', () => {
+    const folded = createLayout([
+      {
+        id: 'c1',
+        width: 640,
+        panes: [
+          { id: 'p1', title: 'edit' },
+          { id: 'p2', title: 'logs', minimized: true },
+        ],
+      },
+    ])
+    const snapshot = layoutSnapshot(folded, new Map(), '/root')
+    expect(snapshot.columns[0]?.panes.map((p) => p.minimized)).toEqual([false, true])
   })
 
   it('renames nothing: a pane title edited on screen is what gets written', () => {

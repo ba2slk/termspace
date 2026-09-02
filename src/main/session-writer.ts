@@ -17,6 +17,8 @@ export interface DraftPane {
   /** Absolute path — where the shell actually stands, for a live pane. */
   readonly cwd: string
   readonly heightRatio: number
+  /** Written as `minimized: true`; omitted, like the default, when open. */
+  readonly minimized?: boolean
 }
 
 export interface DraftColumn {
@@ -99,6 +101,7 @@ export const SESSION_HEADER = `# Termspace session
 # command   run once the shell is up
 # prefill   typed into the shell, but Enter is left to you
 # height    vertical share within the column. Omit for an even split
+# minimized true starts the pane folded to a bar; it still runs
 `
 
 export function toSessionYaml(draft: SessionDraft, home: string): string {
@@ -124,6 +127,7 @@ export function toSessionYaml(draft: SessionDraft, home: string): string {
           ...(pane.prefill === null || pane.prefill === '' ? {} : { prefill: pane.prefill }),
           // A lone pane in a column is always 1.
           ...(column.panes.length === 1 ? {} : { height: round3(pane.heightRatio) }),
+          ...(pane.minimized === true ? { minimized: true } : {}),
         }
       }),
     })),

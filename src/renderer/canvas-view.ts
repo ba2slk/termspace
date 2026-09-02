@@ -18,7 +18,7 @@ import {
   type Rect,
   type Viewport,
 } from './layout-geometry'
-import { PANE_GAP, type Layout } from './layout-model'
+import { PANE_GAP, type Layout, type Pane } from './layout-model'
 import { isDefaultPaneTitle } from './pane-title'
 import { createPaneView, type PaneView } from './pane-view'
 import { indicatorMetrics, scrollForThumbDelta } from './scroll-indicator'
@@ -40,6 +40,16 @@ export interface CanvasHooks {
    * starts the same way, and moving the canvas mid-drag would tear it.
    */
   readonly onPaneClick?: (paneId: string) => void
+  /**
+   * A folded pane's bar was double-clicked.
+   *
+   * Scoped to the bar element rather than to the pane, which is what keeps a
+   * double-click inside an open pane out of this entirely: there it selects a
+   * word, and the bar of an open pane is not on screen to be hit. Whether the
+   * pane is really folded is still the caller's to check — the view reports the
+   * event, the layout decides.
+   */
+  readonly onFoldDoubleClick?: (paneId: string) => void
   /** Called on every scroll change; the renderer budget hangs off this. */
   readonly onScroll?: () => void
   /**
@@ -85,6 +95,12 @@ export interface CanvasView {
    * writes and which panes the renderer budget sees are untouched.
    */
   setZoom(paneId: string | null): void
+  /**
+   * What a folded pane's bar shows besides its title. Kept here rather than
+   * asked for on every render: it comes over IPC, and the layout redraws far
+   * more often than a shell changes what it is running.
+   */
+  setFoldDetail(paneId: string, detail: { command: string; wants: boolean }): void
   getViewport(): Viewport
   getRects(): readonly PaneRect[]
   paneBody(paneId: string): HTMLElement | null
@@ -129,6 +145,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   host.append(track, gutter, gutterRight, indicator)
 
   const views = new Map<string, PaneView>()
+  const foldDetails = new Map<string, { command: string; wants: boolean }>()
   let rects: PaneRect[] = []
   let currentLayout: Layout | null = null
   let scrollX = 0
@@ -194,6 +211,24 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     }
     press = { paneId, x: event.clientX, y: event.clientY }
     hooks.onPaneMouseDown(paneId)
+  })
+
+  /*
+   * A double-click on the bar opens the pane.
+   *
+   * Separate from the press/click pair above rather than counted out of it: the
+   * slop and same-pane rules there exist to protect a selection drag, and this
+   * needs none of that. The listener asks for the bar, so nothing on an open
+   * pane can reach it and word selection in a terminal is untouched.
+   */
+  host.addEventListener('dblclick', (event) => {
+    const bar = (event.target as HTMLElement).closest('.pane__fold')
+    if (bar === null) return
+    const paneId = paneIdAt(event)
+    if (paneId === undefined) return
+    // The bar is chrome; a double-click there is a command, not a text selection.
+    event.preventDefault()
+    hooks.onFoldDoubleClick?.(paneId)
   })
 
   host.addEventListener('mouseup', (event) => {
@@ -417,6 +452,13 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
       const columnRects = rects.filter((r) => r.columnId === column.id)
       for (let p = 0; p < columnRects.length - 1; p++) {
+        /*
+         * No handle under a folded bar. The seam's drag targets the pane above
+         * it, and a folded pane can neither give height nor take it, so the
+         * handle would offer a resize cursor and then do nothing. Seams between
+         * panes that still have a height are unaffected.
+         */
+        if (column.panes[p]?.minimized === true) continue
         const rect = columnRects[p]!
         const handle = document.createElement('div')
         handle.className = 'resize-handle resize-handle--pane'
@@ -439,9 +481,9 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       rects = paneRects(layout, host.clientHeight)
       syncIndicator()
 
-      const titles = new Map<string, string>()
+      const panes = new Map<string, Pane>()
       for (const column of layout.columns) {
-        for (const pane of column.panes) titles.set(pane.id, pane.title)
+        for (const pane of column.panes) panes.set(pane.id, pane)
       }
 
       const alive = new Set<string>()
@@ -456,14 +498,22 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         }
         view.setRect(rect)
         view.setFocused(rect.paneId === layout.focusedPaneId)
-        const title = titles.get(rect.paneId) ?? ''
+        const pane = panes.get(rect.paneId)
+        const title = pane?.title ?? ''
         view.setTitle(isDefaultPaneTitle(title) ? '' : title)
+        // The bar names the pane even when the peek label would not: it is all
+        // there is to go on, so a default title still beats an empty row.
+        view.setFolded(pane?.minimized === true, {
+          title,
+          ...(foldDetails.get(rect.paneId) ?? { command: '', wants: false }),
+        })
       }
 
       for (const [paneId, view] of views) {
         if (alive.has(paneId)) continue
         view.element.remove()
         views.delete(paneId)
+        foldDetails.delete(paneId)
       }
 
       renderHandles(layout)
@@ -523,6 +573,15 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       } else {
         scrim.remove()
       }
+    },
+
+    setFoldDetail(paneId, detail) {
+      foldDetails.set(paneId, detail)
+      const pane = currentLayout?.columns
+        .flatMap((c) => c.panes)
+        .find((p) => p.id === paneId)
+      if (pane === undefined) return
+      views.get(paneId)?.setFolded(pane.minimized === true, { title: pane.title, ...detail })
     },
 
     getViewport() {

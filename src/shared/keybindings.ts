@@ -30,6 +30,8 @@ export type ActionId =
   | 'add-column-right'
   | 'close-pane'
   | 'zoom-pane'
+  | 'minimize-pane'
+  | 'fold-others'
   | 'reveal-focus'
   | 'overview'
   | 'search'
@@ -76,6 +78,9 @@ export const DEFAULT_BINDINGS: Bindings = {
   'add-column-right': ['Alt+Shift+ArrowRight'],
   'close-pane': ['Alt+Shift+KeyW'],
   'zoom-pane': ['Alt+KeyZ'],
+  // Next to the zoom: the two opposite ends of how much room a pane gets.
+  'minimize-pane': ['Alt+KeyD'],
+  'fold-others': ['Alt+Shift+KeyD'],
   'reveal-focus': ['Alt+KeyG'],
   overview: ['Alt+KeyM'],
   search: ['Ctrl+Shift+KeyF'],
@@ -122,6 +127,8 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   'close-pane': ['Shift+Meta+KeyW'],
   // Cmd+Z is undo everywhere on mac; iTerm maximizes a pane with this instead.
   'zoom-pane': ['Shift+Meta+Enter'],
+  'minimize-pane': ['Meta+KeyD'],
+  'fold-others': ['Shift+Meta+KeyD'],
   'reveal-focus': ['Meta+KeyG'],
   // Cmd+M minimizes; the overview moves behind Shift.
   overview: ['Shift+Meta+KeyM'],
@@ -157,6 +164,8 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'focus-up',
       'focus-down',
       'zoom-pane',
+      'minimize-pane',
+      'fold-others',
       'reveal-focus',
       'overview',
     ],

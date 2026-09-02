@@ -241,6 +241,34 @@ describe('toSessionYaml', () => {
     expect((out['columns'] as { width: number }[])[0]!.width).toBe(640)
   })
 
+  it('marks a folded pane, and says nothing about an open one', () => {
+    const out = parsed(
+      draft({
+        columns: [
+          {
+            width: 640,
+            panes: [
+              { title: 'edit', command: null, prefill: null, cwd: HOME, heightRatio: 0.7 },
+              {
+                title: 'logs',
+                command: null,
+                prefill: null,
+                cwd: HOME,
+                heightRatio: 0.3,
+                minimized: true,
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    const panes = (out['columns'] as { panes: Record<string, unknown>[] }[])[0]!.panes
+    expect(panes[0]).not.toHaveProperty('minimized')
+    expect(panes[1]!['minimized']).toBe(true)
+    // The share it holds is written too, so unfolding lands where it left off.
+    expect(panes[1]!['height']).toBe(0.3)
+  })
+
   it('starts with a header saying what the file is', () => {
     expect(toSessionYaml(draft(), HOME).startsWith('# Termspace session')).toBe(true)
   })

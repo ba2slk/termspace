@@ -119,6 +119,20 @@ describe('resolveAction — other bindings', () => {
     expect(isAppAction({ t: 'zoom' })).toBe(false)
   })
 
+  it('Alt+D folds the focused pane', () => {
+    expect(resolveAction(chord('KeyD', { altKey: true }))).toEqual({ t: 'fold' })
+  })
+
+  it('Alt+Shift+D folds the other panes in the column', () => {
+    expect(resolveAction(chord('KeyD', { altKey: true, shiftKey: true }))).toEqual({
+      t: 'fold-others',
+    })
+  })
+
+  it('folding acts on the focused pane, so it is not an app action', () => {
+    expect(isAppAction({ t: 'fold' })).toBe(false)
+  })
+
   it('reveal-focus needs a session, so it is not an app action', () => {
     expect(isAppAction({ t: 'reveal-focus' })).toBe(false)
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createLayout, PANE_GAP } from './layout-model'
+import { columnContentHeight, createLayout, FOLD_BAR_HEIGHT, PANE_GAP } from './layout-model'
 import {
   CANVAS_EDGE,
   canvasWidth,
@@ -7,6 +7,7 @@ import {
   maxColumnWidth,
   maxScrollX,
   paneRects,
+  type Rect,
   scrollToReveal,
   snapToDevicePixels,
   visiblePaneIds,
@@ -63,6 +64,61 @@ describe('paneRects', () => {
 
   it('a lone pane fills the column height', () => {
     expect(rects[2]!.height).toBeCloseTo(columnHeightIn(H), 6)
+  })
+})
+
+describe('paneRects — folded panes', () => {
+  const folded = createLayout([
+    {
+      id: 'c1',
+      width: 700,
+      panes: [
+        { id: 'p1', title: 'a', heightRatio: 0.5 },
+        { id: 'p2', title: 'b', heightRatio: 0.2, minimized: true },
+        { id: 'p3', title: 'c', heightRatio: 0.3 },
+      ],
+    },
+  ])
+  const rects = paneRects(folded, H)
+  const rect = (id: string): Rect => rects.find((r) => r.paneId === id)!
+
+  it('gives a folded pane the fixed bar height', () => {
+    expect(rect('p2').height).toBe(FOLD_BAR_HEIGHT)
+  })
+
+  it('shares what the bar leaves among the expanded panes, by their ratios', () => {
+    const room = columnContentHeight(columnHeightIn(H), 3) - FOLD_BAR_HEIGHT
+    expect(rect('p1').height).toBeCloseTo(room * (0.5 / 0.8), 6)
+    expect(rect('p3').height).toBeCloseTo(room * (0.3 / 0.8), 6)
+  })
+
+  it('still fills the column, gaps included', () => {
+    const total = rects.reduce((a, r) => a + r.height, 0) + PANE_GAP * 2
+    expect(total).toBeCloseTo(columnHeightIn(H), 6)
+  })
+
+  it('stacks a fully folded column from the top and leaves the rest empty', () => {
+    const all = createLayout([
+      {
+        id: 'c1',
+        width: 700,
+        panes: [
+          { id: 'p1', title: 'a', minimized: true },
+          { id: 'p2', title: 'b', minimized: true },
+        ],
+      },
+    ])
+    const bars = paneRects(all, H)
+    expect(bars.map((r) => r.height)).toEqual([FOLD_BAR_HEIGHT, FOLD_BAR_HEIGHT])
+    expect(bars[0]!.y).toBe(CANVAS_EDGE)
+    expect(bars[1]!.y).toBe(CANVAS_EDGE + FOLD_BAR_HEIGHT + PANE_GAP)
+    // The floor of the column is a long way below the last bar: empty canvas.
+    expect(bars[1]!.y + bars[1]!.height).toBeLessThan(columnHeightIn(H))
+  })
+
+  it('gives the expanded panes nothing rather than a negative height', () => {
+    const tight = paneRects(folded, FOLD_BAR_HEIGHT + CANVAS_EDGE)
+    expect(tight.every((r) => r.height >= 0)).toBe(true)
   })
 })
 

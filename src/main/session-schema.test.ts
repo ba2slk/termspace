@@ -151,6 +151,21 @@ describe('parseSession — error isolation', () => {
     expect(spec.columns[0]!.panes[1]!.heightRatio).toBeCloseTo(0.5, 9)
   })
 
+  it('a pane can start folded, and open is the default', () => {
+    const spec = ok({ name: 'x', columns: [{ panes: [{ title: 'a' }, { title: 'b', minimized: true }] }] })
+    const [open, folded] = [spec.columns[0]!.panes[0]!, spec.columns[0]!.panes[1]!]
+    expect(open.kind === 'pane' && open.minimized).toBe(false)
+    expect(folded.kind === 'pane' && folded.minimized).toBe(true)
+  })
+
+  it('a folded pane keeps its share of the column', () => {
+    const spec = ok({
+      name: 'x',
+      columns: [{ panes: [{ title: 'a' }, { title: 'b', height: 0.3, minimized: true }] }],
+    })
+    expect(spec.columns[0]!.panes[1]!.heightRatio).toBeCloseTo(0.3, 9)
+  })
+
   it('errors carry their YAML path', () => {
     const spec = ok({ name: 'x', columns: [{ panes: [{}, { height: 5 }] }] })
     const entry = spec.columns[0]!.panes[1]!

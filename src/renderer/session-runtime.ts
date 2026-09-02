@@ -30,6 +30,8 @@ import {
   resizeColumn,
   resizePane,
   splitPane,
+  toggleFoldOthers as foldOthersInLayout,
+  toggleMinimized,
   type ColumnSeed,
   type Direction,
   type Layout,
@@ -58,7 +60,32 @@ const EXITS_ZOOM: readonly Action['t'][] = [
   'add-column',
   'close-pane',
   'overview',
+  // Folding rearranges the column, so the zoom goes first and the bar appears
+  // where the layout really puts it.
+  'fold',
+  'fold-others',
 ]
+
+/**
+ * Is this key on its way to something that takes typing of its own?
+ *
+ * The fold swallow runs at window capture, before the target has seen anything,
+ * so it has to recognise the surfaces that are not the canvas. The sidebar's
+ * rename box never silences the session, and swallowing its keys would leave it
+ * impossible to type in — with plain Enter unfolding a pane rather than
+ * committing the name. Inside a pane the target is xterm's own textarea, which
+ * is precisely what the swallow exists for.
+ */
+function typesIntoChrome(event: KeyboardEvent): boolean {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('.pane') !== null) return false
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  )
+}
 
 /** A SIGWINCH storm during a drag makes full-screen apps redraw constantly. */
 const PTY_RESIZE_DEBOUNCE_MS = 100
@@ -67,6 +94,13 @@ const RESIZE_STEP_PX = 40
 const SIZE_SETTLE_MS = 90
 /** How long the view must hold still before WebGL contexts are taken. */
 const ATTACH_SETTLE_MS = 120
+/**
+ * How long a folded pane's output must go quiet before its bar asks again what
+ * is running. Output is the only sign a command started or finished, and a
+ * command that has exited must not go on being advertised as live. Coalesced
+ * across every folded pane, so a chatty one costs one question, not a stream.
+ */
+const FOLD_REFRESH_MS = 500
 
 /**
  * Ids must be unique across sessions: pty-host keys on paneId globally and
@@ -127,6 +161,10 @@ export interface SessionRuntime {
   closeFocusedPane(): void
   /** Lay the focused pane over the canvas, or put it back. */
   toggleZoom(): void
+  /** Fold the focused pane to a bar, or open it again. */
+  toggleFold(): void
+  /** Fold every other pane in the focused pane's column, or open them all. */
+  toggleFoldOthers(): void
   /**
    * The clipboard actions for callers that are not the keymap: on mac the
    * application menu owns Cmd+C/V, so the keydown never reaches the page.
@@ -222,6 +260,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         id,
         title: entry.kind === 'pane' ? entry.title : t.runtime.configError,
         heightRatio: entry.heightRatio,
+        // An error card is a fault to read, so it is never folded away.
+        minimized: entry.kind === 'pane' && entry.minimized,
       }
     }),
   }))
@@ -250,6 +290,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // focused already would otherwise sit half off screen with nothing to do.
       if (paneId === layout.focusedPaneId) revealFocused()
     },
+    onFoldDoubleClick: (paneId) => {
+      // The mousedown that opened the double-click already focused it; say so
+      // anyway, since the unfold below is the focused pane's. From there it is
+      // the same unfold Enter and Alt+D use, caret and all.
+      if (paneId !== layout.focusedPaneId) setLayout({ ...layout, focusedPaneId: paneId })
+      unfoldFocused()
+    },
     onScroll: () => {
       updateBudget()
       // The canvas can be wheeled under the open map; the marker must follow.
@@ -270,6 +317,41 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    * which is the whole answer to "did I see it?" — nothing else dismisses it.
    */
   const attention = new Set<string>()
+
+  /** What each folded pane's bar last said it was running. */
+  const foldCommands = new Map<string, string>()
+
+  const isFolded = (paneId: string): boolean =>
+    findPane(layout, paneId)?.pane.minimized === true
+
+  function refreshFoldDetail(paneId: string): void {
+    canvas.setFoldDetail(paneId, {
+      command: foldCommands.get(paneId) ?? '',
+      wants: attention.has(paneId),
+    })
+  }
+
+  /** Ask what the pane is running, the way the overview asks for its cards. */
+  function loadFoldDetail(paneId: string): void {
+    void api.foregroundCommands([paneId]).then((commands) => {
+      foldCommands.set(paneId, commands[paneId] ?? '')
+      refreshFoldDetail(paneId)
+    })
+  }
+
+  /**
+   * Output arrived somewhere; any bar on screen may now be naming a command
+   * that has already exited. One timer for all of them, and only while a bar is
+   * actually up.
+   */
+  let foldRefreshTimer: number | null = null
+  function scheduleFoldRefresh(): void {
+    if (foldRefreshTimer !== null) return
+    foldRefreshTimer = window.setTimeout(() => {
+      foldRefreshTimer = null
+      for (const pane of allPanes(layout)) if (pane.minimized === true) loadFoldDetail(pane.id)
+    }, FOLD_REFRESH_MS)
+  }
 
   const overview = createOverviewView(host, {
     layout: () => layout,
@@ -350,10 +432,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     return decideBudget({
       allPaneIds: allPanes(layout).map((p) => p.id).filter(hasTerminal),
-      visible,
+      // A folded pane draws none of its terminal, so it needs no renderer and
+      // nothing of it has to stay awake — not even while it holds the keyboard.
+      visible: visible.filter((id) => !isFolded(id)),
       frozen,
       attached,
-      focusedPaneId: layout.focusedPaneId,
+      focusedPaneId: isFolded(layout.focusedPaneId) ? null : layout.focusedPaneId,
       lastSeen,
       active,
     })
@@ -436,7 +520,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    */
   function revealFocused(): void {
     canvas.scrollToPane(layout.focusedPaneId, layout)
-    records.get(layout.focusedPaneId)?.terminal.focus()
+    if (!isFolded(layout.focusedPaneId)) records.get(layout.focusedPaneId)?.terminal.focus()
   }
 
   /** Have every terminal remeasure after a DOM size change. */
@@ -478,9 +562,70 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       exitZoom()
       return
     }
+    // A bar has nothing to blow up: open the pane first, then lay it over.
+    unfoldFocused()
     zoomedPaneId = layout.focusedPaneId
     canvas.setZoom(zoomedPaneId)
     records.get(zoomedPaneId)?.terminal.setSize()
+  }
+
+  function toggleFold(): void {
+    const paneId = layout.focusedPaneId
+    const folding = !isFolded(paneId)
+    setLayout(toggleMinimized(layout, paneId))
+    /*
+     * Folding changes what is being watched without moving the focus, so the
+     * one place that normally reports it — a focus change — never fires. main
+     * decides desktop notifications from this, and a stale answer would keep
+     * suppressing them for the pane that has just gone out of sight.
+     */
+    options.onWatchedPaneChanged()
+    if (folding) {
+      /*
+       * Nothing of the pane is on screen any more, so it must not hold the
+       * keyboard either: a keystroke landing in a shell nobody can see is input
+       * with no way of knowing what it did. The pty keeps running regardless.
+       */
+      records.get(paneId)?.terminal.setFocused(false)
+      loadFoldDetail(paneId)
+      return
+    }
+    const record = records.get(paneId)
+    record?.terminal.setFocused(true)
+    record?.terminal.focus()
+    // Back at its layout height, so the grid has to follow the box.
+    record?.terminal.setSize()
+  }
+
+  /** Open the focused pane if it is folded, for an action that needs its body. */
+  function unfoldFocused(): void {
+    if (isFolded(layout.focusedPaneId)) toggleFold()
+  }
+
+  function toggleFoldOthers(): void {
+    const paneId = layout.focusedPaneId
+    const found = findPane(layout, paneId)
+    if (found === null) return
+    const wasFolded = new Map(found.column.panes.map((p) => [p.id, p.minimized === true]))
+    const next = foldOthersInLayout(layout, paneId)
+    if (next === layout) return
+    setLayout(next)
+    // Same reason as toggleFold: what is watched changes with no focus move.
+    options.onWatchedPaneChanged()
+    for (const pane of findPane(next, paneId)!.column.panes) {
+      const folded = pane.minimized === true
+      if (folded === wasFolded.get(pane.id)) continue
+      if (folded) {
+        // A pane nobody can see must not hold the keyboard either.
+        records.get(pane.id)?.terminal.setFocused(false)
+        loadFoldDetail(pane.id)
+      } else {
+        records.get(pane.id)?.terminal.setSize()
+      }
+    }
+    const record = records.get(paneId)
+    record?.terminal.setFocused(true)
+    record?.terminal.focus()
   }
 
   function setLayout(next: Layout, sizes: 'now' | 'settle' = 'now'): void {
@@ -495,13 +640,19 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (focusChanged) {
       options.onWatchedPaneChanged()
       // Looking at it is what dismisses it.
-      if (attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      if (attention.delete(layout.focusedPaneId)) {
+        options.onAttentionChanged()
+        refreshFoldDetail(layout.focusedPaneId)
+      }
       // The bar belongs to the focused pane; a bar left on an unfocused one lies.
       searchBar.close()
       records.get(previousFocus)?.terminal.setFocused(false)
       const record = records.get(layout.focusedPaneId)
-      record?.terminal.setFocused(true)
-      record?.terminal.focus()
+      // Focus lands on a folded bar like any other pane, but the terminal under
+      // it takes neither the caret nor the keys.
+      const folded = isFolded(layout.focusedPaneId)
+      record?.terminal.setFocused(!folded)
+      if (!folded) record?.terminal.focus()
       canvas.scrollToPane(layout.focusedPaneId, layout)
       publishTitle()
     }
@@ -597,6 +748,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     attached = attached.filter((id) => id !== paneId)
     frozen = frozen.filter((id) => id !== paneId)
     lastSeen.delete(paneId)
+    foldCommands.delete(paneId)
     api.kill(paneId)
   }
 
@@ -678,6 +830,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       prefill: null,
       cwd: spec.cwd,
       heightRatio: 0,
+      minimized: false,
     })
     mountPane(id, cwd)
     syncSizes()
@@ -692,6 +845,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function splitFocused(side: 'up' | 'down'): void {
     exitZoom()
+    /*
+     * A folded pane stays folded through a split. Folding it was a deliberate
+     * choice and asking for another pane is not a request to undo it: the bar
+     * keeps half of the height it is holding, and the new pane opens beside it
+     * with the other half. Zoom is the opposite case and still opens first —
+     * there is nothing to blow up about a bar.
+     */
     const id = newId('p')
     const cwd = focusedCwd() // read before focus moves away
     const next = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, side)
@@ -702,6 +862,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function openCommandPane(command: string): void {
     exitZoom()
+    // A folded pane stays folded here too. It is not what the command acts on,
+    // and opening it would undo a choice nobody asked to revisit; see
+    // splitFocused, whose split this shares.
     const id = newId('p')
     const cwd = focusedCwd()
     const split = splitPane(layout, layout.focusedPaneId, columnHeight(), { id, title: 'shell' }, 'down')
@@ -762,8 +925,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   function pasteIntoFocused(): void {
     // Pasting into a pane hidden behind the overview would dirty its shell line
-    // out of sight; see copySelection.
-    if (overview.isOpen) return
+    // out of sight; see copySelection. A folded pane is hidden the same way,
+    // and the guard lives here rather than on the keyboard path because on mac
+    // the Edit menu delivers Cmd+V without a keydown ever reaching the page.
+    if (overview.isOpen || isFolded(layout.focusedPaneId)) return
     void api.readClipboard().then((text) => {
       if (text === '') return
       // Through xterm for bracketed paste, so multi-line input isn't executed.
@@ -787,6 +952,23 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         // Closed without a jump (Esc, Alt+M): hand the keyboard back to the pane.
         if (!overview.isOpen) records.get(layout.focusedPaneId)?.terminal.focus()
       }
+      return
+    }
+    /*
+     * A folded pane is a bar, and a bar takes no typing: the keys would reach a
+     * shell with nothing on screen to show what they did. Enter is the way back
+     * out, which is the one thing the bar has to answer to.
+     */
+    if (action === null && isFolded(layout.focusedPaneId) && !typesIntoChrome(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      const plainEnter =
+        event.key === 'Enter' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !event.metaKey
+      if (plainEnter) toggleFold()
       return
     }
     if (action === null) return // not the app's — pass it through to the terminal
@@ -836,6 +1018,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         pasteIntoFocused()
         break
       case 'search': {
+        // The bar has no scrollback on screen, and a search box inside a body
+        // that is not drawn takes the keys and shows nothing.
+        unfoldFocused()
         const body = canvas.paneBody(layout.focusedPaneId)
         const record = records.get(layout.focusedPaneId)
         // An error card has no scrollback to search.
@@ -852,12 +1037,22 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       case 'zoom':
         toggleZoom()
         break
+      case 'fold':
+        toggleFold()
+        break
+      case 'fold-others':
+        toggleFoldOthers()
+        break
     }
   }
 
   // ── External events ──────────────────────────────────
 
-  const offData = api.onData((paneId, data) => records.get(paneId)?.terminal.write(data))
+  const offData = api.onData((paneId, data) => {
+    records.get(paneId)?.terminal.write(data)
+    // A prompt coming back is how a finished command announces itself.
+    if (isFolded(paneId)) scheduleFoldRefresh()
+  })
 
   const offExit = api.onExit(({ paneId, exitCode, signal }) => {
     if (!records.has(paneId)) return
@@ -901,8 +1096,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
   canvas.render(layout)
   for (const pane of allPanes(layout)) mountPane(pane.id)
   setLayout(layout)
-  records.get(layout.focusedPaneId)?.terminal.setFocused(true)
-  records.get(layout.focusedPaneId)?.terminal.focus()
+  if (!isFolded(layout.focusedPaneId)) {
+    records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+    records.get(layout.focusedPaneId)?.terminal.focus()
+  }
+  for (const pane of allPanes(layout)) if (pane.minimized === true) loadFoldDetail(pane.id)
 
   return {
     get spec() {
@@ -948,6 +1146,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     openCommandPane,
     closeFocusedPane: () => removePane(layout.focusedPaneId),
     toggleZoom,
+    toggleFold,
+    toggleFoldOthers,
     copySelection,
     pasteIntoFocused,
     canSplit,
@@ -965,14 +1165,22 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       return true
     },
 
-    watchedPaneId: () => (active ? layout.focusedPaneId : null),
+    /*
+     * A folded pane is not being watched, however focused it is: nothing of it
+     * is on screen. Reporting it as watched would have main swallow the desktop
+     * notification for the one pane that most needs to send one.
+     */
+    watchedPaneId: () =>
+      active && !isFolded(layout.focusedPaneId) ? layout.focusedPaneId : null,
 
     noteAttention(paneId) {
       if (!records.has(paneId)) return false
-      // The focused pane is already being looked at, so it has nothing to ask for.
-      if (paneId === layout.focusedPaneId && active) return true
+      // The focused pane is already being looked at, so it has nothing to ask
+      // for — unless it is folded, where holding focus shows you nothing.
+      if (paneId === layout.focusedPaneId && active && !isFolded(paneId)) return true
       if (attention.has(paneId)) return true
       attention.add(paneId)
+      refreshFoldDetail(paneId)
       overview.refreshIfOpen()
       options.onAttentionChanged()
       return true
@@ -1001,8 +1209,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // hidden, so only pull the scroll back into range.
       canvas.clampScroll(layout)
       updateBudget()
-      records.get(layout.focusedPaneId)?.terminal.setFocused(true)
-      records.get(layout.focusedPaneId)?.terminal.focus()
+      if (!isFolded(layout.focusedPaneId)) {
+        records.get(layout.focusedPaneId)?.terminal.setFocused(true)
+        records.get(layout.focusedPaneId)?.terminal.focus()
+      }
     },
     destroy() {
       contextHolders.delete(holder)
@@ -1011,6 +1221,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       window.removeEventListener('keydown', onKeyDown, true)
       if (settleTimer !== null) window.clearTimeout(settleTimer)
       if (attachTimer !== null) window.clearTimeout(attachTimer)
+      if (foldRefreshTimer !== null) window.clearTimeout(foldRefreshTimer)
       resizeObserver.disconnect()
       detachDrag()
       offData()

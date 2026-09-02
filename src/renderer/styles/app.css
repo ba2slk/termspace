@@ -875,8 +875,9 @@ body {
   pointer-events: none;
 }
 
-/* A frozen pane is off screen; there is nothing there to label. */
-.canvas--peek .pane:not(.pane--frozen) .pane__label:not([hidden]) {
+/* A frozen pane is off screen; there is nothing there to label. A folded one
+   already carries its name on the bar. */
+.canvas--peek .pane:not(.pane--frozen):not(.pane--folded) .pane__label:not([hidden]) {
   display: block;
 }
 
@@ -936,6 +937,73 @@ body {
  */
 .canvas-track--zoomed .pane:not(.pane--zoomed) {
   z-index: 0;
+}
+
+/*
+ * Folded: the pane shrinks to a bar and keeps everything else — border, radius,
+ * background, the focus ring, the idle scrim. The terminal is hidden rather
+ * than stopped, so the program inside carries on with nobody watching.
+ *
+ * The bar's height is the layout's (FOLD_BAR_HEIGHT); --fold-h is here for the
+ * sizes inside it, so the two cannot drift apart.
+ */
+.pane--folded .pane__body {
+  display: none;
+}
+
+.pane__fold {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 calc(var(--fold-h) / 3);
+  overflow: hidden;
+  font-size: var(--fs-ui-sm);
+  /* The bar is chrome, not terminal output, so it takes the chrome colours —
+     and none of the body's user-select: text. Double-clicking it opens the
+     pane, which should not flash a selected word on the way. */
+  user-select: none;
+  white-space: nowrap;
+}
+
+.pane__fold[hidden] {
+  display: none;
+}
+
+/* Alive, and the same dot the overview uses to say a pane is asking for you. */
+.pane__fold-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--live);
+}
+
+.pane__fold--wants .pane__fold-dot {
+  background: var(--wants);
+}
+
+.pane__fold-title {
+  flex: none;
+  color: var(--fg);
+}
+
+/* Whatever room is left, and no more: the title is the part you steer by. */
+.pane__fold-command {
+  overflow: hidden;
+  color: var(--fg-faint);
+  text-overflow: ellipsis;
+}
+
+/* The same recede every unfocused pane gets; the body that normally carries it
+   is not drawn while folded. */
+.pane:not(.pane--focused).pane--folded .pane__fold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-idle);
+  pointer-events: none;
 }
 
 /* Outside the active region: the browser skips layout and paint for this subtree. */
@@ -1081,6 +1149,60 @@ body {
   border: 1px solid var(--border-focus);
   border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+/*
+ * How much of a card a row can afford, in three steps.
+ *
+ * The padding and border come to about 14px and border-box will not compress
+ * below them, so a row the map made 5px tall rendered at 14px — over the row
+ * beneath it, and past the bottom of the map onto the session behind. The row
+ * keeps its true height, which is the only honest thing for a map to draw, and
+ * gives up whatever it has no room for instead.
+ *
+ * A folded pane's bar is a fixed 30px and the map never scales past a half, so
+ * its row is at most 15px: it can never afford the stack, and asking only that
+ * question left every folded pane on the map anonymous. One line it can afford,
+ * and one line is exactly what the bar shows on the canvas.
+ * See MIN_OVERVIEW_LABEL_PX and MIN_OVERVIEW_ROW_PX.
+ */
+
+/* Name only: the row as the canvas draws it, laid along a single line. */
+.overview__card--name-only {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding: 0 3px;
+}
+
+.overview__card--name-only .overview__title {
+  overflow: hidden;
+  font-size: var(--fs-map-row);
+  /* The line box must not outgrow the row it is centred in. */
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+/* Only the name fits, so the command and the reported title stand down. */
+.overview__card--name-only .overview__command,
+.overview__card--name-only .overview__reported {
+  display: none;
+}
+
+/* Not even one line: the bare row, and nothing inside it. */
+.overview__card--squat {
+  padding: 0;
+  /* Nothing inside would fit; keeping it would only reintroduce the floor. */
+  gap: 0;
+}
+
+.overview__card--squat > * {
+  display: none;
+}
+
+/* At that size the whole row has to carry what a dot normally would. */
+.overview__card--squat.overview__card--wants {
+  background: var(--wants);
 }
 
 /* Same two-part grammar as the canvas: brighter border plus a hard ring — with

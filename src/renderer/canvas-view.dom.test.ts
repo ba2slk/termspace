@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCanvasView } from './canvas-view'
-import { createLayout } from './layout-model'
+import { createLayout, FOLD_BAR_HEIGHT } from './layout-model'
 
 const layout = createLayout([
   { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'editor' }, { id: 'a2', title: 'shell' }] },
@@ -360,5 +360,120 @@ describe('createCanvasView', () => {
     const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
     expect(pane.querySelector('.pane__label')!.parentElement).toBe(pane)
     expect(pane.style.width).toBe('700px')
+  })
+
+  describe('a folded pane', () => {
+    const folded = createLayout([
+      {
+        id: 'c1',
+        width: 700,
+        panes: [
+          { id: 'a1', title: 'editor' },
+          { id: 'a2', title: 'shell', minimized: true },
+        ],
+      },
+    ])
+
+    it('shrinks to the bar height the layout gives it', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      expect(pane.classList.contains('pane--folded')).toBe(true)
+      expect(pane.style.height).toBe(`${String(FOLD_BAR_HEIGHT)}px`)
+    })
+
+    it('shows the bar and keeps the terminal element in place under it', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      const bar = pane.querySelector<HTMLElement>('.pane__fold')!
+      expect(bar.hidden).toBe(false)
+      expect(bar.querySelector('.pane__fold-title')!.textContent).toBe('shell')
+      // The body is hidden by CSS, not removed: the xterm inside must survive.
+      expect(pane.querySelector('.pane__body')).not.toBeNull()
+    })
+
+    it('names what the pane is running, and marks one that rang', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      view.setFoldDetail('a2', { command: 'npm run dev', wants: true })
+      const bar = host.querySelector<HTMLElement>('[data-pane-id="a2"] .pane__fold')!
+      expect(bar.querySelector('.pane__fold-command')!.textContent).toBe('npm run dev')
+      expect(bar.classList.contains('pane__fold--wants')).toBe(true)
+    })
+
+    /*
+     * The seam below a bar drags the folded pane, which refuses to resize. A
+     * handle that answers nothing is worse than no handle: it offers a resize
+     * cursor over a seam that cannot move.
+     */
+    it('leaves no drag handle on the seam under a folded bar', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(
+        createLayout([
+          {
+            id: 'c1',
+            width: 700,
+            panes: [
+              { id: 'a1', title: 'a', minimized: true },
+              { id: 'a2', title: 'b' },
+              { id: 'a3', title: 'c' },
+            ],
+          },
+        ]),
+      )
+      const targets = [...host.querySelectorAll<HTMLElement>('.resize-handle--pane')].map(
+        (h) => h.dataset['targetId'],
+      )
+      // Two seams, but only the one between the panes that still have a height.
+      expect(targets).toEqual(['a2'])
+    })
+
+    it('reports a double-click on the bar, which is what opens the pane', () => {
+      const onFoldDoubleClick = vi.fn()
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn(), onFoldDoubleClick })
+      view.render(folded)
+      host
+        .querySelector('[data-pane-id="a2"] .pane__fold-title')!
+        .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      expect(onFoldDoubleClick).toHaveBeenCalledWith('a2')
+    })
+
+    /* A terminal uses the double-click to select a word; nothing may take it. */
+    it('says nothing about a double-click inside an open pane', () => {
+      const onFoldDoubleClick = vi.fn()
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn(), onFoldDoubleClick })
+      view.render(folded)
+      host
+        .querySelector('[data-pane-id="a1"] .pane__body')!
+        .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      expect(onFoldDoubleClick).not.toHaveBeenCalled()
+    })
+
+    it('leaves a single click on the bar to the press and click hooks', () => {
+      const onFoldDoubleClick = vi.fn()
+      const onPaneClick = vi.fn()
+      const view = createCanvasView(host, {
+        onPaneMouseDown: vi.fn(),
+        onPaneClick,
+        onFoldDoubleClick,
+      })
+      view.render(folded)
+      const bar = host.querySelector('[data-pane-id="a2"] .pane__fold')!
+      bar.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 40, clientY: 20 }))
+      bar.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 41, clientY: 20 }))
+      expect(onPaneClick).toHaveBeenCalledWith('a2')
+      expect(onFoldDoubleClick).not.toHaveBeenCalled()
+    })
+
+    it('hides the bar again on unfolding, and gives the height back', () => {
+      const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+      view.render(folded)
+      view.render(layout)
+      const pane = host.querySelector<HTMLElement>('[data-pane-id="a2"]')!
+      expect(pane.classList.contains('pane--folded')).toBe(false)
+      expect(pane.querySelector<HTMLElement>('.pane__fold')!.hidden).toBe(true)
+      expect(Number.parseInt(pane.style.height)).toBeGreaterThan(FOLD_BAR_HEIGHT)
+    })
   })
 })

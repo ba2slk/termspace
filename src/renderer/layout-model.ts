@@ -13,6 +13,11 @@ export interface Pane {
   readonly title: string
   /** Share of the column's height; the column always totals 1. */
   readonly heightRatio: number
+  /**
+   * Folded to a bar. The ratio is kept while folded, so unfolding lands on the
+   * height the pane had rather than on a share recomputed from its neighbours.
+   */
+  readonly minimized?: boolean
 }
 
 export interface Column {
@@ -33,6 +38,7 @@ export interface PaneSeed {
   readonly id: string
   readonly title: string
   readonly heightRatio?: number
+  readonly minimized?: boolean
 }
 
 export interface ColumnSeed {
@@ -47,11 +53,32 @@ export const DEFAULT_COLUMN_WIDTH = 640
 export const MIN_PANE_HEIGHT = 62
 /** Gap between panes. Mirrors the --gap token; owned here as part of the maths. */
 export const PANE_GAP = 6
+/**
+ * A folded pane's bar: one line of chrome, whatever share it holds. Mirrors the
+ * --fold-h token; owned here because both the rects and the resize maths need it.
+ */
+export const FOLD_BAR_HEIGHT = 30
 const RATIO_EPSILON = 1e-9
 
 /** Column height minus the gaps — what the panes actually share. */
 export function columnContentHeight(columnHeight: number, paneCount: number): number {
   return columnHeight - PANE_GAP * Math.max(0, paneCount - 1)
+}
+
+/**
+ * Height the expanded panes share: the column, less a fixed bar per folded one.
+ *
+ * Folding gives space back rather than taking it, so this only ever grows — but
+ * a window short enough cannot fit the bars either, hence the floor.
+ */
+export function expandedRoom(columnHeight: number, panes: readonly Pane[]): number {
+  const folded = panes.filter((p) => p.minimized === true).length
+  return Math.max(0, columnContentHeight(columnHeight, panes.length) - folded * FOLD_BAR_HEIGHT)
+}
+
+/** What the expanded panes' ratios add up to; 0 when the column is all bars. */
+export function expandedRatioSum(panes: readonly Pane[]): number {
+  return panes.reduce((a, p) => (p.minimized === true ? a : a + p.heightRatio), 0)
 }
 
 function normalize(ratios: readonly number[]): number[] {
@@ -72,7 +99,12 @@ export function createLayout(seeds: readonly ColumnSeed[]): Layout {
     return {
       id: seed.id,
       width: Math.max(MIN_COLUMN_WIDTH, seed.width ?? DEFAULT_COLUMN_WIDTH),
-      panes: seed.panes.map((p, i) => ({ id: p.id, title: p.title, heightRatio: ratios[i]! })),
+      panes: seed.panes.map((p, i) => ({
+        id: p.id,
+        title: p.title,
+        heightRatio: ratios[i]!,
+        ...(p.minimized === true ? { minimized: true } : {}),
+      })),
     }
   })
 
@@ -132,11 +164,29 @@ export function layoutViolations(layout: Layout): string[] {
 
 // ── Operations ────────────────────────────────────────────────────
 
-/** Can these ratios all clear the minimum height in this column? */
-function fitsMinimum(ratios: readonly number[], columnHeight: number): boolean {
-  const content = columnContentHeight(columnHeight, ratios.length)
-  if (content <= 0) return false
-  return ratios.every((r) => r * content >= MIN_PANE_HEIGHT)
+/**
+ * Can these panes all clear the minimum height in this column?
+ *
+ * Two geometries have to answer yes, not one. What is on screen now counts a
+ * folded pane as a bar and shares the rest out among the others; what will be
+ * on screen once it opens counts every ratio against the whole column. A bar's
+ * 30px is on loan, so a layout that only fits while it is up comes apart the
+ * moment it is opened — and folding must not be able to arrange that behind
+ * your back.
+ */
+function fitsMinimum(panes: readonly Pane[], columnHeight: number): boolean {
+  const whole = columnContentHeight(columnHeight, panes.length)
+  if (whole <= 0) return false
+  const room = expandedRoom(columnHeight, panes)
+  const sum = expandedRatioSum(panes)
+  if (sum > 0 && room <= 0) return false
+  return panes.every(
+    (p) =>
+      // Unfolded, every pane included: this is what the column becomes.
+      p.heightRatio * whole >= MIN_PANE_HEIGHT &&
+      // As drawn: a bar is a fixed height and always fits.
+      (p.minimized === true || (p.heightRatio / sum) * room >= MIN_PANE_HEIGHT),
+  )
 }
 
 /** Vertical centre of each pane, 0..1. Ratios total 1, so no pixels needed. */
@@ -200,7 +250,7 @@ export function splitPane(
   ]
 
   // An extra gap shrinks every pane, so refuse if any would fall below the minimum.
-  if (!fitsMinimum(panes.map((p) => p.heightRatio), columnHeight)) return layout
+  if (!fitsMinimum(panes, columnHeight)) return layout
 
   const columns = withColumn(layout, columnIndex, { ...column, panes })
   const addedIndex = side === 'down' ? paneIndex + 1 : paneIndex
@@ -328,6 +378,52 @@ export function renamePane(layout: Layout, paneId: string, title: string): Layou
 }
 
 /**
+ * Fold a pane to a bar, or unfold it.
+ *
+ * Only what is drawn changes: the ratio stays where it was, so the column's
+ * ratios still total 1 and unfolding gives back the exact height, rather than a
+ * share renegotiated with whoever grew in the meantime. Focus stays put too —
+ * folding the pane you are on must not move you somewhere else.
+ */
+export function setMinimized(layout: Layout, paneId: string, minimized: boolean): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null || (found.pane.minimized === true) === minimized) return layout
+
+  const { column, columnIndex, paneIndex } = found
+  const panes = [...column.panes]
+  panes[paneIndex] = { ...found.pane, minimized }
+  return { ...layout, columns: withColumn(layout, columnIndex, { ...column, panes }) }
+}
+
+export function toggleMinimized(layout: Layout, paneId: string): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null) return layout
+  return setMinimized(layout, paneId, found.pane.minimized !== true)
+}
+
+/**
+ * Fold everything in the column but this pane, or open the column back up.
+ *
+ * The second press has to undo the first, so "any other pane is still open"
+ * is what picks the direction: once the focused pane stands alone, the same
+ * key gives the whole column back. Ratios stay untouched, as in setMinimized.
+ */
+export function toggleFoldOthers(layout: Layout, paneId: string): Layout {
+  const found = findPane(layout, paneId)
+  if (found === null) return layout
+
+  const { column, columnIndex, paneIndex } = found
+  if (column.panes.length < 2) return layout
+
+  const anyOtherOpen = column.panes.some((p, i) => i !== paneIndex && p.minimized !== true)
+  const panes = column.panes.map((p, i) => {
+    const minimized = anyOtherOpen && i !== paneIndex
+    return (p.minimized === true) === minimized ? p : { ...p, minimized }
+  })
+  return { ...layout, columns: withColumn(layout, columnIndex, { ...column, panes }) }
+}
+
+/**
  * dy is what the pane gains, not which way a seam moves — the same reading as
  * dx in resizeColumn, where a column widens wherever it sits. The seam that
  * gives way is normally the one below; the last pane in a column has none, so
@@ -343,19 +439,46 @@ export function resizePane(
   if (found === null) return layout
 
   const { column, columnIndex, paneIndex, pane } = found
-  const partnerIndex = column.panes[paneIndex + 1] !== undefined ? paneIndex + 1 : paneIndex - 1
+  // A bar is a fixed height: it can neither give space nor take it.
+  if (pane.minimized === true) return layout
+
+  // Reach across any folded neighbour to the nearest pane that still has a
+  // height. Below first, then above, exactly as with no bars in the way.
+  const expandedFrom = (from: number, step: number): number => {
+    for (let i = from; i >= 0 && i < column.panes.length; i += step) {
+      if (column.panes[i]!.minimized !== true) return i
+    }
+    return -1
+  }
+  const below = expandedFrom(paneIndex + 1, 1)
+  const partnerIndex = below >= 0 ? below : expandedFrom(paneIndex - 1, -1)
   const partner = column.panes[partnerIndex]
-  if (partner === undefined) return layout // Alone in its column
+  if (partner === undefined) return layout // Alone among bars, or in its column
 
-  const content = columnContentHeight(columnHeight, column.panes.length)
+  const content = expandedRoom(columnHeight, column.panes)
   if (content <= 0) return layout
+  /*
+   * Ratios are shares of the whole column but only the expanded panes are given
+   * pixels, so a pixel is worth `sum / content` of a ratio rather than
+   * `1 / content`. With nothing folded sum is 1 and this is the old arithmetic.
+   */
+  const sum = expandedRatioSum(column.panes)
+  if (sum <= 0) return layout
 
-  const minRatio = MIN_PANE_HEIGHT / content
+  /*
+   * The clamp answers to both geometries, for the reason fitsMinimum does: a
+   * pane pushed against the on-screen minimum while a bar is up would fall
+   * straight through it when the bar opens and the borrowed 30px goes back.
+   * The stricter of the two bounds wins; with nothing folded they are equal.
+   */
+  const whole = columnContentHeight(columnHeight, column.panes.length)
+  if (whole <= 0) return layout
+  const minRatio = Math.max((MIN_PANE_HEIGHT / content) * sum, MIN_PANE_HEIGHT / whole)
   const pair = pane.heightRatio + partner.heightRatio
   // Nothing to adjust if the pair can't hold two minimums.
   if (pair < minRatio * 2) return layout
 
-  const wanted = pane.heightRatio + dy / content
+  const wanted = pane.heightRatio + (dy / content) * sum
   const clamped = Math.min(Math.max(wanted, minRatio), pair - minRatio)
   if (clamped === pane.heightRatio) return layout
 
@@ -368,8 +491,10 @@ export function resizePane(
 
 /**
  * Move the focused pane. Vertically it swaps identities with its neighbour
- * while the size slots stay put — sizes never change, so the move is always
- * legal. Horizontally the pane leaves its column and joins the neighbour at
+ * while the size slots stay put — no pane changes height, so the move is always
+ * legal. Across a folded bar the ratios travel with the panes instead, for the
+ * same reason: it is what leaves both heights as they were.
+ * Horizontally the pane leaves its column and joins the neighbour at
  * the slot nearest desiredY; past the edge it breaks out into a new column,
  * which is why the caller must supply an id for one. Unchanged layout back
  * means the move was refused.
@@ -390,8 +515,20 @@ export function movePane(
     if (other === undefined) return layout
 
     const panes = [...column.panes]
-    panes[paneIndex] = { ...other, heightRatio: pane.heightRatio }
-    panes[otherIndex] = { ...pane, heightRatio: other.heightRatio }
+    /*
+     * Identities swap and the size slots stay put, so nothing changes height.
+     * That only holds while both slots are drawn the same way: a bar's ratio is
+     * dormant, so trading across one would hand the moved pane a share it
+     * cannot see and leave the bar holding a height that is not its own. There
+     * the panes carry their ratios with them and only the order changes.
+     */
+    if (pane.minimized === true || other.minimized === true) {
+      panes[paneIndex] = other
+      panes[otherIndex] = pane
+    } else {
+      panes[paneIndex] = { ...other, heightRatio: pane.heightRatio }
+      panes[otherIndex] = { ...pane, heightRatio: other.heightRatio }
+    }
     return {
       columns: withColumn(layout, columnIndex, { ...column, panes }),
       focusedPaneId: pane.id,
@@ -441,7 +578,7 @@ export function movePane(
     { ...pane, heightRatio: share },
     ...scaled.slice(insertAt),
   ]
-  if (!fitsMinimum(joined.map((p) => p.heightRatio), columnHeight)) return layout
+  if (!fitsMinimum(joined, columnHeight)) return layout
 
   // The pane was the column's last, so the column goes with it.
   const columns = layout.columns.flatMap((c, i) => {

@@ -33,6 +33,10 @@ export type Action =
   | { readonly t: 'close-pane' }
   /** Blow the focused pane up over the whole canvas, and back again. */
   | { readonly t: 'zoom' }
+  /** Fold the focused pane to a bar, and back again. */
+  | { readonly t: 'fold' }
+  /** Fold everything in the focused pane's column but itself, and back again. */
+  | { readonly t: 'fold-others' }
   | { readonly t: 'toggle-sidebar' }
   /** Jump to the nth session in the sidebar, zero-based. */
   | { readonly t: 'goto-session'; readonly index: number }
@@ -95,6 +99,8 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   'add-column-right': { t: 'add-column', side: 'right' },
   'close-pane': { t: 'close-pane' },
   'zoom-pane': { t: 'zoom' },
+  'minimize-pane': { t: 'fold' },
+  'fold-others': { t: 'fold-others' },
   'reveal-focus': { t: 'reveal-focus' },
   overview: { t: 'overview' },
   search: { t: 'search' },

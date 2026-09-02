@@ -4,6 +4,18 @@
  */
 import type { Rect } from './layout-geometry'
 
+/**
+ * What a folded pane's bar says. The same three things an overview card carries,
+ * because the question is the same one: what is in there, and does it want me?
+ */
+export interface FoldInfo {
+  readonly title: string
+  /** The foreground command, or empty where the shell is just sitting there. */
+  readonly command: string
+  /** This pane rang while you were looking elsewhere. */
+  readonly wants: boolean
+}
+
 export interface PaneView {
   readonly element: HTMLElement
   readonly body: HTMLElement
@@ -16,6 +28,11 @@ export interface PaneView {
   setFrozen(frozen: boolean): void
   /** Drawn over its neighbours, at whatever rect it is then given. */
   setZoomed(zoomed: boolean): void
+  /**
+   * Folded to a bar: the terminal is hidden, not stopped, and the bar takes its
+   * place. The rect still comes from the layout, so nothing here decides a size.
+   */
+  setFolded(folded: boolean, info: FoldInfo): void
   setRect(rect: Rect): void
 }
 
@@ -36,7 +53,23 @@ export function createPaneView(paneId: string): PaneView {
   label.className = 'pane__label'
   label.hidden = true
 
-  element.append(body, label)
+  /*
+   * The folded bar. Built once and left hidden: a pane is folded and unfolded
+   * by the same key over and over, and rebuilding the row each time would put
+   * DOM churn on a keystroke that promises to change nothing but the height.
+   */
+  const fold = document.createElement('div')
+  fold.className = 'pane__fold'
+  fold.hidden = true
+  const dot = document.createElement('span')
+  dot.className = 'pane__fold-dot'
+  const foldTitle = document.createElement('span')
+  foldTitle.className = 'pane__fold-title'
+  const foldCommand = document.createElement('span')
+  foldCommand.className = 'pane__fold-command'
+  fold.append(dot, foldTitle, foldCommand)
+
+  element.append(body, label, fold)
 
   let last: Rect | null = null
   let lastTitle: string | null = null
@@ -58,6 +91,14 @@ export function createPaneView(paneId: string): PaneView {
     },
     setZoomed(zoomed) {
       element.classList.toggle('pane--zoomed', zoomed)
+    },
+    setFolded(folded, info) {
+      element.classList.toggle('pane--folded', folded)
+      fold.hidden = !folded
+      if (!folded) return
+      fold.classList.toggle('pane__fold--wants', info.wants)
+      foldTitle.textContent = info.title
+      foldCommand.textContent = info.command
     },
     setRect(rect) {
       // Round to keep borders crisp.

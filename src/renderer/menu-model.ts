@@ -28,6 +28,8 @@ export interface CommandState {
 /** One callback per row, wired by main. */
 export interface CommandActions {
   readonly zoomPane: () => void
+  readonly foldPane: () => void
+  readonly foldOthers: () => void
   readonly closePane: () => void
   readonly newSession: () => void
   readonly saveLayout: () => void
@@ -57,6 +59,18 @@ export function commandItems(
       hint: state.hint('zoom-pane'),
       disabled: !state.hasSession,
       run: actions.zoomPane,
+    },
+    {
+      label: t.firstRun.foldPane,
+      hint: state.hint('minimize-pane'),
+      disabled: !state.hasSession,
+      run: actions.foldPane,
+    },
+    {
+      label: t.firstRun.foldOthers,
+      hint: state.hint('fold-others'),
+      disabled: !state.hasSession,
+      run: actions.foldOthers,
     },
     {
       label: t.firstRun.closePane,

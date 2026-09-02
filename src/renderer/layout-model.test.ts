@@ -5,6 +5,8 @@ import {
   columnContentHeight,
   createLayout,
   DEFAULT_COLUMN_WIDTH,
+  expandedRatioSum,
+  expandedRoom,
   findPane,
   focusDir,
   layoutViolations,
@@ -15,8 +17,11 @@ import {
   renamePane,
   resizeColumn,
   resizePane,
+  setMinimized,
   splitDown,
   splitPane,
+  toggleFoldOthers,
+  toggleMinimized,
   type ColumnSeed,
 } from './layout-model'
 
@@ -169,6 +174,65 @@ describe('splitDown', () => {
       { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
     ])
     expect(splitDown(two, 'a', 170, { id: 'n', title: 'n' })).toBe(two)
+  })
+
+  /*
+   * Splitting the bar itself. Folding is a deliberate choice and a split is not
+   * a request to undo it, so the runtime hands the folded pane straight to this
+   * function: the bar keeps its flag and half of its dormant ratio, and the new
+   * pane arrives open beside it with the other half.
+   */
+  it('splitting a folded pane leaves it folded and opens only the new one', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    const next = splitDown(folded, 'b', 1000, { id: 'n', title: 'n' })
+    const panes = next.columns[0]!.panes
+    expect(panes.map((p) => p.id)).toEqual(['a', 'b', 'n'])
+    expect(findPane(next, 'b')!.pane.minimized).toBe(true)
+    expect(findPane(next, 'n')!.pane.minimized).toBeUndefined()
+    // Half each, exactly as a split of an open pane divides it.
+    expect(findPane(next, 'b')!.pane.heightRatio).toBeCloseTo(0.25, 9)
+    expect(findPane(next, 'n')!.pane.heightRatio).toBeCloseTo(0.25, 9)
+    expect(next.focusedPaneId).toBe('n')
+    expect(layoutViolations(next)).toEqual([])
+  })
+
+  it('refuses to split a bar whose half could not be opened again', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    /*
+     * As drawn this split fits: the bar costs 30px and the new pane clears the
+     * minimum in what is left. It is refused on the other geometry alone —
+     * opening the bar afterwards would put its own quarter under the minimum.
+     */
+    expect(splitDown(folded, 'b', 250, { id: 'n', title: 'n' })).toBe(folded)
+  })
+
+  /*
+   * The bar's 30px is on loan. A split that only fits while a neighbour is
+   * folded would come apart the moment it opens, so both geometries have to
+   * hold before the pane is cut in half.
+   */
+  it('refuses a split that only fits while a neighbour is folded', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    expect(splitDown(folded, 'a', 224, { id: 'n', title: 'n' })).toBe(folded)
+  })
+
+  it('still allows a split both geometries can hold', () => {
+    const two = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b' }] },
+    ])
+    const folded = setMinimized(two, 'b', true)
+    const next = splitDown(folded, 'a', 1000, { id: 'n', title: 'n' })
+    expect(next.columns[0]!.panes.map((p) => p.id)).toEqual(['a', 'n', 'b'])
+    expect(layoutViolations(next)).toEqual([])
   })
 
   it('is a no-op for an unknown pane', () => {
@@ -517,6 +581,79 @@ describe('resizePane', () => {
   it('is a no-op for an unknown pane', () => {
     expect(resizePane(base, 'nope', 10, H)).toBe(base)
   })
+
+  describe('with a folded neighbour', () => {
+    const three = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a' },
+          { id: 'b', title: 'b' },
+          { id: 'c', title: 'c' },
+        ],
+      },
+    ])
+    const middleFolded = setMinimized(three, 'b', true)
+
+    it('trades across the bar with the next pane that still has a height', () => {
+      const next = resizePane(middleFolded, 'a', 60, H)
+      expect(next.columns[0]!.panes[0]!.heightRatio).toBeGreaterThan(1 / 3)
+      expect(next.columns[0]!.panes[1]!.heightRatio).toBe(1 / 3) // the bar is untouched
+      expect(next.columns[0]!.panes[2]!.heightRatio).toBeLessThan(1 / 3)
+      expect(layoutViolations(next)).toEqual([])
+    })
+
+    it('moves the pixels the caller asked for, counting only the shared room', () => {
+      const next = resizePane(middleFolded, 'a', 60, H)
+      const room = expandedRoom(H, middleFolded.columns[0]!.panes)
+      const sum = expandedRatioSum(middleFolded.columns[0]!.panes)
+      const before = (1 / 3 / sum) * room
+      expect((next.columns[0]!.panes[0]!.heightRatio / sum) * room).toBeCloseTo(before + 60, 6)
+    })
+
+    it('takes from above when everything below is folded', () => {
+      const bottomFolded = setMinimized(three, 'c', true)
+      const next = resizePane(bottomFolded, 'b', 60, H)
+      expect(next.columns[0]!.panes[1]!.heightRatio).toBeGreaterThan(1 / 3)
+      expect(next.columns[0]!.panes[0]!.heightRatio).toBeLessThan(1 / 3)
+      expect(next.columns[0]!.panes[2]!.heightRatio).toBe(1 / 3)
+    })
+
+    it('refuses to resize a folded pane: a bar has no height to trade', () => {
+      expect(resizePane(middleFolded, 'b', 60, H)).toBe(middleFolded)
+    })
+
+    it('refuses when no expanded partner is left', () => {
+      const alone = setMinimized(setMinimized(three, 'a', true), 'c', true)
+      expect(resizePane(alone, 'b', 60, H)).toBe(alone)
+    })
+
+    /*
+     * Folding hands the column extra room, so a pane clamped against the
+     * minimum while a bar is up would fall through it the moment the bar opens.
+     * The clamp has to answer for both geometries, not just the one on screen.
+     */
+    it('clamps so that unfolding cannot leave a pane under the minimum', () => {
+      const SHORT = 324
+      const folded = setMinimized(three, 'c', true)
+      const shrunk = resizePane(folded, 'a', -9999, SHORT)
+      const opened = setMinimized(shrunk, 'c', false)
+      const content = columnContentHeight(SHORT, 3)
+      const heights = opened.columns[0]!.panes.map((p) => p.heightRatio * content)
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(MIN_PANE_HEIGHT - 1e-6)
+    })
+
+    it('still clamps to the folded minimum where that is the stricter one', () => {
+      // A tall column: the bar frees so little that the on-screen minimum bites
+      // first, and the clamp must not be loosened by the other geometry.
+      const folded = setMinimized(three, 'c', true)
+      const shrunk = resizePane(folded, 'a', -9999, 4000)
+      const room = expandedRoom(4000, shrunk.columns[0]!.panes)
+      const sum = expandedRatioSum(shrunk.columns[0]!.panes)
+      const onScreen = (shrunk.columns[0]!.panes[0]!.heightRatio / sum) * room
+      expect(onScreen).toBeGreaterThanOrEqual(MIN_PANE_HEIGHT - 1e-6)
+    })
+  })
 })
 
 describe('focusDir', () => {
@@ -648,6 +785,48 @@ describe('movePane', () => {
     expect(movePane(layout, 'up', HEIGHT, 'cx')).toBe(layout)
   })
 
+  /*
+   * Slots stay put only while both are drawn the same way. Across a bar the
+   * moved pane would be handed the folded one's dormant share and shrink on
+   * screen, and the bar would forget the height it is holding for later.
+   */
+  it('stepping past a folded bar carries the ratios with the panes', () => {
+    const column = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a', heightRatio: 0.5 },
+          { id: 'b', title: 'b', heightRatio: 0.2, minimized: true },
+          { id: 'c', title: 'c', heightRatio: 0.3 },
+        ],
+      },
+    ])
+    const next = movePane({ ...column, focusedPaneId: 'a' }, 'down', HEIGHT, 'cx')
+    const panes = next.columns[0]!.panes
+    expect(panes.map((p) => p.id)).toEqual(['b', 'a', 'c'])
+    expect(findPane(next, 'a')!.pane.heightRatio).toBe(0.5)
+    expect(findPane(next, 'b')!.pane.heightRatio).toBe(0.2)
+    expect(findPane(next, 'b')!.pane.minimized).toBe(true)
+    expect(next.focusedPaneId).toBe('a')
+    expect(layoutViolations(next)).toEqual([])
+  })
+
+  it('a folded pane moved past an open one keeps its dormant share too', () => {
+    const column = createLayout([
+      {
+        id: 'c1',
+        panes: [
+          { id: 'a', title: 'a', heightRatio: 0.8 },
+          { id: 'b', title: 'b', heightRatio: 0.2, minimized: true },
+        ],
+      },
+    ])
+    const next = movePane({ ...column, focusedPaneId: 'b' }, 'up', HEIGHT, 'cx')
+    expect(next.columns[0]!.panes.map((p) => p.id)).toEqual(['b', 'a'])
+    expect(findPane(next, 'b')!.pane.heightRatio).toBe(0.2)
+    expect(findPane(next, 'a')!.pane.heightRatio).toBe(0.8)
+  })
+
   it('right steps out into a column of its own rather than joining the neighbour', () => {
     const next = movePane(base(), 'right', HEIGHT, 'cx')
     expect(next.columns.map((c) => c.id)).toEqual(['c1', 'cx', 'c2'])
@@ -754,6 +933,140 @@ describe('movePane', () => {
       layout = movePane(layout, dir, HEIGHT, `n-${dir}`)
       expect(layoutViolations(layout)).toEqual([])
     }
+  })
+})
+
+describe('toggleMinimized', () => {
+  const base = createLayout([
+    {
+      id: 'c1',
+      panes: [
+        { id: 'a', title: 'a' },
+        { id: 'b', title: 'b' },
+        { id: 'c', title: 'c' },
+      ],
+    },
+  ])
+
+  it('folds and unfolds the same pane', () => {
+    const folded = toggleMinimized(base, 'b')
+    expect(findPane(folded, 'b')?.pane.minimized).toBe(true)
+    expect(findPane(toggleMinimized(folded, 'b'), 'b')?.pane.minimized).toBe(false)
+  })
+
+  it('leaves the height ratio alone, so unfolding restores it', () => {
+    const resized = resizePane(base, 'b', 90, 1000)
+    const ratio = findPane(resized, 'b')!.pane.heightRatio
+    const round = toggleMinimized(toggleMinimized(resized, 'b'), 'b')
+    expect(findPane(round, 'b')?.pane.heightRatio).toBe(ratio)
+    expect(layoutViolations(round)).toEqual([])
+  })
+
+  it('keeps the ratios totalling 1 while folded', () => {
+    expect(layoutViolations(toggleMinimized(base, 'b'))).toEqual([])
+    expect(layoutViolations(setMinimized(toggleMinimized(base, 'b'), 'a', true))).toEqual([])
+  })
+
+  it('folds every pane in a column without complaint', () => {
+    let layout = base
+    for (const id of ['a', 'b', 'c']) layout = setMinimized(layout, id, true)
+    expect(layout.columns[0]!.panes.every((p) => p.minimized === true)).toBe(true)
+    expect(layoutViolations(layout)).toEqual([])
+  })
+
+  it('touches neither the focus nor the remembered height', () => {
+    const next = toggleMinimized(base, 'b')
+    expect(next.focusedPaneId).toBe(base.focusedPaneId)
+    expect(next.desiredY).toBe(base.desiredY)
+  })
+
+  it('does not mutate its input', () => {
+    const before = JSON.stringify(base)
+    toggleMinimized(base, 'b')
+    expect(JSON.stringify(base)).toBe(before)
+  })
+
+  it('leaves the layout as it is when the state already matches', () => {
+    expect(setMinimized(base, 'b', false)).toBe(base)
+  })
+
+  it('is a no-op for an unknown pane', () => {
+    expect(toggleMinimized(base, 'nope')).toBe(base)
+  })
+
+  it('is carried in from a seed, so a session file can start folded', () => {
+    const seeded = createLayout([
+      { id: 'c1', panes: [{ id: 'a', title: 'a' }, { id: 'b', title: 'b', minimized: true }] },
+    ])
+    expect(findPane(seeded, 'a')?.pane.minimized).toBeUndefined()
+    expect(findPane(seeded, 'b')?.pane.minimized).toBe(true)
+  })
+})
+
+describe('toggleFoldOthers', () => {
+  const base = createLayout([
+    {
+      id: 'c1',
+      panes: [
+        { id: 'a', title: 'a' },
+        { id: 'b', title: 'b' },
+        { id: 'c', title: 'c' },
+      ],
+    },
+    { id: 'c2', panes: [{ id: 'd', title: 'd' }] },
+  ])
+
+  it('folds every other pane in the column and unfolds the focused one', () => {
+    const next = toggleFoldOthers(setMinimized(base, 'b', true), 'b')
+    expect(next.columns[0]!.panes.map((p) => p.minimized === true)).toEqual([true, false, true])
+  })
+
+  it('leaves the other columns alone', () => {
+    const next = toggleFoldOthers(base, 'b')
+    expect(next.columns[1]).toBe(base.columns[1])
+  })
+
+  it('unfolds the whole column once every other pane is already folded', () => {
+    const solo = toggleFoldOthers(base, 'b')
+    const next = toggleFoldOthers(solo, 'b')
+    expect(next.columns[0]!.panes.every((p) => p.minimized !== true)).toBe(true)
+  })
+
+  it('unfolds the column even when the focused pane is folded too', () => {
+    let layout = base
+    for (const id of ['a', 'b', 'c']) layout = setMinimized(layout, id, true)
+    const next = toggleFoldOthers(layout, 'b')
+    expect(next.columns[0]!.panes.every((p) => p.minimized !== true)).toBe(true)
+  })
+
+  it('leaves every height ratio where it was', () => {
+    const ratios = base.columns[0]!.panes.map((p) => p.heightRatio)
+    const solo = toggleFoldOthers(base, 'b')
+    expect(solo.columns[0]!.panes.map((p) => p.heightRatio)).toEqual(ratios)
+    expect(layoutViolations(solo)).toEqual([])
+    const back = toggleFoldOthers(solo, 'b')
+    expect(back.columns[0]!.panes.map((p) => p.heightRatio)).toEqual(ratios)
+    expect(layoutViolations(back)).toEqual([])
+  })
+
+  it('touches neither the focus nor the remembered height', () => {
+    const next = toggleFoldOthers(base, 'b')
+    expect(next.focusedPaneId).toBe(base.focusedPaneId)
+    expect(next.desiredY).toBe(base.desiredY)
+  })
+
+  it('does not mutate its input', () => {
+    const before = JSON.stringify(base)
+    toggleFoldOthers(base, 'b')
+    expect(JSON.stringify(base)).toBe(before)
+  })
+
+  it('is a no-op in a column of one', () => {
+    expect(toggleFoldOthers(base, 'd')).toBe(base)
+  })
+
+  it('is a no-op for an unknown pane', () => {
+    expect(toggleFoldOthers(base, 'nope')).toBe(base)
   })
 })
 

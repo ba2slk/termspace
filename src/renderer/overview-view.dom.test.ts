@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createLayout } from './layout-model'
+import { createLayout, setMinimized } from './layout-model'
 import { overviewLayout } from './overview-model'
 import { createOverviewView, type OverviewHooks } from './overview-view'
 import { t } from './i18n'
@@ -692,5 +692,80 @@ describe('createOverviewView — lifecycle', () => {
     expect(host.querySelector<HTMLElement>('.overview__card--selected')?.dataset['paneId']).toBe(
       'b1',
     )
+  })
+})
+
+/*
+ * The card's own chrome is what broke this: padding and a border come to about
+ * 14px, and border-box cannot compress below them, so a row the model made 5px
+ * tall rendered at 14px, over the card beneath it and out of the bottom of the
+ * map. A row too short to carry text drops the text and the padding with it.
+ */
+describe('createOverviewView — a folded pane\'s row', () => {
+  const folded = setMinimized(
+    createLayout([
+      { id: 'c1', width: 700, panes: [{ id: 'a1', title: 'editor' }, { id: 'a2', title: 'shell' }] },
+    ]),
+    'a2',
+    true,
+  )
+  const foldedHooks = (over: Partial<OverviewHooks> = {}): OverviewHooks =>
+    hooks({ layout: () => ({ ...folded, focusedPaneId: 'a1' }), ...over })
+
+  const cardOf = (id: string): HTMLElement =>
+    host.querySelector<HTMLElement>(`.overview__card[data-pane-id="${id}"]`)!
+
+  it('strips the chrome a row that short cannot afford', () => {
+    const view = createOverviewView(host, foldedHooks())
+    view.open()
+    expect(cardOf('a2').classList.contains('overview__card--stacked')).toBe(false)
+    expect(cardOf('a1').classList.contains('overview__card--stacked')).toBe(true)
+  })
+
+  /*
+   * The row is 15px and a stacked card needs 28, but the pane it stands for is
+   * one line on the canvas and one line fits here. Leaving it blank is what
+   * made the map unreadable: five of six rows in the reported session are
+   * folded, so five of six had no name at all.
+   */
+  it('keeps the name, which is the whole reason to look at the map', () => {
+    const view = createOverviewView(host, foldedHooks())
+    view.open()
+    const card = cardOf('a2')
+    expect(card.classList.contains('overview__card--name-only')).toBe(true)
+    expect(card.classList.contains('overview__card--squat')).toBe(false)
+    expect(card.querySelector('.overview__title')!.textContent).toBe('shell')
+  })
+
+  it('gives the name up only where even one line will not fit', () => {
+    const view = createOverviewView(
+      host,
+      foldedHooks({ viewport: () => ({ width: 300, height: 600, scrollX: 0 }) }),
+    )
+    view.open()
+    expect(cardOf('a2').classList.contains('overview__card--squat')).toBe(true)
+    expect(cardOf('a2').classList.contains('overview__card--name-only')).toBe(false)
+  })
+
+  it('still draws the row, at the height the layout gave it', () => {
+    const view = createOverviewView(host, foldedHooks())
+    view.open()
+    const expected = overviewLayout(folded, { width: 800, height: 600, scrollX: 0 }).cards.find(
+      (c) => c.paneId === 'a2',
+    )!
+    expect(cardOf('a2').style.height).toBe(`${expected.height}px`)
+  })
+
+  it('keeps a row that rang readable as one that rang', () => {
+    const view = createOverviewView(host, foldedHooks({ wants: (id) => id === 'a2' }))
+    view.open()
+    expect(cardOf('a2').classList.contains('overview__card--wants')).toBe(true)
+  })
+
+  it('lets the selection land on it like any other row', () => {
+    const view = createOverviewView(host, foldedHooks())
+    view.open()
+    expect(view.handleKey(key('ArrowDown'))).toBe(true)
+    expect(cardOf('a2').classList.contains('overview__card--selected')).toBe(true)
   })
 })

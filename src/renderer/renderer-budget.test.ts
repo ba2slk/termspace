@@ -162,6 +162,15 @@ describe('decideBudget — freeze and thaw', () => {
     expect(d.freeze).toEqual(['b'])
   })
 
+  it('freezes the focused pane once nothing of it is showing', () => {
+    // A folded pane is a bar: the caller passes null rather than name a pane
+    // whose only claim to being awake is that it holds the keyboard.
+    const d = decideBudget(
+      state({ allPaneIds: ['a', 'b', 'c'], visible: ['a'], focusedPaneId: null }),
+    )
+    expect([...d.freeze].sort()).toEqual(['b', 'c'])
+  })
+
   it('thaws a frozen pane when it takes focus', () => {
     const d = decideBudget(
       state({ allPaneIds: ['a', 'b'], visible: ['a'], frozen: ['b'], focusedPaneId: 'b' }),

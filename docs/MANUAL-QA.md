@@ -132,6 +132,52 @@ English copy.
   is rounded to whole pixels and the track's transform snaps to device ones, so the
   two can disagree by a fraction and the pane behind showed through that sliver)
 
+**Pane fold**
+- **`Alt+D` folds the focused pane to a bar of exactly `FOLD_BAR_HEIGHT`, and opening
+  it again gives back the pixel height it had** (measured with
+  `getBoundingClientRect`: the ratio is never touched by folding, so the height that
+  comes back has to be the same one, not a share renegotiated with the neighbours)
+- **The bar carries the pane's title** (it is the only thing left on screen saying
+  what is in there; an unnamed bar is a row of nothing)
+- **Focus stays on the pane that was folded** (otherwise `Alt+D` twice is not the
+  round trip it looks like)
+- **Keys typed at a folded pane never reach its shell, and plain Enter opens it
+  again** (the same keystrokes are typed twice through the same route, once at the bar
+  and once at the open pane; only the second may appear in the buffer. A shell that
+  echoes neither is reported as unmeasurable rather than as a pass)
+- **A paste aimed at a folded pane never reaches its shell** (the guard lives in the
+  paste itself rather than on the key path: on macOS the Edit menu delivers `Cmd+V`
+  without a keydown ever reaching the page, so a keyboard-only guard would have two
+  doors and one of them open. The clipboard is shared with the desktop, so a priming
+  write that does not come back is reported as unmeasurable)
+- **A split leaves a folded pane folded, and focuses the new pane beside it**
+  (folding is a deliberate choice and a split is not a request to undo it. The bar
+  keeps half of the height it was holding and the new pane opens with the other half;
+  a split that could not be opened again afterwards is still refused outright)
+- **Search on a folded pane opens the pane before it opens the bar** (the search box
+  lives inside the pane body, which is not drawn while folded — opened there it would
+  take the keys and show nothing)
+
+**The overview with folded panes**
+- **No row hangs past the bottom of the map, and no row is drawn over the one above
+  it** (measured from `getBoundingClientRect`, because the inline styles were right the
+  whole time. A card cannot render shorter than its own padding and border, so a row
+  the map sized at 5px came out at 14px, over its neighbour and out of the map onto the
+  session behind the scrim)
+- **A folded pane's row stays thinner than the panes around it** (the map is a picture
+  of what is on screen, so a bar on screen is a bar on the map. Inflating the row to
+  whatever a stacked card needs would make the map lie about the layout it exists to
+  describe; the row gives up what it cannot hold instead, the same answer a column too
+  narrow to label gets)
+- **Every row with the room for one line says which pane it is** (run against a fixture
+  of the shape this was reported on: five of its six panes folded. A bar is a fixed
+  30px and the map never scales past a half, so a folded row is at most 15px — under
+  what a stacked card needs, at every scale. Measured against the row's height and the
+  title's computed style together, because a title that is present but `display: none`
+  is exactly the state that left the map unreadable)
+- **The viewport marker stays inside the map** (it frames a region of the map, so one
+  running off the side would say the wrong thing about where you are)
+
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
 - Frozen panes hold no WebGL context
@@ -484,6 +530,13 @@ These can't be replaced by automated judgment. They're matters of impression, no
       `git diff`, `htop`)
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
+
+### Fold the other panes (no self-check covers this)
+
+- [ ] In a column of three panes, focus one and press `Alt+Shift+D`: the other two become
+      bars, the focused pane takes the room they gave up, and focus has not moved. Press
+      it again and the whole column opens back up at the heights it had. In a column of
+      one pane nothing happens
 
 ### Renaming (no self-check covers these)
 

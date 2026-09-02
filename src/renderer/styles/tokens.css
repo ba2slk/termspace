@@ -100,6 +100,8 @@
   /* The floor under the panels: the canvas bar runs there. Mirrors CANVAS_BOTTOM. */
   --edge-bottom: 10px;
   --hit: 12px;
+  /* A folded pane's bar. Mirrors FOLD_BAR_HEIGHT in layout-model.ts. */
+  --fold-h: 30px;
   /* Every control in the title bar. Grows with the text it sits beside. */
   --ctl-h: calc(26px * var(--ui-scale));
   /* That control plus 4px of air above it; the bar is bottom aligned. */
@@ -131,6 +133,9 @@
   --fs-ui-sm: calc(12px * var(--ui-scale));
   /* Things you point at rather than read in bulk, like session names. */
   --fs-ui-lg: calc(14px * var(--ui-scale));
+  /* A folded pane's row on the overview map: one line in about 13px of room,
+     so it cannot ride --fs-ui-sm. Fixed, like the map's own geometry. */
+  --fs-map-row: 9px;
   --fs-title: calc(17px * var(--ui-scale));
   --fs-term: 13px;
   --lh-term: 1.35;

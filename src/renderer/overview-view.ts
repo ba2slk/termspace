@@ -10,6 +10,8 @@ import {
   clampStripOffset,
   columnAtLensCenter,
   columnSnapOffset,
+  fitsALabel,
+  fitsAName,
   landingScrollX,
   type Lens,
   lensOnStrip,
@@ -311,6 +313,21 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       el.dataset['paneId'] = card.paneId
       if (hooks.isError(card.paneId)) el.classList.add('overview__card--error')
       if (hooks.wants(card.paneId)) el.classList.add('overview__card--wants')
+      /*
+       * How much of a card the row can afford, in three steps. The card cannot
+       * render shorter than its own chrome, so a row that keeps padding it has
+       * no room for is floored above its real height and paints over the row
+       * below and out of the map — which is the fault this replaced. Below the
+       * full stack the row drops to its name alone, and below even one line to
+       * the bare row.
+       */
+      el.classList.add(
+        fitsALabel(card.height)
+          ? 'overview__card--stacked'
+          : fitsAName(card.height)
+            ? 'overview__card--name-only'
+            : 'overview__card--squat',
+      )
       px(card, el)
 
       const title = document.createElement('div')

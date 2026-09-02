@@ -24,7 +24,10 @@ import {
   checkNavigation,
   checkOverview,
   checkOverviewScaleFloor,
+  checkOverviewWithFoldedPanes,
+  checkOverviewFoldedShape,
   checkPaneTitlePeek,
+  checkPaneFold,
   checkPaneZoom,
   checkTerminalSignals,
   checkRendererBudget,
@@ -93,9 +96,13 @@ const GROUPS: Readonly<
     await checkTerminalSignals(report)
     await checkLayoutEditing(report)
     await checkPaneZoom(report)
+    await checkPaneFold(report)
+    await checkOverviewWithFoldedPanes(report)
     checkRendererBudget(report)
     await checkGridFillsPane(report)
     await checkClickableLinks(report)
+    // Last: it opens a session of its own, then ends it with verify back open.
+    await checkOverviewFoldedShape(report)
   },
 
   // Anything that needs frames or the clipboard, which need an active window.

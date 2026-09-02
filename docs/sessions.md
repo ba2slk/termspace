@@ -22,6 +22,7 @@ columns:                      # left to right
         command: nvim .
       - title: shell
         height: 0.3           # vertical share within the column; omitted = equal
+        minimized: true       # starts folded to a bar; the shell runs anyway
 
   - width: 900
     panes:
@@ -105,6 +106,10 @@ pane and opens the file in `$EDITOR`, falling back to `$VISUAL`, then `vi`.
 The **base directory** becomes `cwd` at the top of the file — the session's
 anchor. Panes under it are written as relative paths, so moving a project
 folder means editing one line.
+
+Panes folded on screen (`Alt` + `D`) are written as `minimized: true`, next to
+the `height` they still hold. Reopening the session brings the pane back folded,
+and unfolding it lands on exactly that height.
 
 Commands running at save time are captured too, with two rules:
 

@@ -46,6 +46,7 @@ const paneShape = z.strictObject({
   prefill: z.string().min(1).optional(),
   cwd: z.string().min(1).optional(),
   height: z.number().gt(0).lt(1).optional(),
+  minimized: z.boolean().optional(),
 })
 
 // ── Paths ─────────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ function parsePane(
   const parsed = paneShape.safeParse(raw)
   if (!parsed.success) return toIssues(path, parsed.error)[0]!
 
-  const { title, command, prefill, cwd, height } = parsed.data
+  const { title, command, prefill, cwd, height, minimized } = parsed.data
   return {
     pane: {
       kind: 'pane',
@@ -155,6 +156,7 @@ function parsePane(
       command: command ?? null,
       prefill: prefill ?? null,
       cwd: cwd === undefined ? sessionCwd : resolveCwd(sessionCwd, cwd, home),
+      minimized: minimized ?? false,
     },
     height: height ?? null,
   }
