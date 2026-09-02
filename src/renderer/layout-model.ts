@@ -624,7 +624,7 @@ export function focusDir(layout: Layout, dir: Direction, columnHeight: number): 
   if (dir === 'up' || dir === 'down') {
     const next = column.panes[paneIndex + (dir === 'down' ? 1 : -1)]
     if (next === undefined) return layout
-    // Only vertical movement updates desiredY; that memory is what makes ←→ return.
+    // desiredY follows the focus: closing a pane and moving one still read it.
     return {
       ...layout,
       focusedPaneId: next.id,

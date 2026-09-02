@@ -64,8 +64,10 @@ start at the canvas's left edge, independent of scroll. Insets live in
 `src/renderer/layout-geometry.ts` (`CANVAS_EDGE`, `CANVAS_BOTTOM`) and are mirrored by the
 `--edge` token; change both together.
 
-`desiredY` on the layout keeps ←→ focus moves reversible: without it, moving right then
-left lands on a different pane.
+`desiredY` on the layout is the focused pane's centre as a ratio. Closing a pane and
+moving one across columns land nearest to it. A ←→ focus move does not read it: it goes
+to the pane drawn across from the focused one, since a folded bar's height is not its
+ratio.
 
 ### Pure modules, and everything else
 
