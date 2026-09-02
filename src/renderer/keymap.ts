@@ -31,6 +31,8 @@ export type Action =
   /** Add a column to either side. */
   | { readonly t: 'add-column'; readonly side: 'left' | 'right' }
   | { readonly t: 'close-pane' }
+  /** Blow the focused pane up over the whole canvas, and back again. */
+  | { readonly t: 'zoom' }
   | { readonly t: 'toggle-sidebar' }
   /** Jump to the nth session in the sidebar, zero-based. */
   | { readonly t: 'goto-session'; readonly index: number }
@@ -92,6 +94,7 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   'add-column-left': { t: 'add-column', side: 'left' },
   'add-column-right': { t: 'add-column', side: 'right' },
   'close-pane': { t: 'close-pane' },
+  'zoom-pane': { t: 'zoom' },
   'reveal-focus': { t: 'reveal-focus' },
   overview: { t: 'overview' },
   search: { t: 'search' },

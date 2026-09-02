@@ -691,8 +691,14 @@ body {
  */
 .pane--focused {
   /* The setting sets --focus-border at runtime; with it unset the token stands,
-     which is what "white" means. */
-  border-color: var(--focus-border, var(--border-active));
+     which is what "white" means. --focus-rest is the resting end of the pair
+     the zoom steps up from: the whole colour in white mode, held back in the
+     tinted ones, which is where the room to move is. */
+  border-color: color-mix(
+    in srgb,
+    var(--focus-border, var(--border-active)) var(--focus-rest),
+    transparent
+  );
   /* A hard 1px ring outside the border, not a blur. It ends inside the 6px gap,
      so it neither reaches the neighbour nor changes the layout. */
   box-shadow: 0 0 0 1px var(--focus-ring, var(--ring-active));
@@ -765,6 +771,58 @@ body {
 .pane--focused .pane__label {
   background: color-mix(in srgb, var(--term-fg, #cfcbc4) 18%, var(--term-bg, #1b1b1b));
   border-color: var(--focus-border, var(--border-active));
+}
+
+/*
+ * The layer behind a zoomed pane: canvas background over the whole visible
+ * area, so no seam of the panes underneath shows around it.
+ *
+ * Rung 1 inside the track: above the panes (which set no z-index), below the
+ * resize handles at 2 (they paint nothing) and the zoomed pane at 3.
+ */
+.zoom-scrim {
+  position: absolute;
+  top: 0;
+  background: var(--bg-canvas);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * Zoomed: one pane laid over the visible canvas. Only the box changes — the
+ * layout still holds the pane's real rect, which is what a save writes.
+ * Above the scrim at 1, the neighbouring panes and the resize handles, which
+ * sit at 2 inside the same track; the side gutters still cover the canvas
+ * inset.
+ */
+.pane--zoomed {
+  z-index: 3;
+  /*
+   * The zoomed pane is always the focused one, so this has to beat
+   * .pane--focused's border-color. Same specificity, so it wins by coming
+   * later in the file — keep it below that rule. The ring stays the focused
+   * one. The colour is the bright end of the same pair --focus-rest opens: the
+   * colour whole in the tinted modes, and white mixed into it in white mode,
+   * which is already at full and can only step up by going whiter.
+   */
+  border-color: color-mix(
+    in srgb,
+    var(--focus-border, var(--border-active)) var(--focus-zoom),
+    white
+  );
+}
+
+/*
+ * While a zoom is on, every other pane becomes its own stacking context.
+ *
+ * A pane sets no z-index, so its children climb the track's ladder directly:
+ * the peek label at 4 and the search bar at 3 would land above the scrim at 1
+ * and the zoomed pane at 3, floating over the thing that covers them. z-index 0
+ * is the cheapest layer that keeps them inside the pane, still below the scrim.
+ * The zoomed pane needs no rule — its own 3 already traps its label.
+ */
+.canvas-track--zoomed .pane:not(.pane--zoomed) {
+  z-index: 0;
 }
 
 /* Outside the active region: the browser skips layout and paint for this subtree. */

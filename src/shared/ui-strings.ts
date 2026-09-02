@@ -22,6 +22,7 @@ const en = {
     // Shown on the empty canvas only while there are no sessions at all
     createSession: 'Create a new session',
     // ☰ menu
+    zoomPane: 'Maximize pane',
     closePane: 'Close pane',
     newSession: 'New session',
     saveLayout: 'Save this layout',
@@ -281,6 +282,7 @@ const en = {
     'add-column-left': 'Add a column to the left',
     'add-column-right': 'Add a column to the right',
     'close-pane': 'Close the pane',
+    'zoom-pane': 'Maximize the focused pane',
     'resize-left': 'Narrow the column',
     'resize-right': 'Widen the column',
     'resize-up': 'Shorten the pane',
@@ -359,6 +361,7 @@ const ko: Catalog = {
     welcomeTitle: 'Termspace에 오신 것을 환영합니다',
     moreKeys: '나머지 단축키는 설정에 있습니다.',
     createSession: '새 세션 만들기',
+    zoomPane: 'pane 최대화',
     closePane: 'pane 닫기',
     newSession: '새 세션',
     saveLayout: '현재 배치 저장',
@@ -602,6 +605,7 @@ const ko: Catalog = {
     'add-column-left': '왼쪽에 컬럼 추가하기',
     'add-column-right': '오른쪽에 컬럼 추가하기',
     'close-pane': 'pane 닫기',
+    'zoom-pane': '포커스한 pane 최대화하기',
     'resize-left': '컬럼 좁히기',
     'resize-right': '컬럼 넓히기',
     'resize-up': 'pane 높이 줄이기',

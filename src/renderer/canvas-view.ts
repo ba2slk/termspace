@@ -6,6 +6,7 @@
  * scroll-behavior gives no control over.
  */
 import {
+  CANVAS_BOTTOM,
   CANVAS_EDGE,
   canvasWidth,
   columnHeightIn,
@@ -14,6 +15,7 @@ import {
   scrollToReveal,
   snapToDevicePixels,
   type PaneRect,
+  type Rect,
   type Viewport,
 } from './layout-geometry'
 import { PANE_GAP, type Layout } from './layout-model'
@@ -76,6 +78,13 @@ export interface CanvasView {
     /** Canvas's left edge in window coordinates, so an indicator can line up. */
     readonly left: number
   }
+  /**
+   * Blow one pane up over the visible canvas, or restore the layout with null.
+   *
+   * View state only: the layout keeps the rects it always had, so what a save
+   * writes and which panes the renderer budget sees are untouched.
+   */
+  setZoom(paneId: string | null): void
   getViewport(): Viewport
   getRects(): readonly PaneRect[]
   paneBody(paneId: string): HTMLElement | null
@@ -124,10 +133,53 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   let currentLayout: Layout | null = null
   let scrollX = 0
   let animation: number | null = null
+  let zoomedPaneId: string | null = null
 
   const canvasWidthOf = (): number => (currentLayout === null ? 0 : canvasWidth(currentLayout))
   /** Wheel multiplier, from the scroll acceleration setting. */
   const baseBoostOf = (): number => Math.max(1, hooks.scrollBoost?.() ?? 1)
+
+  /**
+   * Where the visible area starts, in track coordinates.
+   *
+   * The transform below snaps, so anything laid over the viewport has to read
+   * the same snapped value: against the raw scroll the box lands up to a device
+   * pixel away from the screen, and a wheel glide leaves the scroll fractional
+   * often enough for that to be the normal case.
+   */
+  const trackLeft = (): number => snapToDevicePixels(scrollX, window.devicePixelRatio)
+
+  /**
+   * The zoomed pane's box, in track coordinates.
+   *
+   * The insets are the ones every pane already keeps against the canvas edge.
+   */
+  const zoomRect = (): Rect => ({
+    x: trackLeft() + CANVAS_EDGE,
+    y: CANVAS_EDGE,
+    width: host.clientWidth - CANVAS_EDGE * 2,
+    height: host.clientHeight - CANVAS_EDGE - CANVAS_BOTTOM,
+  })
+
+  /*
+   * Behind the zoomed pane, over everything else.
+   *
+   * Boxes are rounded to whole CSS pixels, so the zoomed pane's edge can still
+   * miss the snapped viewport edge by a fraction, and that sliver showed the
+   * live pane underneath. Behind a normal pane the same hairline shows canvas
+   * background, which is exactly what this paints.
+   */
+  const scrim = document.createElement('div')
+  scrim.className = 'zoom-scrim'
+
+  /** Lay the zoom box, and the scrim under it, over the visible area. */
+  function applyZoom(): void {
+    if (zoomedPaneId === null) return
+    scrim.style.left = `${String(trackLeft())}px`
+    scrim.style.width = `${String(host.clientWidth)}px`
+    scrim.style.height = `${String(host.clientHeight)}px`
+    views.get(zoomedPaneId)?.setRect(zoomRect())
+  }
 
   const paneIdAt = (event: MouseEvent): string | undefined =>
     (event.target as HTMLElement).closest<HTMLElement>('.pane')?.dataset['paneId']
@@ -166,6 +218,8 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   function applyScroll(value: number): void {
     scrollX = value
     track.style.transform = `translateX(${-snapToDevicePixels(value, window.devicePixelRatio)}px)`
+    // The track moves under it, so the zoom box has to move with the scroll.
+    applyZoom()
     syncIndicator()
     hooks.onScroll?.()
   }
@@ -236,7 +290,8 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   }
 
   function panBy(raw: number, deltaMode: number): void {
-    if (currentLayout === null || raw === 0) return
+    // A zoomed pane covers the canvas; panning it would only slide it away.
+    if (currentLayout === null || raw === 0 || zoomedPaneId !== null) return
     const delta = wheelPixels(raw, deltaMode)
 
     const now = performance.now()
@@ -257,7 +312,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
    * the thumb, which must land on the pixel it was dropped at.
    */
   function scrollByExact(dx: number): void {
-    if (currentLayout === null || dx === 0) return
+    if (currentLayout === null || dx === 0 || zoomedPaneId !== null) return
     cancelAnimation()
     stopWheelGlide()
     const limit = maxScrollX(currentLayout, host.clientWidth)
@@ -273,7 +328,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   let thumbDrag: { readonly pointerId: number; last: number } | null = null
 
   indicator.addEventListener('pointerdown', (event) => {
-    if (currentLayout === null || indicator.hidden) return
+    if (currentLayout === null || indicator.hidden || zoomedPaneId !== null) return
     event.preventDefault()
     try {
       indicator.setPointerCapture(event.pointerId)
@@ -412,6 +467,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       }
 
       renderHandles(layout)
+      applyZoom()
 
       // A narrower canvas can leave the view past its end.
       const limit = maxScrollX(layout, host.clientWidth)
@@ -442,6 +498,30 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
         viewport: host.clientWidth,
         total: canvasWidthOf(),
         left: host.getBoundingClientRect().left,
+      }
+    },
+
+    setZoom(paneId) {
+      if (paneId === zoomedPaneId) return
+      const previous = zoomedPaneId
+      zoomedPaneId = paneId
+      if (previous !== null) {
+        const view = views.get(previous)
+        view?.setZoomed(false)
+        // Straight back to the rect the layout has been holding all along.
+        const rect = rects.find((r) => r.paneId === previous)
+        if (view !== undefined && rect !== undefined) view.setRect(rect)
+      }
+      // Panes set no z-index of their own, so nothing inside one is trapped by
+      // it: a peeked label at 4 would draw over the scrim and the zoomed pane.
+      // The class gives every other pane a layer to hold its children in.
+      track.classList.toggle('canvas-track--zoomed', paneId !== null)
+      if (paneId !== null) {
+        track.append(scrim)
+        views.get(paneId)?.setZoomed(true)
+        applyZoom()
+      } else {
+        scrim.remove()
       }
     },
 

@@ -1,7 +1,7 @@
 import { api } from '../api'
 import { IS_MAC } from '../platform'
 import { AUTOSCROLL_STEP, AUTOSCROLL_ZONE } from '../edge-autoscroll'
-import { CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
+import { CANVAS_BOTTOM, CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
 import { MIN_OVERVIEW_COLUMN_PX } from '../overview-model'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
@@ -17,6 +17,7 @@ import {
   press,
   RENDERER_CANVAS,
   type Report,
+  resolveColor,
   selectedCard,
   SKIPPED,
   termOf,
@@ -439,6 +440,204 @@ export async function checkLayoutEditing(report: Report): Promise<void> {
     panes().length === beforeClose - 1 ? 'ok' : `FAIL ${beforeClose}→${panes().length}`
 }
 
+/**
+ * Press or release the peek modifier: the same key that prefixes the focus
+ * moves, Alt off mac and Cmd on it. Two checks hold it, so it lives out here.
+ */
+function holdPeek(type: 'keydown' | 'keyup'): void {
+  window.dispatchEvent(
+    new KeyboardEvent(type, {
+      code: IS_MAC ? 'MetaLeft' : 'AltLeft',
+      key: IS_MAC ? 'Meta' : 'Alt',
+      bubbles: true,
+      cancelable: true,
+      altKey: !IS_MAC && type === 'keydown',
+      metaKey: IS_MAC && type === 'keydown',
+    }),
+  )
+}
+
+/**
+ * Zoom lays the focused pane over the visible canvas, and puts it back exactly.
+ *
+ * Measured in pixels: the class says only that the app agrees it is zoomed, and
+ * what the feature promises is the box — the same insets every pane keeps, and
+ * the rect it started from when the zoom is dropped.
+ */
+export async function checkPaneZoom(report: Report): Promise<void> {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  const pane = document.querySelector<HTMLElement>('.pane--focused')
+  if (host === null || pane === null) {
+    report['paneZoom'] = 'FAIL (no focused pane)'
+    return
+  }
+
+  const before = pane.getBoundingClientRect()
+  const canvas = host.getBoundingClientRect()
+  const paneBorder = (): string => getComputedStyle(pane).borderTopColor
+  const focusedBorder = paneBorder()
+  /*
+   * The bright end of the pair, resolved through the very expression the zoom
+   * rule uses. Naming a colour would only pin one mode: white rests at full and
+   * steps up by mixing white in, a tint rests held back and steps up to whole.
+   */
+  const zoomedBorder = resolveColor(
+    'color-mix(in srgb, var(--focus-border, var(--border-active)) var(--focus-zoom), white)',
+  )
+  // A pixel of tolerance: the rects are rounded, and a fractional scale rounds
+  // the window's own edges too.
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
+  const covers = (): boolean => {
+    const box = pane.getBoundingClientRect()
+    return (
+      near(box.left, canvas.left + CANVAS_EDGE) &&
+      near(box.top, canvas.top + CANVAS_EDGE) &&
+      near(box.width, canvas.width - CANVAS_EDGE * 2) &&
+      near(box.height, canvas.height - CANVAS_EDGE - CANVAS_BOTTOM)
+    )
+  }
+  const boxText = (): string => {
+    const box = pane.getBoundingClientRect()
+    return `${String(Math.round(box.width))}x${String(Math.round(box.height))} at ${String(Math.round(box.left))},${String(Math.round(box.top))}`
+  }
+
+  press('KeyZ', { altKey: true })
+  await waitFor(covers)
+  report['paneZoomCoversCanvas'] = covers()
+    ? `ok (${boxText()})`
+    : `FAIL (${boxText()}, canvas ${String(Math.round(canvas.width))}x${String(Math.round(canvas.height))})`
+
+  /*
+   * The scrim behind the zoomed pane. Its rung is what hides the panes it
+   * covers; read from the computed styles, since only the real stylesheet has
+   * them.
+   */
+  const scrim = document.querySelector<HTMLElement>('.zoom-scrim')
+  const scrimBox = scrim?.getBoundingClientRect()
+  const stacked =
+    scrim !== null &&
+    Number(getComputedStyle(scrim).zIndex) < Number(getComputedStyle(pane).zIndex)
+  report['paneZoomScrim'] =
+    scrimBox !== undefined && stacked && near(scrimBox.width, canvas.width) && near(scrimBox.height, canvas.height)
+      ? 'ok'
+      : `FAIL (${scrim === null ? 'absent' : `${String(Math.round(scrimBox?.width ?? 0))}x${String(Math.round(scrimBox?.height ?? 0))}, stacked ${String(stacked)}`})`
+
+  /*
+   * The zoom has no chrome of its own; the border is the whole signal, and it
+   * says "zoomed" by being one step brighter than the resting focus. Both
+   * halves are asserted: the resolved colour is what the rule promises, and
+   * differing from the resting one is the promise the user can actually see —
+   * a pair of knobs set to the same share would satisfy the first alone.
+   */
+  await waitFor(() => paneBorder() === zoomedBorder)
+  report['paneZoomBorder'] =
+    paneBorder() !== zoomedBorder
+      ? `FAIL (${paneBorder()}, expected ${zoomedBorder})`
+      : zoomedBorder === focusedBorder
+        ? `FAIL (zoomed and resting both ${zoomedBorder})`
+        : `ok (${focusedBorder} → ${zoomedBorder})`
+
+  /*
+   * Peek while zoomed. A pane sets no z-index, so its label at 4 used to climb
+   * the track's ladder and draw over the scrim and the zoomed pane at 3.
+   * Asked of the compositor rather than of the styles: elementFromPoint at the
+   * label's own centre returns whatever is actually painted on top there, so
+   * anything but the label itself means the zoomed pane covers it.
+   */
+  const hiddenLabels = (): HTMLElement[] =>
+    visiblePanes()
+      .filter((other) => other !== pane)
+      .flatMap((other) => [...other.querySelectorAll<HTMLElement>('.pane__label')])
+      .filter((label) => getComputedStyle(label).display !== 'none')
+  if (typeof document.elementFromPoint !== 'function') {
+    report['paneZoomHidesOtherLabels'] = 'skipped: elementFromPoint is unavailable'
+  } else if (visiblePanes().length < 2) {
+    report['paneZoomHidesOtherLabels'] = 'skipped: nothing is behind the zoomed pane'
+  } else {
+    holdPeek('keydown')
+    await waitFor(() => hiddenLabels().length > 0)
+    const behind = hiddenLabels()
+    const onTop = behind.filter((label) => {
+      const box = label.getBoundingClientRect()
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return hit === label
+    })
+    report['paneZoomHidesOtherLabels'] =
+      behind.length === 0
+        ? 'skipped: no other pane is labelled on screen'
+        : onTop.length === 0
+          ? `ok (${String(behind.length)} behind the zoom)`
+          : `FAIL (${String(onTop.length)} of ${String(behind.length)} labels drawn over the zoomed pane)`
+    holdPeek('keyup')
+    await waitFor(() => hiddenLabels().length === 0)
+  }
+
+  const restored = (): boolean => {
+    const box = pane.getBoundingClientRect()
+    return (
+      near(box.left, before.left) &&
+      near(box.top, before.top) &&
+      near(box.width, before.width) &&
+      near(box.height, before.height)
+    )
+  }
+  press('KeyZ', { altKey: true })
+  await waitFor(restored)
+  // Back to the resting strength it was read at, not merely off the full one.
+  report['paneZoomBorderRestores'] =
+    paneBorder() === focusedBorder
+      ? 'ok'
+      : `FAIL (${paneBorder()}, expected ${focusedBorder})`
+  report['paneZoomRestores'] = restored()
+    ? 'ok'
+    : `MISMATCH (${boxText()}, was ${String(Math.round(before.width))}x${String(Math.round(before.height))} at ${String(Math.round(before.left))},${String(Math.round(before.top))})`
+
+  /*
+   * A focus move out of a zoom takes two presses. The neighbours are off screen
+   * under a zoom, so the first arrow only drops it and focus stays put; the
+   * second aims with the layout back in view. Both halves are worth pinning:
+   * the first press moving focus would be a blind jump, and the second failing
+   * to move would mean the zoom had swallowed the key for good.
+   */
+  const zoomedId = focusedId()
+  press('KeyZ', { altKey: true })
+  await waitFor(covers)
+  if (!covers()) {
+    report['paneZoomFocusMoveDropsTheZoomOnly'] = 'FAIL (the pane would not zoom again)'
+    return
+  }
+  press('ArrowRight', { altKey: true })
+  await waitFor(restored)
+  report['paneZoomFocusMoveDropsTheZoomOnly'] =
+    restored() && focusedId() === zoomedId
+      ? 'ok'
+      : `FAIL (zoom ${restored() ? 'gone' : 'still on'}, focus ${String(focusedId())} was ${String(zoomedId)})`
+
+  /*
+   * Whether the next press has anywhere to go, read off the boxes rather than
+   * assumed: the checks before this one rearrange the layout, so the pane that
+   * ends up focused here is not always the one that started with a neighbour.
+   */
+  const focusedBox = pane.getBoundingClientRect()
+  const hasRightNeighbour = visiblePanes().some(
+    (other) => other !== pane && other.getBoundingClientRect().left >= focusedBox.right,
+  )
+  if (!hasRightNeighbour) {
+    report['paneZoomSecondPressMovesFocus'] = 'skipped: nothing to the right of the zoomed pane'
+    return
+  }
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() !== zoomedId)
+  const landed = focusedId()
+  report['paneZoomSecondPressMovesFocus'] =
+    landed !== zoomedId ? `ok (${String(zoomedId)} → ${String(landed)})` : 'FAIL (focus stayed put)'
+
+  // Put the focus, and the scroll the move dragged along, back where they were.
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() === zoomedId)
+  await trackSettles()
+}
+
 export function checkRendererBudget(report: Report): void {
   const frozen = document.querySelectorAll('.pane--frozen').length
   report['frozenOffscreenPanes'] = frozen > 0 ? `ok (${frozen})` : 'FAIL (nothing froze)'
@@ -596,31 +795,17 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
     report['peekLabels'] = 'FAIL (no canvas)'
     return
   }
-  // The same key that prefixes the focus moves: Alt off mac, Cmd on it.
-  const code = IS_MAC ? 'MetaLeft' : 'AltLeft'
-  const hold = (type: 'keydown' | 'keyup'): void => {
-    window.dispatchEvent(
-      new KeyboardEvent(type, {
-        code,
-        key: IS_MAC ? 'Meta' : 'Alt',
-        bubbles: true,
-        cancelable: true,
-        altKey: !IS_MAC && type === 'keydown',
-        metaKey: IS_MAC && type === 'keydown',
-      }),
-    )
-  }
 
   const shown = (): HTMLElement[] =>
     visiblePanes()
       .flatMap((pane) => [...pane.querySelectorAll<HTMLElement>('.pane__label')])
       .filter((label) => getComputedStyle(label).display !== 'none')
 
-  hold('keydown')
+  holdPeek('keydown')
   await waitFor(() => shown().length > 0)
   const labels = shown()
   if (labels.length === 0) {
-    hold('keyup')
+    holdPeek('keyup')
     report['peekLabels'] = 'FAIL (holding the modifier showed none)'
     return
   }
@@ -685,7 +870,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
         ? `ok (${bar})`
         : `FAIL (bar reads "${bar}", pane is "${focusedLabel}")`
 
-  hold('keyup')
+  holdPeek('keyup')
   await waitFor(() => shown().length === 0)
   report['peekLabelsGoOnRelease'] =
     shown().length === 0 ? 'ok' : `FAIL (${String(shown().length)} left on screen)`

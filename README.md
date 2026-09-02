@@ -157,6 +157,7 @@ tmux itself.
 | `Alt+Shift` + `↑` / `↓` | `Cmd+Shift` + `↑` / `↓` | Split up / down |
 | `Alt+Shift` + `←` / `→` | `Cmd+Shift` + `←` / `→` | New column left / right |
 | `Alt+Shift` + `W` | `Cmd+Shift` + `W` | Close pane |
+| `Alt` + `Z` | `Cmd+Shift` + `Enter` | Maximize the focused pane over the canvas, and back |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
 | Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title (can be turned off in settings) |

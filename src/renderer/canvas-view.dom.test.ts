@@ -15,6 +15,8 @@ beforeEach(() => {
   // happy-dom computes no layout, so sizes are planted directly.
   Object.defineProperty(host, 'clientWidth', { value: 800, configurable: true })
   Object.defineProperty(host, 'clientHeight', { value: 600, configurable: true })
+  // A test that wants a fractional snap sets its own scale.
+  Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true })
 })
 
 describe('createCanvasView', () => {
@@ -54,6 +56,135 @@ describe('createCanvasView', () => {
     const first = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
     expect(first.style.left).toBe('6px')
     expect(first.style.width).toBe('700px')
+  })
+
+  /*
+   * Zoom is view state: the pane's box changes, the layout behind it does not.
+   * 800x600 host, 6px edges and a 10px floor, so the box is 788x584 at 6,6.
+   */
+  it('lays the zoomed pane over the visible canvas', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    expect([pane.style.left, pane.style.top, pane.style.width, pane.style.height]).toEqual([
+      '6px',
+      '6px',
+      '788px',
+      '584px',
+    ])
+    expect(pane.classList.contains('pane--zoomed')).toBe(true)
+  })
+
+  /*
+   * The track's transform snaps to device pixels; a wheel glide can stop the
+   * scroll between them. Read raw, the zoom box would sit a fraction off the
+   * screen and the pane behind it would show through at the edge.
+   */
+  it('places the zoom box at the scroll the transform actually used', () => {
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.scrollByExact(100.4) // within the 418px range this canvas has
+    expect(view.root.style.transform).toBe('translateX(-100.5px)')
+    view.setZoom('a1')
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    // 100.5 snapped + the 6px edge, rounded as every pane box is.
+    expect(pane.style.left).toBe('107px')
+  })
+
+  it('covers the visible area behind the zoomed pane', () => {
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.scrollByExact(100.4)
+    view.setZoom('a1')
+    const scrim = host.querySelector<HTMLElement>('.zoom-scrim')!
+    expect(scrim).not.toBeNull()
+    expect([scrim.style.left, scrim.style.width, scrim.style.height]).toEqual([
+      '100.5px',
+      '800px',
+      '600px',
+    ])
+    // Not a pane: the budget, the rects and every pane query must miss it.
+    expect(scrim.classList.contains('pane')).toBe(false)
+    expect(host.querySelectorAll('.pane')).toHaveLength(3)
+    expect(view.getRects()).toHaveLength(3)
+    expect(scrim.closest('.canvas-track')).not.toBeNull()
+  })
+
+  /*
+   * The panes underneath need a layer of their own while a zoom is on, or their
+   * peek labels (z-index 4 inside a pane that has none) draw over it.
+   */
+  it('marks the track while a pane is zoomed, and unmarks it after', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(false)
+    view.setZoom('a1')
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(true)
+    view.setZoom(null)
+    expect(view.root.classList.contains('canvas-track--zoomed')).toBe(false)
+  })
+
+  it('takes the scrim away with the zoom', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    view.setZoom(null)
+    expect(host.querySelector('.zoom-scrim')).toBeNull()
+  })
+
+  it('leaves every other pane where the layout put it', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const other = host.querySelector<HTMLElement>('[data-pane-id="b1"]')!
+    const before = other.style.cssText
+    view.setZoom('a1')
+    expect(other.style.cssText).toBe(before)
+    expect(other.classList.contains('pane--zoomed')).toBe(false)
+  })
+
+  it('restores the exact rect it had, in the element it already had', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const pane = host.querySelector<HTMLElement>('[data-pane-id="a1"]')!
+    const before = pane.style.cssText
+    view.setZoom('a1')
+    view.setZoom(null)
+    // The same element throughout — xterm lives inside it.
+    expect(host.querySelector('[data-pane-id="a1"]')).toBe(pane)
+    expect(pane.style.cssText).toBe(before)
+    expect(pane.classList.contains('pane--zoomed')).toBe(false)
+  })
+
+  it('ignores a pan while zoomed, so the pane cannot slide away', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    const before = view.root.style.transform
+    view.panBy(240, 0)
+    view.scrollByExact(240)
+    expect(view.root.style.transform).toBe(before)
+    expect(view.getViewport().scrollX).toBe(0)
+  })
+
+  it('scrolls again once the zoom is gone', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    view.setZoom('a1')
+    view.setZoom(null)
+    view.scrollByExact(120)
+    expect(view.getViewport().scrollX).toBe(120)
+  })
+
+  /* The layout is untouched, so the budget still sees the panes as they are. */
+  it('keeps getRects on the layout rects', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const before = JSON.stringify(view.getRects())
+    view.setZoom('a1')
+    expect(JSON.stringify(view.getRects())).toBe(before)
   })
 
   it('calls the hook with the pane id on mousedown', () => {

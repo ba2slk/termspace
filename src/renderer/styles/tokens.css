@@ -10,6 +10,21 @@
   --border-active: rgba(255, 255, 255, 0.34);
   /* A hard 1px ring outside that border, not a blurred shadow. */
   --ring-active: rgba(255, 255, 255, 0.11);
+  /*
+   * The two ends of the focus border: resting, and the same border zoomed. The
+   * zoom is always the brighter of the pair, but the room to move is on a
+   * different side in each mode, so the pair below is the white one and the
+   * tinted override flips it.
+   *
+   * White has nowhere to go up — it is already the brightest thing on the
+   * canvas — so it rests at full and the zoom mixes white in on top. A tint
+   * cannot brighten without washing out to grey, so it rests held back and the
+   * zoom is the colour whole.
+   */
+  /* Share of the focus colour the resting border keeps, the rest transparent. */
+  --focus-rest: 100%;
+  /* Share of it in the zoomed border, the rest white. */
+  --focus-zoom: 70%;
   /* Scrim over unfocused panes; enough to recede, not to hide. */
   --scrim-idle: rgba(10, 10, 10, 0.3);
 
@@ -119,4 +134,14 @@
   --fs-title: calc(17px * var(--ui-scale));
   --fs-term: 13px;
   --lh-term: 1.35;
+}
+
+/*
+ * The focus border is a colour of the user's choosing — the palette accent or
+ * a typed hex. main.ts puts this class on the root for those two modes, and
+ * takes it off for white.
+ */
+:root.focus-tinted {
+  --focus-rest: 60%;
+  --focus-zoom: 100%;
 }

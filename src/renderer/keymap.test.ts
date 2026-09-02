@@ -111,6 +111,14 @@ describe('resolveAction — other bindings', () => {
     expect(resolveAction(chord('KeyB', { altKey: true }))).toBeNull()
   })
 
+  it('Alt+Z zooms the focused pane', () => {
+    expect(resolveAction(chord('KeyZ', { altKey: true }))).toEqual({ t: 'zoom' })
+  })
+
+  it('zoom acts on the focused pane, so it is not an app action', () => {
+    expect(isAppAction({ t: 'zoom' })).toBe(false)
+  })
+
   it('reveal-focus needs a session, so it is not an app action', () => {
     expect(isAppAction({ t: 'reveal-focus' })).toBe(false)
   })

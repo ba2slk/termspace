@@ -107,6 +107,31 @@ English copy.
   moves via a round trip of the left coordinate, and focus must stay on the pane
   throughout the move
 
+**Pane zoom**
+- **`Alt+Z` lays the focused pane over the visible canvas, and `Alt+Z` again puts it
+  back where it was** (measured as pixels against the canvas host, insets included: the
+  class saying "zoomed" was never the promise, the box is. The restore is compared with
+  the rect the pane held before the zoom, since the layout behind it never changed)
+- **The zoomed pane's border is one step brighter than the resting focused one, and
+  back to resting when the zoom is dropped** (both ends are derived from whichever
+  colour the focus-border setting is on, and the direction flips per mode: white rests
+  at full and the zoom mixes white in, a tint rests held back and the zoom is the
+  colour whole. The check resolves the rule's own expression rather than naming a
+  colour, and asserts the two actually differ. The zoomed pane is also the focused
+  one, so the rule only works if it beats `.pane--focused`, which a class name cannot
+  show)
+- **A focus move under a zoom takes two presses: the first drops the zoom with the
+  focus where it was, the second moves** (the neighbours are off screen under a zoom,
+  so one press would aim blind. Every other zoom-dropping action — resize, split,
+  move, add column, close, overview — still lands in the same press, since each names
+  what it acts on)
+- **Holding the peek modifier while zoomed shows no label from the panes
+  underneath** (asked of `elementFromPoint` at each label's centre: a pane sets no
+  z-index, so its label at 4 climbed the track's ladder and drew over the zoom)
+- **Canvas background covers the whole visible area behind the zoomed pane** (the box
+  is rounded to whole pixels and the track's transform snaps to device ones, so the
+  two can disagree by a fraction and the pane behind showed through that sliver)
+
 **Renderer budget**
 - Off-screen panes freeze (a pane that had never been visible stayed awake forever)
 - Frozen panes hold no WebGL context
@@ -290,10 +315,14 @@ English copy.
   they report as monospace, but rendering a terminal with them shows no characters at
   all)
 - 0/1 settings appear as on/off toggles, not sliders, and clicking actually flips them
-- **Custom focus border paints the focused pane's border that colour, and White puts the
-  token's colour back** (the border is set through a runtime custom property with the
-  token as its fallback, so reading the class or the setting proves nothing — only the
-  pane's computed `border-top-color` says which of the two actually won)
+- **Custom focus border paints the focused pane's border that colour held back to its
+  resting share, and White puts the token's colour back at full** (the border is set
+  through a runtime custom property with the token as its fallback, so reading the class
+  or the setting proves nothing — only the pane's computed `border-top-color` says which
+  of the two actually won)
+- **The root carries `focus-tinted` in Custom and Palette, and loses it in White** (that
+  class is what picks the mode's pair of resting/zoomed shares; without it a chosen
+  colour would step the way white does)
 - The colour field is inert unless the mode is Custom (in the other two modes it names a
   colour nothing reads)
 - **Interface size grows the title bar in pixels while the canvas track's width does not
