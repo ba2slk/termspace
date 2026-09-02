@@ -904,7 +904,8 @@ export async function checkOverviewWithFoldedPanes(report: Report): Promise<void
  * first pane is folded over one that is not, beside a column folded all the way
  * down. Five of its six panes are folded.
  *
- * Runs last in its group, because it opens a session of its own.
+ * Runs last in its group, because it opens a session of its own, and ends it
+ * with the group's own session back on screen.
  *
  * The fault it pins is that a folded row could never be named. A bar is a fixed
  * FOLD_BAR_HEIGHT and the map never scales past MAX_OVERVIEW_SCALE, so its row
@@ -993,6 +994,17 @@ export async function checkOverviewFoldedShape(report: Report): Promise<void> {
   await capture(report, 'overview-folded-shape')
   press('Escape')
   await waitFor(() => overlay() === null)
+
+  // Put the group's session back and end this one: under --serial the groups
+  // after this count what is open, and a second session froze their panes.
+  await openSession('verify')
+  const close = [...document.querySelectorAll<HTMLButtonElement>('.sidebar__close')].find(
+    (button) => button.closest('.sidebar__row')?.textContent?.includes('folded') === true,
+  )
+  close?.click()
+  await waitFor(() => document.querySelectorAll('.session-host').length === 1)
+  report['overviewFoldedShapeEnded'] =
+    document.querySelectorAll('.session-host').length === 1 ? 'ok' : 'FAIL (folded still running)'
 }
 
 export function checkRendererBudget(report: Report): void {

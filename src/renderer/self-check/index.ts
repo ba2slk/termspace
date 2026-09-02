@@ -101,7 +101,7 @@ const GROUPS: Readonly<
     checkRendererBudget(report)
     await checkGridFillsPane(report)
     await checkClickableLinks(report)
-    // Last: it opens a session of its own and does not put the previous one back.
+    // Last: it opens a session of its own, then ends it with verify back open.
     await checkOverviewFoldedShape(report)
   },
 
