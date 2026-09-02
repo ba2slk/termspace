@@ -237,7 +237,7 @@ export function columnSnapOffset(
   return OVERVIEW_MARGIN + centres[next]!.centre - lens.x - lens.width / 2
 }
 
-/** The pane in this column whose middle sits closest to a remembered height. */
+/** The pane in this column drawn nearest a height on the map — the canvas's rule. */
 export function paneNearestY(
   cards: readonly OverviewCard[],
   columnId: string,
@@ -252,9 +252,14 @@ export function paneNearestY(
 
 /**
  * One selection step, by the canvas's own focus rules — a step on the map must
- * land where the same key would on the canvas. Returns the whole layout so
- * desiredY survives and ←→ stays reversible, exactly as on the canvas.
+ * land where the same key would on the canvas. Returns the whole layout, so the
+ * caller gets desiredY along with the new focus, exactly as on the canvas.
  */
-export function moveSelection(layout: Layout, selectedId: string, dir: Direction): Layout {
-  return focusDir({ ...layout, focusedPaneId: selectedId }, dir)
+export function moveSelection(
+  layout: Layout,
+  selectedId: string,
+  dir: Direction,
+  columnHeight: number,
+): Layout {
+  return focusDir({ ...layout, focusedPaneId: selectedId }, dir, columnHeight)
 }

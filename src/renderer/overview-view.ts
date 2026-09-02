@@ -5,7 +5,7 @@
  */
 import type { Viewport } from './layout-geometry'
 import type { Direction, Layout } from './layout-model'
-import { canvasWidth } from './layout-geometry'
+import { canvasWidth, columnHeightIn } from './layout-geometry'
 import {
   clampStripOffset,
   columnAtLensCenter,
@@ -155,8 +155,6 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
   let lens: Lens = { x: 0, width: 0 }
   let lastCards: readonly OverviewCard[] = []
   let pannable = false
-  /** The height the selection keeps as it crosses columns — the canvas's rule. */
-  let desiredY = 0
   /** Where the canvas was when the map opened, for a cancel to put it back. */
   let openedAtScrollX = 0
   let scrubbed = false
@@ -175,17 +173,20 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     hooks.onScrub(landingScrollX(offset, scale, canvasWidth(snapshot), hooks.viewport(), lens))
   }
 
-  /** The selection follows the lens: whichever column it frames, at desiredY. */
+  /** The canvas's own column height, so a step on the map measures what it draws. */
+  const columnHeight = (): number => columnHeightIn(hooks.viewport().height)
+
+  /**
+   * The selection follows the lens: whichever column it frames, at the card
+   * facing the selected one — the canvas's rule, read off the map's own
+   * geometry rather than a remembered height.
+   */
   const trackSelection = (): void => {
     const columnId = columnAtLensCenter(lastCards, offset, lens)
     if (columnId === null) return
-    const paneId = paneNearestY(lastCards, columnId, desiredY)
+    const from = lastCards.find((c) => c.paneId === selectedId)
+    const paneId = paneNearestY(lastCards, columnId, from === undefined ? 0 : from.y + from.height / 2)
     if (paneId !== null) selectCard(paneId)
-  }
-
-  const rememberY = (): void => {
-    const card = lastCards.find((c) => c.paneId === selectedId)
-    if (card !== undefined) desiredY = card.y + card.height / 2
   }
 
   // Vertical wheel pans horizontally, exactly like the canvas; both axes
@@ -411,7 +412,6 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
     scrubbed = false
     offset = 0
     render()
-    rememberY()
     if (pannable) {
       // Align the strip so the canvas region you are looking at sits in the lens.
       offset = clampStripOffset(
@@ -455,7 +455,7 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
       if (dir !== undefined) {
         if (!pannable) {
           // Fit mode: nothing slides, so a step is the canvas's own focus move.
-          snapshot = moveSelection(snapshot, selectedId, dir)
+          snapshot = moveSelection(snapshot, selectedId, dir, columnHeight())
           selectCard(snapshot.focusedPaneId)
           return true
         }
@@ -467,13 +467,12 @@ export function createOverviewView(host: HTMLElement, hooks: OverviewHooks): Ove
           scrub()
           return true
         }
-        // Vertical stays inside the framed column, and sets the height to keep.
-        const stepped = moveSelection(snapshot, selectedId, dir)
+        // Vertical stays inside the framed column; a horizontal step resets it.
+        const stepped = moveSelection(snapshot, selectedId, dir, columnHeight())
         snapshot = stepped
         const framed = columnAtLensCenter(lastCards, offset, lens)
         const moved = lastCards.find((c) => c.paneId === stepped.focusedPaneId)
         if (moved !== undefined && moved.columnId === framed) selectCard(stepped.focusedPaneId)
-        rememberY()
         return true
       }
       if (event.key === 'Enter') {

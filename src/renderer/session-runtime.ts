@@ -991,7 +991,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     switch (action.t) {
       case 'focus':
-        setLayout(focusDir(layout, action.dir))
+        setLayout(focusDir(layout, action.dir, columnHeight()))
         break
       case 'resize':
         applyResize(action.dir)
