@@ -373,6 +373,18 @@ body {
   cursor: grabbing;
   /* Without this the drag paints a text selection across the names it passes. */
   user-select: none;
+  /* The width of the bar that was on screen when the drag began, held open in
+     its place: Chromium's is a classic bar, so hiding it hands its width to the
+     content box and every row would grow by it mid-drag. */
+  border-right: var(--drag-bar-w, 0px) solid transparent;
+}
+
+/* The dragged row rides on a transform, and a transform past the last row is
+   scrollable overflow: the list would flip a scrollbar on for the drag and off
+   again on the drop. Hide it instead of touching `overflow`, which would move
+   the rows and could reset the scroll position. */
+.sidebar__list--dragging::-webkit-scrollbar {
+  display: none;
 }
 
 /* A session with a bad file is still a session: its row must drag. The button is
@@ -498,6 +510,107 @@ body {
   text-align: center;
   color: var(--fg-faint);
   line-height: 1.6;
+}
+
+/* The archive dock, pinned under the list. It sits in the flow and pushes the
+   list up when it opens: no overlay, no shadow, nothing covering live rows. */
+.sidebar__dock {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar__dock-list {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 6px;
+  transition: max-height var(--dur) ease;
+}
+
+.sidebar__dock--open .sidebar__dock-list {
+  /* About four rows: enough to see the archive, never enough to become it. */
+  max-height: 160px;
+}
+
+/* Only once the height has arrived: mid-open the rows overflow a cap they are
+ * about to fit under, and the scrollbar would appear for the animation alone. */
+.sidebar__dock--settled .sidebar__dock-list {
+  overflow-y: auto;
+}
+
+.sidebar__dock-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: var(--fg-faint);
+  font: inherit;
+  /* Reads at the same size as the session names it sits under. */
+  font-size: var(--fs-ui-lg);
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar__dock-header:hover {
+  background: var(--fill-hover-faint);
+  color: var(--fg-dim);
+}
+
+/* The row being dragged is aimed here: louder than hover, and it outlives it. */
+.sidebar__dock-header--target,
+.sidebar__dock-header--target:hover {
+  background: var(--fill-active);
+  color: var(--fg);
+}
+
+.sidebar__dock-label {
+  flex: 1;
+}
+
+/* The same number as a row's pane count, so the two read as one system: the
+   small size, and a colour of its own so the header's hover cannot lift it —
+   the pane count does not brighten when its row is hovered either. */
+.sidebar__dock-count {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+/* Archived rows are readable, not addressable: no dot, no count, no power. */
+.sidebar__row--archived {
+  padding: 6px 8px;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-lg);
+}
+
+.sidebar__dock-list--dragging {
+  cursor: grabbing;
+  /* Without this the drag paints a text selection across the names it passes. */
+  user-select: none;
+}
+
+/* A row on its way out of the archive. Fixed, not translated in place: the dock
+   is a capped scrolling box and would cut the row off at its own top edge.
+   Under the menus and the toast, over everything in the sidebar. */
+.sidebar__row--lifted {
+  position: fixed;
+  z-index: 5;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+}
+
+/* Held over the list, where a release restores it: it stops reading as archived
+   before the drop, not after. */
+.sidebar__row--restoring {
+  color: var(--fg);
+}
+
+/* Where that row would land. The faint hover fill, not the header's --fill-active:
+   spread over the whole list, that reads as a lit block rather than a target. */
+.sidebar__list--restore-target {
+  background: var(--fill-hover-faint);
 }
 
 /* ── Canvas ───────────────────────────────────────────── */

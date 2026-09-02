@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyOrder, moveTo, parseOrder, renameInOrder } from './session-order'
+import { applyOrder, moveTo, moveToVisible, parseOrder, renameInOrder } from './session-order'
 
 const item = (id: string, createdMs: number) => ({ id, createdMs })
 
@@ -59,6 +59,42 @@ describe('moveTo', () => {
   })
   it('leaves the order alone when the index does not change', () => {
     expect(moveTo(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('moveToVisible', () => {
+  const hidden = (...ids: string[]) => new Set(ids)
+
+  it('counts the target slot over the visible ids only', () => {
+    // The list shows a b c; dropping a at the bottom must read as b c a.
+    expect(moveToVisible(['old', 'a', 'b', 'c'], hidden('old'), 'a', 2)).toEqual([
+      'old',
+      'b',
+      'c',
+      'a',
+    ])
+  })
+
+  it('leaves every hidden id at its own index', () => {
+    expect(moveToVisible(['a', 'x', 'b', 'y', 'c'], hidden('x', 'y'), 'c', 0)).toEqual([
+      'c',
+      'x',
+      'a',
+      'y',
+      'b',
+    ])
+  })
+
+  it('behaves like moveTo when nothing is hidden', () => {
+    expect(moveToVisible(['a', 'b', 'c'], hidden(), 'c', 0)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('is a no-op for a hidden id', () => {
+    expect(moveToVisible(['a', 'x', 'b'], hidden('x'), 'x', 0)).toEqual(['a', 'x', 'b'])
+  })
+
+  it('is a no-op for an id it does not hold', () => {
+    expect(moveToVisible(['a', 'b'], hidden(), 'zz', 0)).toEqual(['a', 'b'])
   })
 })
 

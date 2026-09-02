@@ -113,6 +113,8 @@ export interface SidebarMenuState {
   readonly running: boolean
   /** That session is the one on the canvas. */
   readonly isCurrent: boolean
+  /** It sits in the archive dock, not in the list. */
+  readonly archived: boolean
 }
 
 export interface SidebarMenuActions {
@@ -125,6 +127,8 @@ export interface SidebarMenuActions {
   readonly refreshList: () => void
   readonly openSessionsDir: () => void
   readonly deleteSession: () => void
+  readonly archiveSession: () => void
+  readonly restoreSession: () => void
 }
 
 /**
@@ -140,6 +144,23 @@ export function sidebarMenuItems(
       { label: t.firstRun.newSession, run: actions.newSession },
       { label: t.firstRun.refreshList, separatorBefore: true, run: actions.refreshList },
       { label: t.firstRun.openSessionsDir, run: actions.openSessionsDir },
+    ]
+  }
+
+  /*
+   * An archived row is a shelf, not a session: opening, renaming and saving a
+   * layout into it all assume a place in the list it no longer has. What is
+   * left is getting it back, or letting it go.
+   */
+  if (state.archived) {
+    return [
+      { label: t.firstRun.restoreSession, run: actions.restoreSession },
+      {
+        label: t.firstRun.deleteSession,
+        separatorBefore: true,
+        danger: true,
+        run: actions.deleteSession,
+      },
     ]
   }
 
@@ -170,11 +191,12 @@ export function sidebarMenuItems(
       run: actions.saveLayout,
     },
     { label: t.firstRun.editSessionFile, run: actions.editSessionFile },
-    // List commands (new session, the folder) belong to the empty-space menu:
-    // this one is about the row under the pointer.
+    // Leaving the list, reversibly first, then not. List commands (new session,
+    // the folder) belong to the empty-space menu: this one is about the row
+    // under the pointer.
+    { label: t.firstRun.archiveSession, separatorBefore: true, run: actions.archiveSession },
     {
       label: t.firstRun.deleteSession,
-      separatorBefore: true,
       danger: true,
       run: actions.deleteSession,
     },

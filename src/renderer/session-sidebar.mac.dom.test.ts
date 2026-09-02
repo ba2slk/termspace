@@ -18,6 +18,7 @@ function summary(over: Partial<SessionSummary> = {}): SessionSummary {
     paneCount: 1,
     createdMs: 0,
     error: null,
+    archived: false,
     ...over,
   }
 }
@@ -27,6 +28,8 @@ const hooks = (): SidebarHooks => ({
   onClose: vi.fn(),
   onRefresh: vi.fn(),
   onWidthChange: vi.fn(),
+  onArchive: vi.fn(),
+  onRestore: vi.fn(),
   gotoHint: (index: number) => `Cmd+${String(index + 1)}`,
   onCreateBlank: vi.fn(),
   onContextMenu: vi.fn(),
@@ -109,5 +112,33 @@ describe('Ctrl+click on mac', () => {
     pointer(rows[0]!, 'pointerup', 190)
 
     expect(h.onReorder).toHaveBeenCalledWith('a', 1)
+  })
+
+  it('on an archived row it restores nothing either', () => {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.render([summary({ id: 'a' }), summary({ id: 'old', archived: true })], new Map(), null)
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    dock.getBoundingClientRect = (): DOMRect =>
+      ({
+        top: 300,
+        height: 60,
+        bottom: 360,
+        left: 0,
+        right: 200,
+        width: 200,
+        x: 0,
+        y: 300,
+        toJSON: () => ({}),
+      }) as DOMRect
+    const row = host.querySelector<HTMLElement>('.sidebar__dock-list .sidebar__row')!
+    stubBoxes([row])
+
+    pointer(row, 'pointerdown', 310, { ctrlKey: true })
+    pointer(row, 'pointermove', 200, { ctrlKey: true })
+    pointer(row, 'pointerup', 200, { ctrlKey: true })
+
+    expect(h.onRestore).not.toHaveBeenCalled()
+    expect(row.className).not.toContain('sidebar__row--lifted')
   })
 })

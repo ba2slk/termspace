@@ -19,7 +19,7 @@ import {
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
-import { gotoTarget, stepSession } from './session-ring'
+import { gotoTarget, reachableSessions, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
@@ -244,11 +244,16 @@ const sidebar = createSessionSidebar(workspace, {
     const chord = bindings['goto-session'][0]
     return chord === undefined ? '' : formatChord(chord, IS_MAC).replace('1~9', String(index + 1))
   },
-  onContextMenu: (at, sessionId) => {
+  onContextMenu: (at, sessionId, archived) => {
     appBar.closeMenus()
-    sidebarMenu.open(at, sidebarMenuItems(sessionId))
+    sidebarMenu.open(at, sidebarMenuItems(sessionId, archived))
   },
   onRename: (id, newName) => void renameSession(id, newName),
+  // The same flow the right-click menu runs: it decides about a running session.
+  onArchive: (id) => archiveSession(id),
+  // As the menu's Restore does, landing at the end of the list. The sidebar
+  // waits on this one: a refusal is how the row it is holding gets put back.
+  onRestore: (id) => restoreSession(id),
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list
@@ -260,12 +265,13 @@ const sidebar = createSessionSidebar(workspace, {
 /** The sidebar's right-click menu; menu-model decides what is in it. */
 const sidebarMenu = createCommandMenu()
 
-function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
+function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly CommandItem[] {
   return buildSidebarMenuItems(
     {
       sessionId,
       running: sessionId !== null && runtimes.has(sessionId),
       isCurrent: sessionId === currentName,
+      archived,
     },
     {
       open: () => {
@@ -287,8 +293,67 @@ function sidebarMenuItems(sessionId: string | null): readonly CommandItem[] {
       deleteSession: () => {
         if (sessionId !== null) confirmDelete(sessionId)
       },
+      archiveSession: () => {
+        if (sessionId !== null) archiveSession(sessionId)
+      },
+      restoreSession: () => {
+        // The toast has already said so; the menu has nothing left to do with it.
+        if (sessionId !== null) void restoreSession(sessionId).catch(() => undefined)
+      },
     },
   )
+}
+
+/**
+ * Archive a session: it leaves the list for the dock, and every shortcut that
+ * could reach it.
+ *
+ * Running is the only case worth a dialog. Archiving ends the processes inside,
+ * which is the same loss closing the window asks about — the shelving itself is
+ * one right-click away from being undone.
+ */
+function archiveSession(id: string): void {
+  const runtime = runtimes.get(id)
+  if (runtime === undefined) {
+    void applyArchive(id)
+    return
+  }
+  const summary = knownSessions.find((s) => s.id === id)
+  askConfirm(
+    {
+      title: t.firstRun.archiveTitle,
+      items: [{ name: summary?.name ?? id, paneCount: livePaneCount(runtime) }],
+      lead: t.firstRun.archiveLead,
+      confirmLabel: t.firstRun.archiveConfirm,
+    },
+    () => {
+      confirmView.close()
+      // The same end as the sidebar's power button, aftermath included.
+      endSession(id)
+      void applyArchive(id)
+    },
+  )
+}
+
+async function applyArchive(id: string): Promise<void> {
+  knownSessions = await api.archiveSession(id)
+  renderSidebar()
+}
+
+/**
+ * Back into the list, at its end — main decides where.
+ *
+ * A refusal is rethrown as well as told: the drag that dropped the row holds it
+ * over the list until this render arrives, and it has to hear that none will.
+ */
+async function restoreSession(id: string): Promise<void> {
+  try {
+    knownSessions = await api.restoreSession(id)
+  } catch (error) {
+    toast.show(t.firstRun.restoreFailedToast)
+    throw error
+  }
+  renderSidebar()
 }
 
 /** Rename a session. The file follows the name, so the id can change under us. */
@@ -383,6 +448,15 @@ function toggleSidebar(): void {
 let knownSessions: readonly SessionSummary[] = []
 
 /**
+ * The same list without the archived ones — everything a shortcut, or a screen
+ * that offers "pick a session", is allowed to see. The sidebar takes the whole
+ * list instead: the dock is where the archived ones are meant to show.
+ */
+function available(): readonly SessionSummary[] {
+  return reachableSessions(knownSessions)
+}
+
+/**
  * The session we were on before this one.
  *
  * Alt+N on the session you are already in goes back here. Switching between two
@@ -417,7 +491,9 @@ function renderSidebar(): void {
     [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
-  placeholder.setHasSessions(knownSessions.length > 0)
+  // What the empty canvas offers is "open one", so an archive-only workspace
+  // has nothing to offer.
+  placeholder.setHasSessions(available().length > 0)
 }
 
 /**
@@ -762,7 +838,7 @@ window.addEventListener('keydown', onAppKeyDown, true)
  * sees. Beyond the ninth there is no shortcut — the list is right there.
  */
 function gotoSession(index: number): void {
-  const rows = knownSessions.map((s) => ({ id: s.id, broken: s.error !== null }))
+  const rows = available().map((s) => ({ id: s.id, broken: s.error !== null }))
   const target = gotoTarget(rows, index, currentName, previousName)
   if (target !== null) void openSession(target)
 }
@@ -774,7 +850,7 @@ function gotoSession(index: number): void {
  * between the ones you are working in, the way a tab strip does.
  */
 function stepToSession(delta: 1 | -1): void {
-  const running = knownSessions.filter((s) => runtimes.has(s.id)).map((s) => s.id)
+  const running = available().filter((s) => runtimes.has(s.id)).map((s) => s.id)
   const target = stepSession(running, currentName, delta)
   if (target !== null) void openSession(target)
 }

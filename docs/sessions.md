@@ -56,6 +56,24 @@ it back, only removing the directory itself does.
 Its middle pane prints the main shortcuts for the platform and the language the
 app started with; changing either later leaves the file as it was written.
 
+## Files the app owns
+
+Two small JSON files sit beside `sessions/`, in `~/.config/termspace/`. They are the
+app's, not yours: it writes them, and nothing in them changes what a session *is*.
+
+- `session-order.json` — the order the sidebar lists sessions in, which is also the
+  order `Alt` + `1`–`9` open. Set by dragging a row. A session not yet dragged sorts by
+  when its file was created.
+- `session-archive.json` — the ids of the sessions you have archived. An archived
+  session is out of the list, out of `Alt` + `1`–`9` and off the step ring, sitting in
+  the dock at the sidebar's bottom until you restore it, which puts it back at the end
+  of the list.
+
+Both hold ids, and an id that no longer has a file is simply ignored — deleting a
+session by hand leaves nothing to clean up, and cannot bring a deleted one back.
+Deleting either file loses only the order or the archive: every session is still
+whatever its own YAML says.
+
 ## Three ways to make one
 
 **Start empty** — `+` in the sidebar header, right-click the sidebar, or ☰ →

@@ -25,6 +25,7 @@ const COMMAND_ACTIONS: readonly (keyof CommandActions)[] = [
 const SIDEBAR_ACTIONS: readonly (keyof SidebarMenuActions)[] = [
   'open', 'endSession', 'saveLayout', 'editSessionFile', 'renameSession',
   'newSession', 'refreshList', 'openSessionsDir', 'deleteSession',
+  'archiveSession', 'restoreSession',
 ]
 
 /** Stands in for a keymap: every action is bound to its own name. */
@@ -132,7 +133,7 @@ function sidebar(state: Partial<SidebarMenuState> = {}): {
 } {
   const actions = spyActions(SIDEBAR_ACTIONS)
   const items = sidebarMenuItems(
-    { sessionId: 'work', running: true, isCurrent: true, ...state },
+    { sessionId: 'work', running: true, isCurrent: true, archived: false, ...state },
     actions,
   )
   return { items, actions }
@@ -143,7 +144,7 @@ describe('the sidebar menu', () => {
     expect(groups(sidebar({}).items)).toEqual([
       [t.firstRun.viewing, t.firstRun.endSession],
       [t.firstRun.renameSession, t.firstRun.saveLayout, t.firstRun.editSessionFile],
-      [t.firstRun.deleteSession],
+      [t.firstRun.archiveSession, t.firstRun.deleteSession],
     ])
   })
 
@@ -199,5 +200,38 @@ describe('the sidebar menu', () => {
     items.find((item) => item.label === t.firstRun.renameSession)?.run()
     expect(actions.renameSession).toHaveBeenCalledTimes(1)
     expect(actions.deleteSession).not.toHaveBeenCalled()
+  })
+
+  it('offers to archive a session that is not archived', () => {
+    const { items, actions } = sidebar({ running: false, isCurrent: false })
+    const archive = items.find((item) => item.label === t.firstRun.archiveSession)
+    expect(archive?.disabled).not.toBe(true)
+    archive?.run()
+    expect(actions.archiveSession).toHaveBeenCalledTimes(1)
+  })
+
+  /* An archived row is a shelf, not a session: only getting it back, or losing it. */
+  it('offers restore and delete, and nothing else, on an archived row', () => {
+    const { items, actions } = sidebar({ archived: true, running: false, isCurrent: false })
+    expect(groups(items)).toEqual([
+      [t.firstRun.restoreSession],
+      [t.firstRun.deleteSession],
+    ])
+    items[0]?.run()
+    expect(actions.restoreSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('still marks only the delete as dangerous on an archived row', () => {
+    const danger = sidebar({ archived: true }).items.filter((item) => item.danger === true)
+    expect(labels(danger)).toEqual([t.firstRun.deleteSession])
+  })
+
+  /* The list commands belong to empty space, archived rows or not. */
+  it('ignores the archived flag over empty space', () => {
+    expect(labels(sidebar({ sessionId: null, archived: true }).items)).toEqual([
+      t.firstRun.newSession,
+      t.firstRun.refreshList,
+      t.firstRun.openSessionsDir,
+    ])
   })
 })

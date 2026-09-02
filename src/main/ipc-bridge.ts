@@ -25,17 +25,20 @@ import { OutputBatcher } from './output-batcher'
 import { resolvePaneCommand } from './pane-command'
 import type { PtyHost } from './pty-host'
 import {
+  archiveSession,
   createBlankSession,
   listSessions,
   loadSession,
   renameSessionName,
   reorderSession,
+  restoreSession,
   saveSession,
   sessionExists,
   sessionFilePath,
   sessionsDir,
 } from './session-config'
 import { orderFile } from './session-order-file'
+import { archiveFile } from './session-archive-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
 import { resolveCwd } from './session-schema'
@@ -53,6 +56,8 @@ const INVOKE_CHANNELS = [
   'session:delete',
   'session:rename',
   'session:reorder',
+  'session:archive',
+  'session:restore',
   'session:editor-command',
   'fonts:list',
   'themes:list',
@@ -100,6 +105,7 @@ export function registerIpcHandlers(
 ): () => void {
   const dir = sessionsDir(env)
   const orderPath = orderFile(env)
+  const archivePath = archiveFile(env)
 
   const send = (channel: string, ...args: unknown[]): void => {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -164,7 +170,10 @@ export function registerIpcHandlers(
     onResume: (paneId) => host.resume(paneId),
   })
 
-  ipcMain.handle('session:list', (): Promise<SessionSummary[]> => listSessions(dir, orderPath))
+  ipcMain.handle(
+    'session:list',
+    (): Promise<SessionSummary[]> => listSessions(dir, orderPath, archivePath),
+  )
   ipcMain.handle(
     'session:load',
     (_e, name: string): Promise<LoadSessionResult> => loadSession(dir, name, env),
@@ -192,7 +201,19 @@ export function registerIpcHandlers(
   ipcMain.handle(
     'session:reorder',
     (_e, id: string, toIndex: number): Promise<SessionSummary[]> =>
-      reorderSession(dir, orderPath, id, toIndex),
+      reorderSession(dir, orderPath, archivePath, id, toIndex),
+  )
+
+  ipcMain.handle(
+    'session:archive',
+    (_e, id: string): Promise<SessionSummary[]> =>
+      archiveSession(dir, orderPath, archivePath, id),
+  )
+
+  ipcMain.handle(
+    'session:restore',
+    (_e, id: string): Promise<SessionSummary[]> =>
+      restoreSession(dir, orderPath, archivePath, id),
   )
 
   ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {

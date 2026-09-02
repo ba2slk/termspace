@@ -29,6 +29,34 @@ export function dropIndexAt(
   return index
 }
 
+/** Where a released drag would land: a slot in the list, or the archive. */
+export type DropTarget = { readonly kind: 'index'; readonly index: number } | { readonly kind: 'archive' }
+
+/**
+ * The archive header sits under the list, so the pointer reaching it also reads
+ * as "past every row" to `dropIndexAt`. The header wins: a drag that has gone
+ * that far is aiming at it, not at the last slot. Anything at or below its top
+ * edge counts, because nothing else lives down there.
+ */
+export function dropTargetAt(
+  pointerY: number,
+  rows: readonly RowBox[],
+  fromIndex: number,
+  header: RowBox | null,
+): DropTarget {
+  if (header !== null && pointerY >= header.top) return { kind: 'archive' }
+  return { kind: 'index', index: dropIndexAt(pointerY, rows, fromIndex) }
+}
+
+/**
+ * A row dragged out of the archive: above the dock's top edge is the session
+ * list, and dropping there puts the session back. The dock is one zone, header
+ * and rows alike — a drag that stays inside it is a drag that changed its mind.
+ */
+export function isRestoreDrop(pointerY: number, dock: RowBox | null): boolean {
+  return dock !== null && pointerY < dock.top
+}
+
 /**
  * How far a row that is not being dragged has to move, in slots, for the list
  * to look as it will after the drop: rows between the origin and the target
