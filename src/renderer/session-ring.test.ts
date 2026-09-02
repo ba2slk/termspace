@@ -63,7 +63,15 @@ describe('the session a numbered key opens', () => {
 
   /* Bouncing back beats the broken flag: you were in it, so it is live. */
   it('bounces back off the current row even when the list calls it broken', () => {
-    expect(gotoTarget([{ id: 'work', broken: true }], 0, 'work', 'notes')).toBe('notes')
+    expect(
+      gotoTarget([{ id: 'work', broken: true }, { id: 'notes', broken: false }], 0, 'work', 'notes'),
+    ).toBe('notes')
+  })
+
+  /* Archiving the session you were in leaves it behind you; the key must not
+     hand it back, or the bounce is a way out of the archive. */
+  it('refuses to bounce back to a session the list no longer has', () => {
+    expect(gotoTarget(rows, 0, 'work', 'shelved')).toBeNull()
   })
 
   it('opens the first row with nothing on the canvas', () => {

@@ -48,8 +48,12 @@ export interface Reachable {
  * instead. Switching between two sessions is the common case, and it should not
  * cost a second shortcut.
  *
+ * The bounce needs its destination to still be a row: archiving the session you
+ * came from leaves it behind you, and handing it back would be a way out of the
+ * archive that the key is not allowed to be.
+ *
  * Null when the key has nowhere to go: past the end of the list, on a broken
- * row, or bouncing back with nothing behind you.
+ * row, or bouncing back with nothing reachable behind you.
  */
 export function gotoTarget(
   rows: readonly Reachable[],
@@ -59,6 +63,8 @@ export function gotoTarget(
 ): string | null {
   const target = rows[index]
   if (target === undefined) return null
-  if (target.id === current) return previous
+  if (target.id === current) {
+    return previous !== null && rows.some((row) => row.id === previous) ? previous : null
+  }
   return target.broken ? null : target.id
 }
