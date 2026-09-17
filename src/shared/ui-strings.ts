@@ -334,6 +334,19 @@ const en = {
     close: 'Close (Esc)',
   },
 
+  /** pane-jump-view.ts: the panel that finds a pane by a few letters. */
+  paneJump: {
+    placeholder: 'Go to a pane by name or command',
+    empty: 'No matching pane',
+    current: 'current',
+    column: (n: number) => `column ${n}`,
+    keys: [
+      { key: '↑↓', label: 'select' },
+      { key: 'Enter', label: 'goes' },
+      { key: 'Esc', label: 'closes' },
+    ],
+  },
+
   /** window-manager.ts: the mac application menu. Roles name themselves; these do not. */
   appMenu: {
     file: 'File',
@@ -665,6 +678,18 @@ const ko: Catalog = {
     previousMatch: '이전 일치 (Shift+Enter)',
     nextMatch: '다음 일치 (Enter)',
     close: '닫기 (Esc)',
+  },
+
+  paneJump: {
+    placeholder: 'pane 이름이나 명령으로 이동',
+    empty: '일치하는 pane 없음',
+    current: '현재',
+    column: (n: number) => `컬럼 ${n}`,
+    keys: [
+      { key: '↑↓', label: '선택' },
+      { key: 'Enter', label: '이동' },
+      { key: 'Esc', label: '닫기' },
+    ],
   },
 
   appMenu: {
