@@ -99,6 +99,22 @@ English copy.
   rather than failed when the scale floor pins the width at both sizes, which is the case
   in a small window)
 
+**Pane jump (`Alt+K` / `Cmd+Shift+K`)**
+- The panel opens on the platform's own default chord, lists every pane in the session,
+  and tags the one focus is already on
+- `Esc` closes it and hands the keyboard back to the focused pane — an input over a
+  terminal that keeps the keys leaves the pane deaf, and nothing in the DOM says so
+- **The typed name reaches the pane as letters in order, not as a substring** (the check
+  types a pane's name with its spaces removed, which no pane's text contains verbatim, and
+  asserts the selected row is that pane)
+- **`Enter` lands on the pane** (focus, the focused border read off computed styles, the
+  keyboard inside the pane, and the pane's `getBoundingClientRect()` inside the canvas
+  viewport — landing is a scroll, so a class name proves nothing. Skipped rather than
+  failed when the window is occluded: the reveal is a glide and needs frames)
+- Not covered: composing a query with a real input method. A synthetic `input` event is
+  not a composition, so Hangul or Japanese in the jump field is checked by hand
+  ("Korean input" below)
+
 **Layout editing**
 - Split down / new column to the right / close pane
 - **A newly created pane receives keyboard focus** (it didn't, so typing right after a
@@ -549,6 +565,9 @@ These can't be replaced by automated judgment. They're matters of impression, no
       appears as a toast
 - [ ] Type a Korean name with the IME: the Enter that ends composition only ends
       composition — a second Enter commits
+- [ ] In the `Alt+K` pane jump, type a Korean query with the IME: the list narrows as
+      syllables commit, the arrows still move the selection, and the Enter that ends
+      composition only ends composition — a second Enter jumps
 - [ ] In the `Alt+M` overview, press `F2` on the selected card and type a title. Letters
       appear as typed (both English and Korean), Enter commits, and the session file has the
       new title without pressing save. Escape leaves the card as it was

@@ -49,6 +49,7 @@ while you're looking somewhere else.
 | Move focus with `Alt` / `Cmd` + arrows | The pane in that direction takes focus and the canvas scrolls to it. No prefix key, and no window numbers to remember. |
 | Columns have fixed pixel widths | A column is a number of pixels, not a share of the window. Resizing the window changes how much of the canvas you can see, not how wide anything is. |
 | Overview of the whole session (`Alt` + `M` / `Cmd+Shift+M`) | The entire canvas shrunk to one screen, each card showing the pane's title and what it is running. Arrow keys or a click jump to a pane, and `F2` renames the selected card. |
+| Go to a pane by name (`Alt` + `K` / `Cmd+Shift+K`) | Type a few letters of a pane's name, its running command or its window title, pick with the arrows, and `Enter` lands on it. Letters need not be adjacent: `nrd` finds `npm run dev`. Current session only. |
 | Save the current layout as a session | Split panes, `cd` each shell, start the commands, then save. Column widths, pane ratios, each shell's working directory, and the running commands are written to a new YAML file. |
 | Sessions are YAML files | One file per session in `~/.config/termspace/sessions/`. The app reads them and never writes back on its own: splitting or resizing at runtime leaves the file alone. Right-clicking a row in the session list renames it: the `name:` field is rewritten and the file is renamed to match, keeping the rest of the file as you wrote it. |
 | Reordering the session list | Drag a row up or down to set its place in the list, which is also the order `Alt` + `1`–`9` open. The order is kept in `~/.config/termspace/session-order.json`, next to the app's settings rather than inside `sessions/`. A session not yet dragged sorts by when its file was created. |
@@ -166,6 +167,7 @@ tmux itself.
 | Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title (can be turned off in settings) |
 | `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |
 | `F2` | `F2` | Rename the selected pane, in the overview |
+| `Alt` + `K` | `Cmd+Shift+K` | Go to a pane by name, command or window title |
 | `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |
 | `Alt` + `G` | `Cmd` + `G` | Scroll back to the focused pane |
 | `Alt` + `1`–`9` | `Cmd` + `1`–`9` | Jump to a session; the same number again bounces back |
