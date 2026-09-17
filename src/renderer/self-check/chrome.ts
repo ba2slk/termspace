@@ -812,6 +812,18 @@ export async function checkPaneJump(report: Report): Promise<void> {
       ? `ok (${rows().length} of ${visiblePanes().length} panes listed)`
       : `MISMATCH (${tagged.length} rows tagged, focus on ${String(startFocus)})`
 
+  /*
+   * The panel holds the keyboard, so a session chord must do nothing while it is
+   * up. A bounded wait is the only way to assert an absence: focus moves inside
+   * the keydown, so a move would already be visible well before this runs out.
+   */
+  press('ArrowRight', { altKey: true })
+  const moved = await waitFor(() => focusedHere() !== startFocus, 300)
+  report['paneJumpBlocksActions'] =
+    !moved && panel() !== null
+      ? 'ok (a focus chord moved nothing, panel still up)'
+      : `FAIL (focus ${String(focusedHere())} from ${String(startFocus)}, panel ${panel() === null ? 'gone' : 'up'})`
+
   // Closing without a jump has to hand the keyboard back, or the pane is deaf.
   send('Escape')
   await waitFor(() => panel() === null)
