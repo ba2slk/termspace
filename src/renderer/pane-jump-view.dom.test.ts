@@ -178,6 +178,35 @@ describe('createPaneJumpView', () => {
     expect(host.querySelector('.pane-jump')).toBeNull()
   })
 
+  it('clicking a row jumps to it', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    rows()[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(h.onJump).toHaveBeenCalledWith('b')
+    expect(host.querySelector('.pane-jump')).toBeNull()
+  })
+
+  it('closes on a mousedown outside, and stays open on one inside', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    host
+      .querySelector('.pane-jump__list')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(host.querySelector('.pane-jump')).not.toBeNull()
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(h.onClose).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('.pane-jump')).toBeNull()
+  })
+
+  it('destroy drops the document listener', () => {
+    const h = hooks()
+    const view = createPaneJumpView(host, h)
+    view.open()
+    view.destroy()
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(h.onClose).not.toHaveBeenCalled()
+  })
+
   it('fills the sub line once commands and titles answer', async () => {
     createPaneJumpView(
       host,
