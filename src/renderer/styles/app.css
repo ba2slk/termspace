@@ -1074,6 +1074,16 @@ body {
 
 /* ── Pane jump ────────────────────────────────────────── */
 
+/* Dims the session the way the overview does, over the same area and through the
+   same token, so the two read as one thing. Sharing rung 5 with the overview is
+   safe: whichever is up owns the keyboard, so the other cannot be opened. */
+.pane-jump-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--overview-scrim);
+}
+
 /* Near the top, centred: a panel you read down from where you typed. Centred on
    the window, not the session host, so it keeps the centre line the title-bar
    title already holds instead of sliding right by half the sidebar. Rung 6 with

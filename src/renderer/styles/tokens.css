@@ -52,8 +52,8 @@
   --search-match-bg: #4a4636;
   --search-match-active-bg: #806f35;
 
-  /* Behind the overview map: dark enough to read the map, light enough to
-     say the session is still there. */
+  /* Behind the overview map, and behind the pane jump: dark enough to read what
+     is over it, light enough to say the session is still there. */
   --overview-scrim: rgba(10, 10, 10, 0.55);
   /* The viewport marker: must stand apart from the card borders around it,
      without outshouting the selected card it often frames. */
