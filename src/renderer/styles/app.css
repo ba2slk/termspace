@@ -1136,7 +1136,9 @@ body {
   background: var(--fill-hover);
 }
 
-.pane-jump__row--selected {
+/* :hover alone out-specifies a plain class, so the selected fill names it too. */
+.pane-jump__row--selected,
+.pane-jump__row--selected:hover {
   background: var(--fill-active);
 }
 
