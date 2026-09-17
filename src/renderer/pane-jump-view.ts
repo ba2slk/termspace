@@ -3,7 +3,7 @@
  * letters mean. Drawing only; keys and pointer are wired by the caller.
  */
 import { t } from './i18n'
-import { rankEntries, type JumpEntry } from './pane-jump-model'
+import { isBlankQuery, rankEntries, type JumpEntry } from './pane-jump-model'
 import { buildEmptyRow, buildRow } from './pane-jump-row'
 
 export interface PaneJumpHooks {
@@ -66,8 +66,8 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   }
 
   function render(): void {
-    // Whitespace alone is not a query; rankEntries strips it the same way.
-    element.classList.toggle('pane-jump--querying', input.value.replace(/\s+/g, '') !== '')
+    // Whitespace alone is not a query; the model decides that, so both agree.
+    element.classList.toggle('pane-jump--querying', !isBlankQuery(input.value))
     const results = rankEntries(input.value, currentEntries())
     list.textContent = ''
     if (results.length === 0) {
