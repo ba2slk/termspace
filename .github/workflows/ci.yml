@@ -7,6 +7,12 @@ on:
   # Run on any branch on demand: gh workflow run ci.yml --ref <branch>
   workflow_dispatch:
 
+# A newer push to the same PR makes the run before it moot. Runs on main are
+# left to finish: each one is the record for its own commit.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-22.04
