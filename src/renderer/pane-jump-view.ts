@@ -163,8 +163,11 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     }
   })
 
-  // Pressing a row must not pull the caret out of the input.
-  list.addEventListener('mousedown', (event) => event.preventDefault())
+  // Pressing anywhere but the input itself must not pull the caret out of it:
+  // the legend and the panel's own padding blur it as readily as a row does.
+  element.addEventListener('mousedown', (event) => {
+    if (event.target !== input) event.preventDefault()
+  })
   list.addEventListener('click', (event) => {
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.pane-jump__row')
     if (row?.dataset.paneId !== undefined) jump(row.dataset.paneId)

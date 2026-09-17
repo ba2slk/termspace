@@ -198,6 +198,16 @@ describe('createPaneJumpView', () => {
     expect(host.querySelector('.pane-jump')).toBeNull()
   })
 
+  it('keeps the caret in the input for a press anywhere but the input', () => {
+    createPaneJumpView(host, hooks()).open()
+    const onLegend = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    host.querySelector('.pane-jump__legend')!.dispatchEvent(onLegend)
+    expect(onLegend.defaultPrevented).toBe(true)
+    const onInput = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    input().dispatchEvent(onInput)
+    expect(onInput.defaultPrevented).toBe(false)
+  })
+
   it('destroy drops the document listener', () => {
     const h = hooks()
     const view = createPaneJumpView(host, h)
