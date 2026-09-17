@@ -66,6 +66,8 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   }
 
   function render(): void {
+    // Whitespace alone is not a query; rankEntries strips it the same way.
+    element.classList.toggle('pane-jump--querying', input.value.replace(/\s+/g, '') !== '')
     const results = rankEntries(input.value, currentEntries())
     list.textContent = ''
     if (results.length === 0) {

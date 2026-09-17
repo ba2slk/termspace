@@ -55,6 +55,23 @@ describe('createPaneJumpView', () => {
     expect(rows()[0]?.classList.contains('pane-jump__row--selected')).toBe(true)
   })
 
+  it('marks the panel while a query is typed, and only then', () => {
+    createPaneJumpView(host, hooks()).open()
+    const panel = host.querySelector('.pane-jump')!
+    expect(panel.classList.contains('pane-jump--querying')).toBe(false)
+    type('nrd')
+    expect(panel.classList.contains('pane-jump--querying')).toBe(true)
+    type('   ')
+    expect(panel.classList.contains('pane-jump--querying')).toBe(false)
+  })
+
+  it('marks the typed letters in the row it ranked', () => {
+    createPaneJumpView(host, hooks()).open()
+    type('nrd')
+    const marks = [...rows()[0]!.querySelectorAll('.pane-jump__match')]
+    expect(marks.map((mark) => mark.textContent).join('')).toBe('nrd')
+  })
+
   it('shows the empty line when nothing matches', () => {
     createPaneJumpView(host, hooks()).open()
     type('zzz')
