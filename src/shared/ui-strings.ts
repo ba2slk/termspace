@@ -342,7 +342,7 @@ const en = {
     column: (n: number) => `column ${n}`,
     keys: [
       { key: '↑↓', label: 'select' },
-      { key: 'Enter', label: 'goes' },
+      { key: 'Enter', label: 'opens' },
       { key: 'Esc', label: 'closes' },
     ],
   },
@@ -687,7 +687,7 @@ const ko: Catalog = {
     column: (n: number) => `컬럼 ${n}`,
     keys: [
       { key: '↑↓', label: '선택' },
-      { key: 'Enter', label: '이동' },
+      { key: 'Enter', label: '열기' },
       { key: 'Esc', label: '닫기' },
     ],
   },
