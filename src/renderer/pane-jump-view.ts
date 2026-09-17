@@ -12,7 +12,11 @@ export interface PaneJumpHooks {
   readonly commands: (paneIds: readonly string[]) => Promise<Record<string, string | null>>
   readonly titles: (paneIds: readonly string[]) => Promise<Record<string, string | null>>
   readonly onJump: (paneId: string) => void
-  /** Closed without a jump; the caller hands the keyboard back to the pane. */
+  /**
+   * The panel closed itself without a jump (Escape, a click outside, toggle);
+   * the caller hands the keyboard back to the pane. `close()` and `destroy()`
+   * are silent: whoever called them already knows.
+   */
   readonly onClose: () => void
 }
 
@@ -58,6 +62,9 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   let opened = false
   // Bumped on every open and close, so an answer from a past open cannot paint.
   let generation = 0
+  // The pane the selection sits on, not its row number: a late sub line re-ranks nothing,
+  // but an entry closing under the panel would shift every index below it.
+  let selectedId: string | null = null
   const commands = new Map<string, string>()
   const titles = new Map<string, string>()
 
@@ -76,11 +83,45 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     const results = rankEntries(input.value, currentEntries())
     list.textContent = ''
     if (results.length === 0) {
+      selectedId = null
       list.append(buildEmptyRow())
       return
     }
-    // Typing resets the selection: the best row after the new letter is row 0.
-    results.forEach((result, index) => list.append(buildRow(result, index === 0)))
+    // The selected pane keeps the highlight while it is listed; otherwise the best row takes it.
+    const at = Math.max(
+      results.findIndex((result) => result.entry.id === selectedId),
+      0,
+    )
+    selectedId = results[at]?.entry.id ?? null
+    results.forEach((result, index) => list.append(buildRow(result, index === at)))
+  }
+
+  function move(delta: number): void {
+    const items = [...list.querySelectorAll<HTMLElement>('.pane-jump__row')]
+    if (items.length === 0) return
+    const from = Math.max(
+      items.findIndex((item) => item.dataset.paneId === selectedId),
+      0,
+    )
+    const next = (from + delta + items.length) % items.length
+    items.forEach((item, index) =>
+      item.classList.toggle('pane-jump__row--selected', index === next),
+    )
+    const row = items[next]
+    selectedId = row?.dataset.paneId ?? null
+    // happy-dom has no scrollIntoView.
+    if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' })
+  }
+
+  function jump(paneId: string): void {
+    // Close first: the caller moves focus, and a teardown after that would take it back.
+    teardown()
+    hooks.onJump(paneId)
+  }
+
+  function dismiss(): void {
+    teardown()
+    hooks.onClose()
   }
 
   /** One round trip per open, for every pane at once. */
@@ -98,7 +139,29 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     void hooks.titles(ids).then(absorb(titles))
   }
 
-  input.addEventListener('input', render)
+  input.addEventListener('input', () => {
+    // A new letter re-ranks everything, so the best row takes the highlight back.
+    selectedId = null
+    render()
+  })
+
+  input.addEventListener('keydown', (event) => {
+    // An open Hangul composition uses the arrows, Enter and Escape itself.
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (event.isComposing) return
+      event.preventDefault()
+      move(event.key === 'ArrowDown' ? 1 : -1)
+    } else if (event.key === 'Enter') {
+      if (event.isComposing) return
+      event.preventDefault()
+      if (selectedId !== null) jump(selectedId)
+    } else if (event.key === 'Escape') {
+      // The first Esc cancels the composition; the panel only gets the next one.
+      if (event.isComposing) return
+      event.preventDefault()
+      dismiss()
+    }
+  })
 
   function teardown(): void {
     opened = false
@@ -122,18 +185,17 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
       commands.clear()
       titles.clear()
       input.value = ''
+      selectedId = null
       host.append(scrim, element)
       render()
       input.focus()
       fill()
     },
     close() {
-      if (!opened) return
-      teardown()
-      hooks.onClose()
+      if (opened) teardown()
     },
     toggle() {
-      if (opened) this.close()
+      if (opened) dismiss()
       else this.open()
     },
     destroy() {

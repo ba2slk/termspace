@@ -30,6 +30,14 @@ function type(query: string): void {
   input().dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+function press(key: string, over: KeyboardEventInit = {}): void {
+  const init = { key, bubbles: true, cancelable: true, ...over }
+  input().dispatchEvent(new KeyboardEvent('keydown', init))
+}
+
+const selectedId = (): string | undefined =>
+  rows().find((row) => row.classList.contains('pane-jump__row--selected'))?.dataset.paneId
+
 /** The hooks resolve one microtask deep; two flushes cover the re-render. */
 async function settle(): Promise<void> {
   await Promise.resolve()
@@ -79,14 +87,95 @@ describe('createPaneJumpView', () => {
     expect(host.querySelector('.pane-jump__empty')).not.toBeNull()
   })
 
-  it('close removes the panel and hands the keyboard back', () => {
+  it('close removes the panel without reporting it: the caller already knows', () => {
     const h = hooks()
     const view = createPaneJumpView(host, h)
     view.open()
     view.close()
     expect(host.querySelector('.pane-jump')).toBeNull()
     expect(view.isOpen).toBe(false)
+    expect(h.onClose).not.toHaveBeenCalled()
+  })
+
+  it('arrows move the selection and wrap', () => {
+    createPaneJumpView(host, hooks()).open()
+    expect(selectedId()).toBe('a')
+    press('ArrowDown')
+    press('ArrowDown')
+    expect(selectedId()).toBe('c')
+    press('ArrowDown')
+    expect(selectedId()).toBe('a')
+    press('ArrowUp')
+    expect(selectedId()).toBe('c')
+  })
+
+  it('typing puts the selection back on the first row', () => {
+    createPaneJumpView(host, hooks()).open()
+    press('ArrowDown')
+    type('e')
+    expect(selectedId()).toBe(rows()[0]?.dataset.paneId)
+  })
+
+  it('keeps the selection on its pane when the sub lines arrive', async () => {
+    createPaneJumpView(host, hooks({ commands: vi.fn(async () => ({ a: 'npm run dev' })) })).open()
+    press('ArrowDown')
+    await settle()
+    expect(selectedId()).toBe('b')
+  })
+
+  it('Enter jumps to the selected pane and closes, without reporting a close', () => {
+    const h = hooks()
+    const view = createPaneJumpView(host, h)
+    view.open()
+    press('ArrowDown')
+    press('Enter')
+    expect(h.onJump).toHaveBeenCalledWith('b')
+    expect(host.querySelector('.pane-jump')).toBeNull()
+    expect(view.isOpen).toBe(false)
+    expect(h.onClose).not.toHaveBeenCalled()
+  })
+
+  it('leaves Enter to an open composition', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    press('Enter', { isComposing: true })
+    expect(h.onJump).not.toHaveBeenCalled()
+    expect(host.querySelector('.pane-jump')).not.toBeNull()
+  })
+
+  it('Enter on the empty line does nothing', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    type('zzz')
+    press('Enter')
+    expect(h.onJump).not.toHaveBeenCalled()
+    expect(host.querySelector('.pane-jump')).not.toBeNull()
+  })
+
+  it('Escape closes and reports it', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    press('Escape')
     expect(h.onClose).toHaveBeenCalledTimes(1)
+    expect(h.onJump).not.toHaveBeenCalled()
+    expect(host.querySelector('.pane-jump')).toBeNull()
+  })
+
+  it('leaves Escape to an open composition', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    press('Escape', { isComposing: true })
+    expect(h.onClose).not.toHaveBeenCalled()
+    expect(host.querySelector('.pane-jump')).not.toBeNull()
+  })
+
+  it('toggle while open reports a close', () => {
+    const h = hooks()
+    const view = createPaneJumpView(host, h)
+    view.open()
+    view.toggle()
+    expect(h.onClose).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('.pane-jump')).toBeNull()
   })
 
   it('fills the sub line once commands and titles answer', async () => {
