@@ -51,9 +51,22 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   element.append(input, list, legend)
 
   let opened = false
+  // Bumped on every open and close, so an answer from a past open cannot paint.
+  let generation = 0
+  const commands = new Map<string, string>()
+  const titles = new Map<string, string>()
+
+  /** The panes as the canvas has them, with whatever the two hooks have answered. */
+  function currentEntries(): JumpEntry[] {
+    return hooks.entries().map((entry) => ({
+      ...entry,
+      command: commands.get(entry.id) ?? entry.command,
+      windowTitle: titles.get(entry.id) ?? entry.windowTitle,
+    }))
+  }
 
   function render(): void {
-    const results = rankEntries(input.value, hooks.entries())
+    const results = rankEntries(input.value, currentEntries())
     list.textContent = ''
     if (results.length === 0) {
       list.append(buildEmptyRow())
@@ -63,10 +76,26 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     results.forEach((result, index) => list.append(buildRow(result, index === 0)))
   }
 
+  /** One round trip per open, for every pane at once. */
+  function fill(): void {
+    const ids = hooks.entries().map((entry) => entry.id)
+    const mine = generation
+    const absorb = (into: Map<string, string>) => (answer: Record<string, string | null>) => {
+      if (mine !== generation) return
+      for (const [id, value] of Object.entries(answer)) {
+        if (value !== null && value !== '') into.set(id, value)
+      }
+      render()
+    }
+    void hooks.commands(ids).then(absorb(commands))
+    void hooks.titles(ids).then(absorb(titles))
+  }
+
   input.addEventListener('input', render)
 
   function teardown(): void {
     opened = false
+    generation += 1
     element.remove()
   }
 
@@ -81,10 +110,14 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
         return
       }
       opened = true
+      generation += 1
+      commands.clear()
+      titles.clear()
       input.value = ''
       host.append(element)
       render()
       input.focus()
+      fill()
     },
     close() {
       if (!opened) return

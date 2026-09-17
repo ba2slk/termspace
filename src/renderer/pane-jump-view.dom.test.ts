@@ -30,6 +30,12 @@ function type(query: string): void {
   input().dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+/** The hooks resolve one microtask deep; two flushes cover the re-render. */
+async function settle(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 beforeEach(() => {
   document.body.innerHTML = '<div id="host"></div>'
   host = document.getElementById('host')!
@@ -64,6 +70,28 @@ describe('createPaneJumpView', () => {
     expect(host.querySelector('.pane-jump')).toBeNull()
     expect(view.isOpen).toBe(false)
     expect(h.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('fills the sub line once commands and titles answer', async () => {
+    createPaneJumpView(
+      host,
+      hooks({
+        commands: vi.fn(async () => ({ a: 'npm run dev', c: 'nvim' })),
+        titles: vi.fn(async () => ({ c: 'layout-model.ts' })),
+      }),
+    ).open()
+    await settle()
+    const subs = rows().map((row) => row.querySelector('.pane-jump__sub')?.textContent)
+    expect(subs).toEqual(['npm run dev', '', 'nvim · layout-model.ts'])
+  })
+
+  it('ignores answers that arrive after close', async () => {
+    const view = createPaneJumpView(host, hooks({ commands: vi.fn(async () => ({ a: 'late' })) }))
+    view.open()
+    view.close()
+    await settle()
+    expect(host.querySelector('.pane-jump')).toBeNull()
+    expect(view.isOpen).toBe(false)
   })
 
   it('opening twice keeps one panel', () => {
