@@ -1074,16 +1074,20 @@ body {
 
 /* ── Pane jump ────────────────────────────────────────── */
 
-/* Near the top of the session, centred: a panel you read down from where you
-   typed. Rung 6 with the toast — above the overview, under the menu; the two
-   never meet, since the toast sits in the far corner and takes no clicks. */
+/* Near the top, centred: a panel you read down from where you typed. Centred on
+   the window, not the session host, so it keeps the centre line the title-bar
+   title already holds instead of sliding right by half the sidebar. Rung 6 with
+   the toast — above the overview, under the menu; the two never meet, since the
+   toast sits in the far corner and takes no clicks. */
 .pane-jump {
-  position: absolute;
-  top: 28px;
+  /* fixed, so no ancestor's width decides the centre. Its top is the session
+     area's own top (the title bar's height) plus the offset it always had. */
+  position: fixed;
+  top: calc(var(--bar-h) + 28px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  width: min(440px, calc(100% - 24px));
+  width: min(440px, calc(100vw - 24px));
   padding: 4px;
   background: var(--bg-raised);
   border: 1px solid var(--border-focus);
