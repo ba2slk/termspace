@@ -802,6 +802,47 @@ export async function checkPaneJump(report: Report): Promise<void> {
       ? 'ok'
       : `MISMATCH (${field()?.placeholder ?? 'none'})`
 
+  /*
+   * The panel is centred on the window, not on the session host — with the
+   * sidebar open the two differ by half its width. Measured rather than read off
+   * the rule: position: fixed is trapped by a transformed ancestor, and nothing
+   * in the DOM says so. top rides along so the vertical place can be compared.
+   */
+  const panelBox = panel()?.getBoundingClientRect()
+  const panelMid = panelBox === undefined ? 0 : (panelBox.left + panelBox.right) / 2
+  const windowMid = window.innerWidth / 2
+  report['paneJumpCentredOnWindow'] =
+    panelBox !== undefined && Math.abs(panelMid - windowMid) <= 1
+      ? `ok (centre ${panelMid.toFixed(1)}px, window ${windowMid.toFixed(1)}px, top ${Math.round(panelBox.top)}px)`
+      : `FAIL (centre ${panelMid.toFixed(1)}px, window ${windowMid.toFixed(1)}px)`
+
+  /*
+   * The session behind is dimmed, like the overview's. The pane is clipped by
+   * the canvas, so only the part of it on screen can be covered.
+   */
+  const scrim = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane-jump-scrim')
+  const scrimBox = scrim?.getBoundingClientRect()
+  const paint = scrim === null ? 'none' : getComputedStyle(scrim).backgroundColor
+  const seen = paint !== 'none' && paint !== 'transparent' && !paint.endsWith(', 0)')
+  const hostBox = document
+    .querySelector<HTMLElement>('.session-host:not([hidden])')
+    ?.getBoundingClientRect()
+  const paneBox = document
+    .querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')
+    ?.getBoundingClientRect()
+  const covers =
+    scrimBox !== undefined &&
+    hostBox !== undefined &&
+    paneBox !== undefined &&
+    scrimBox.left <= Math.max(paneBox.left, hostBox.left) + 1 &&
+    scrimBox.right >= Math.min(paneBox.right, hostBox.right) - 1 &&
+    scrimBox.top <= Math.max(paneBox.top, hostBox.top) + 1 &&
+    scrimBox.bottom >= Math.min(paneBox.bottom, hostBox.bottom) - 1
+  report['paneJumpDimsSession'] =
+    seen && covers
+      ? `ok (${paint} over ${Math.round(scrimBox?.width ?? 0)}×${Math.round(scrimBox?.height ?? 0)}px)`
+      : `FAIL (paint ${paint}, covers the focused pane: ${String(covers)})`
+
   // An empty query lists every pane, and marks the one focus is already on.
   await waitFor(() => rows().length === visiblePanes().length)
   const tagged = rows().filter(
