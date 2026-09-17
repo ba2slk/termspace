@@ -1072,6 +1072,167 @@ body {
   background: var(--fill-active);
 }
 
+/* ── Pane jump ────────────────────────────────────────── */
+
+/* Dims the session the way the overview does, over the same area and through the
+   same token, so the two read as one thing. Sharing rung 5 with the overview is
+   safe: whichever is up owns the keyboard, so the other cannot be opened. */
+.pane-jump-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--overview-scrim);
+}
+
+/* Near the top, centred: a panel you read down from where you typed. Centred on
+   the window, not the session host, so it keeps the centre line the title-bar
+   title already holds instead of sliding right by half the sidebar. Rung 6 with
+   the toast — above the overview, under the menu; the two never meet, since the
+   toast sits in the far corner and takes no clicks. */
+.pane-jump {
+  /* fixed, so no ancestor's width decides the centre. Its top is the session
+     area's own top (the title bar's height) plus the offset it always had. */
+  position: fixed;
+  top: calc(var(--bar-h) + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(560px, calc(100vw - 24px));
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-overlay);
+  color: var(--fg);
+  font-size: var(--fs-ui);
+}
+
+.pane-jump__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  outline: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-ui-lg);
+}
+
+.pane-jump__input::placeholder {
+  color: var(--fg-faint);
+}
+
+.pane-jump__list {
+  /* Eight rows, then scroll. A row is its padding plus the name and sub lines;
+     the thin thumb comes from the app-wide scrollbar rule. */
+  max-height: calc(8 * (12px + 1.5 * var(--fs-ui) + 1.5 * var(--fs-ui-sm)));
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* Flex, not a grid: the tag is only on the focused pane, and in a grid the
+   column it leaves empty would be taken by the one after it. */
+.pane-jump__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+  cursor: default;
+}
+
+.pane-jump__row:hover {
+  background: var(--fill-hover);
+}
+
+/* :hover alone out-specifies a plain class, so the selected fill names it too. */
+.pane-jump__row--selected,
+.pane-jump__row--selected:hover {
+  background: var(--fill-active);
+}
+
+/* Takes the room the tag and the column leave, and gives it up first. */
+.pane-jump__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Rang while you were elsewhere. The same dot the sidebar and the overview use. */
+.pane-jump__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--wants);
+}
+
+.pane-jump__tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-pill);
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+}
+
+.pane-jump__where {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Its own line under the two above, whatever they took. */
+.pane-jump__sub {
+  flex: 0 0 100%;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pane-jump__sep {
+  color: var(--fg-faint);
+}
+
+/* Once there is a query, the name stands down so the matched letters carry it. */
+.pane-jump--querying .pane-jump__name {
+  color: var(--fg-dim);
+}
+
+.pane-jump__match {
+  color: var(--fg-match);
+  font-weight: 600;
+}
+
+.pane-jump__empty {
+  padding: 14px 10px;
+  color: var(--fg-faint);
+}
+
+.pane-jump__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: var(--fs-ui-sm);
+}
+
 /* ── Overview ─────────────────────────────────────────── */
 
 /* Over the whole canvas; the session keeps running underneath. */

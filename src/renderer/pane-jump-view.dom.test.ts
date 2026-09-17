@@ -118,4 +118,21 @@ describe('createPaneJumpView', () => {
     expect(host.querySelectorAll('.pane-jump')).toHaveLength(1)
     expect(view.isOpen).toBe(true)
   })
+
+  it('dims the session behind the panel, with one scrim under it', () => {
+    const view = createPaneJumpView(host, hooks())
+    view.open()
+    view.open()
+    const scrims = host.querySelectorAll('.pane-jump-scrim')
+    expect(scrims).toHaveLength(1)
+    expect(scrims[0]?.nextElementSibling).toBe(host.querySelector('.pane-jump'))
+  })
+
+  it.each(['close', 'destroy'] as const)('%s takes the scrim with the panel', (how) => {
+    const view = createPaneJumpView(host, hooks())
+    view.open()
+    view[how]()
+    expect(host.querySelector('.pane-jump-scrim')).toBeNull()
+    expect(host.querySelector('.pane-jump')).toBeNull()
+  })
 })

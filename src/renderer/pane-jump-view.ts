@@ -29,6 +29,11 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   element.className = 'pane-jump'
   element.setAttribute('role', 'dialog')
 
+  // A sibling of the panel, not a child: the panel's own pointer handling asks
+  // closest('.pane-jump'), and a press on the scrim has to read as outside.
+  const scrim = document.createElement('div')
+  scrim.className = 'pane-jump-scrim'
+
   const input = document.createElement('input')
   input.className = 'pane-jump__input'
   input.type = 'text'
@@ -99,6 +104,7 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     opened = false
     generation += 1
     element.remove()
+    scrim.remove()
   }
 
   return {
@@ -116,7 +122,7 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
       commands.clear()
       titles.clear()
       input.value = ''
-      host.append(element)
+      host.append(scrim, element)
       render()
       input.focus()
       fill()
