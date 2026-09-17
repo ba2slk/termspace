@@ -107,10 +107,15 @@ English copy.
 - **The typed name reaches the pane as letters in order, not as a substring** (the check
   types a pane's name with its spaces removed, which no pane's text contains verbatim, and
   asserts the selected row is that pane)
+- **No session action runs while the panel is open** (a focus chord is pressed with the
+  panel up; focus must not move and the panel must stay. The input holds the keyboard, so
+  a chord that got through would also reach a pty)
 - **`Enter` lands on the pane** (focus, the focused border read off computed styles, the
   keyboard inside the pane, and the pane's `getBoundingClientRect()` inside the canvas
-  viewport — landing is a scroll, so a class name proves nothing. Skipped rather than
-  failed when the window is occluded: the reveal is a glide and needs frames)
+  viewport — landing is a scroll, so a class name proves nothing. The report says whether
+  the target was off screen before the jump, so a pass with nothing to scroll is not read
+  as proof of a scroll. Skipped rather than failed when the window is occluded: the reveal
+  is a glide and needs frames)
 - Not covered: composing a query with a real input method. A synthetic `input` event is
   not a composition, so Hangul or Japanese in the jump field is checked by hand
   ("Korean input" below)
