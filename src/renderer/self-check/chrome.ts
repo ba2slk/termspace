@@ -866,6 +866,22 @@ export async function checkPaneJump(report: Report): Promise<void> {
       ? `ok ("${query}" → ${name}, ${rows().length} of ${visiblePanes().length} rows)`
       : `MISMATCH ("${query}" selected ${String(selected()?.dataset['paneId'])}, wanted ${targetId})`
 
+  /*
+   * Where the target sat before the jump, by the same rule the reveal is judged
+   * by. Without it a pass that never had to scroll reads like one that did.
+   */
+  const viewBefore = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+    ?.getBoundingClientRect()
+  const boxBefore = document
+    .querySelector<HTMLElement>(`.pane[data-pane-id="${targetId}"]`)
+    ?.getBoundingClientRect()
+  const wasInView =
+    viewBefore !== undefined &&
+    boxBefore !== undefined &&
+    boxBefore.left >= viewBefore.left - 1 &&
+    (boxBefore.right <= viewBefore.right + 1 || boxBefore.width >= viewBefore.width)
+  const before = wasInView ? 'was already in view' : 'was off screen'
+
   send('Enter')
   await waitFor(() => panel() === null)
   report['paneJumpEnterCloses'] = panel() === null ? 'ok' : 'FAIL (the panel stayed open)'
@@ -904,8 +920,8 @@ export async function checkPaneJump(report: Report): Promise<void> {
     const arrived = await waitFor(inView)
     const box = landed.getBoundingClientRect()
     report['paneJumpRevealsPane'] = arrived
-      ? `ok (pane ${Math.round(box.left)}–${Math.round(box.right)} in ${Math.round(view.left)}–${Math.round(view.right)}px)`
-      : `FAIL (pane ${Math.round(box.left)}–${Math.round(box.right)}, host ${Math.round(view.left)}–${Math.round(view.right)}px)`
+      ? `ok (${before}; pane ${Math.round(box.left)}–${Math.round(box.right)} in ${Math.round(view.left)}–${Math.round(view.right)}px)`
+      : `FAIL (${before}; pane ${Math.round(box.left)}–${Math.round(box.right)}, host ${Math.round(view.left)}–${Math.round(view.right)}px)`
   }
 
   // Put focus back where the check found it.
