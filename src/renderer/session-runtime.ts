@@ -1217,8 +1217,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     focusPane(paneId) {
       if (!records.has(paneId)) return false
       // setLayout is a no-op for the pane that is already focused, but the
-      // canvas may have been scrolled away from it since.
-      if (paneId === layout.focusedPaneId) revealFocused()
+      // canvas may have been scrolled away from it since. setLayout closes the
+      // jump on the other branch; this one has to do it itself, or the panel
+      // would stay up while revealFocused hands the keys to the pty.
+      if (paneId === layout.focusedPaneId) {
+        paneJump.close()
+        revealFocused()
+      }
       else setLayout({ ...layout, focusedPaneId: paneId })
       return true
     },
