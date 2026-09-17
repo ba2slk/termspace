@@ -1097,7 +1097,7 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  width: min(440px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
   padding: 4px;
   background: var(--bg-raised);
   border: 1px solid var(--border-focus);
