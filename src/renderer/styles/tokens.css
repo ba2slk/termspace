@@ -35,6 +35,8 @@
   --wants: #c9a227;
 
   --fg: #cfcbc4;
+  /* The letters a query landed on, which have to outrank the name holding them. */
+  --fg-match: #ffffff;
   --fg-dim: #8a8781;
   --fg-faint: #5c5a56;
   --danger: #cf7a6a;
