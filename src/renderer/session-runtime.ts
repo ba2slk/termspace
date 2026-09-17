@@ -359,6 +359,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   /** Landing on a pane, whether it was picked on the map or typed. */
   function jumpTo(paneId: string): void {
+    // A row can outlive its pane; landing on a dead one would focus nothing.
+    if (findPane(layout, paneId) === null) return
     if (paneId !== layout.focusedPaneId) {
       setLayout({ ...layout, focusedPaneId: paneId })
       return
@@ -410,7 +412,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     commands: (paneIds) => api.foregroundCommands(paneIds),
     titles: (paneIds) => api.paneTitles(paneIds),
     onJump: jumpTo,
-    onClose: () => records.get(layout.focusedPaneId)?.terminal.focus(),
+    onClose: () => focusFocusedTerminal(),
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {
@@ -547,6 +549,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    */
   function revealFocused(): void {
     canvas.scrollToPane(layout.focusedPaneId, layout)
+    focusFocusedTerminal()
+  }
+
+  /** The keyboard back to the focused pane; a folded bar has no terminal to take it. */
+  function focusFocusedTerminal(): void {
     if (!isFolded(layout.focusedPaneId)) records.get(layout.focusedPaneId)?.terminal.focus()
   }
 
@@ -673,6 +680,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       // The bar belongs to the focused pane; a bar left on an unfocused one lies.
       searchBar.close()
+      // Same for the jump: focus moving under it would leave the panel up while
+      // the keys went to a pty. The focus() below is the single hand-back.
+      paneJump.close()
       records.get(previousFocus)?.terminal.setFocused(false)
       const record = records.get(layout.focusedPaneId)
       // Focus lands on a folded bar like any other pane, but the terminal under
@@ -796,7 +806,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       options.onEnd() // that was the session's last pane — back to the list screen
       return
     }
+    // The panel would list a pane that is gone. Closing it here also covers the
+    // case setLayout cannot see: an unfocused pane exiting moves no focus.
+    const jumpWasOpen = paneJump.isOpen
+    paneJump.close()
     setLayout(next)
+    if (jumpWasOpen) focusFocusedTerminal()
   }
 
   function applyResize(dir: Direction): void {
