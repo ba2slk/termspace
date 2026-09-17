@@ -2,6 +2,7 @@ import { ACTION_IDS, defaultBindingsFor, formatChord } from '../../shared/keybin
 import { t } from '../i18n'
 import { IS_MAC } from '../platform'
 import {
+  animationRuns,
   capture,
   focusedHost,
   focusedId,
@@ -755,4 +756,149 @@ export async function checkScrollbackSearch(report: Report): Promise<void> {
   const start = startPane === undefined ? null : document.querySelector(`[data-pane-id="${startPane}"]`)
   start?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
   await waitFor(() => focusedId() === startPane)
+}
+
+/**
+ * The pane jump: a few letters, `Enter`, and the canvas is on that pane.
+ *
+ * Nothing here can be seen from a unit test. The panel takes the keyboard off a
+ * live terminal, and landing is a scroll — so the verdict is the pane's rect
+ * inside the canvas viewport, not the class the app gave it.
+ */
+export async function checkPaneJump(report: Report): Promise<void> {
+  const panel = (): HTMLElement | null => document.querySelector<HTMLElement>('.pane-jump')
+  const field = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('.pane-jump__input')
+  const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.pane-jump__row')]
+  const selected = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.pane-jump__row--selected')
+  const keyboardIn = (paneId: string | undefined): boolean =>
+    document.activeElement?.closest('.pane')?.getAttribute('data-pane-id') === paneId
+  /*
+   * The session on screen, not whichever host is first in the document: an
+   * earlier check left a second session open behind this one, and its focused
+   * pane is the one a document-wide query finds.
+   */
+  const focusedHere = (): string | undefined =>
+    document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')?.dataset[
+      'paneId'
+    ]
+  const send = (key: string): void => {
+    field()?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  }
+  // Pressed in its Linux spelling; the harness sends the mac default on mac.
+  const chord = formatChord(defaultBindingsFor(IS_MAC)['pane-jump'][0] as string, IS_MAC)
+
+  const startFocus = focusedHere()
+  press('KeyK', { altKey: true })
+  await waitFor(() => field() !== null)
+  if (field() === null) {
+    report['paneJumpOpens'] = `FAIL (${chord} did not open it)`
+    return
+  }
+  report['paneJumpOpens'] = `ok (${chord})`
+  report['paneJumpPlaceholder'] =
+    field()?.placeholder === t.paneJump.placeholder
+      ? 'ok'
+      : `MISMATCH (${field()?.placeholder ?? 'none'})`
+
+  // An empty query lists every pane, and marks the one focus is already on.
+  await waitFor(() => rows().length === visiblePanes().length)
+  const tagged = rows().filter(
+    (row) => row.querySelector('.pane-jump__tag')?.textContent === t.paneJump.current,
+  )
+  report['paneJumpMarksCurrent'] =
+    tagged.length === 1 && tagged[0]?.dataset['paneId'] === startFocus
+      ? `ok (${rows().length} of ${visiblePanes().length} panes listed)`
+      : `MISMATCH (${tagged.length} rows tagged, focus on ${String(startFocus)})`
+
+  // Closing without a jump has to hand the keyboard back, or the pane is deaf.
+  send('Escape')
+  await waitFor(() => panel() === null)
+  report['paneJumpEscCloses'] = panel() === null ? 'ok' : 'FAIL (the panel survived Escape)'
+  await waitFor(() => keyboardIn(focusedHere()))
+  report['paneJumpEscReturnsKeyboard'] = keyboardIn(focusedHere())
+    ? 'ok'
+    : 'FAIL (the focused pane did not get the keyboard back)'
+
+  press('KeyK', { altKey: true })
+  await waitFor(() => rows().length === visiblePanes().length)
+  /*
+   * The last pane in canvas order that is not the focused one. In the windows
+   * these groups run in it is off screen, so landing on it has to scroll.
+   */
+  const target = rows()
+    .filter((row) => row.dataset['paneId'] !== startFocus)
+    .pop()
+  const name = target?.querySelector('.pane-jump__name')?.textContent ?? ''
+  const targetId = target?.dataset['paneId']
+  if (targetId === undefined || name.length < 3) {
+    send('Escape')
+    await waitFor(() => panel() === null)
+    report['paneJumpLands'] = 'skipped: no second named pane to jump to'
+    return
+  }
+
+  /*
+   * The name with its spaces taken out, which no pane's text contains verbatim:
+   * the panel has to read it as letters in order with a gap, not as a substring.
+   * Whole, because panes in one session often share their first few letters.
+   */
+  const query = name.replace(/\s+/g, '')
+  const input = field() as HTMLInputElement
+  input.value = query
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await waitFor(() => selected()?.dataset['paneId'] === targetId)
+  report['paneJumpRanks'] =
+    selected()?.dataset['paneId'] === targetId
+      ? `ok ("${query}" → ${name}, ${rows().length} of ${visiblePanes().length} rows)`
+      : `MISMATCH ("${query}" selected ${String(selected()?.dataset['paneId'])}, wanted ${targetId})`
+
+  send('Enter')
+  await waitFor(() => panel() === null)
+  report['paneJumpEnterCloses'] = panel() === null ? 'ok' : 'FAIL (the panel stayed open)'
+  await waitFor(() => focusedHere() === targetId)
+  report['paneJumpFocuses'] =
+    focusedHere() === targetId ? 'ok' : `FAIL (focus on ${String(focusedHere())}, wanted ${targetId})`
+  await waitFor(() => keyboardIn(targetId))
+  report['paneJumpTakesKeyboard'] = keyboardIn(targetId)
+    ? 'ok'
+    : 'FAIL (the landed pane did not get the keyboard)'
+
+  const landed = document.querySelector<HTMLElement>(`.pane[data-pane-id="${targetId}"]`)
+  const idle = visiblePanes().find((pane) => pane.dataset['paneId'] !== targetId)
+  const landedBorder = landed === null ? '' : getComputedStyle(landed).borderTopColor
+  const idleBorder = idle === undefined ? '' : getComputedStyle(idle).borderTopColor
+  report['paneJumpDrawsFocus'] =
+    landed !== null && idle !== undefined && landedBorder !== idleBorder
+      ? 'ok'
+      : `FAIL (landed border ${landedBorder || 'none'}, idle ${idleBorder || 'none'})`
+
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  if (host === null || landed === null) {
+    report['paneJumpRevealsPane'] = 'FAIL (no session host)'
+  } else if (!(await animationRuns())) {
+    // The reveal is a glide; without frames the canvas never leaves where it was.
+    report['paneJumpRevealsPane'] = SKIPPED
+  } else {
+    const view = host.getBoundingClientRect()
+    // A pane wider than the window can never fit; there the left edge is all
+    // the reveal promises, the same bound the reveal-focus check asks for.
+    const inView = (): boolean => {
+      const box = landed.getBoundingClientRect()
+      if (box.left < view.left - 1) return false
+      return box.right <= view.right + 1 || box.width >= view.width
+    }
+    const arrived = await waitFor(inView)
+    const box = landed.getBoundingClientRect()
+    report['paneJumpRevealsPane'] = arrived
+      ? `ok (pane ${Math.round(box.left)}–${Math.round(box.right)} in ${Math.round(view.left)}–${Math.round(view.right)}px)`
+      : `FAIL (pane ${Math.round(box.left)}–${Math.round(box.right)}, host ${Math.round(view.left)}–${Math.round(view.right)}px)`
+  }
+
+  // Put focus back where the check found it.
+  document
+    .querySelector(`[data-pane-id="${String(startFocus)}"]`)
+    ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  await waitFor(() => focusedHere() === startFocus)
 }

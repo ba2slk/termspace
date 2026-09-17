@@ -9,6 +9,7 @@ import { api } from '../api'
 import {
   checkAppBarMenu,
   checkKeybindings,
+  checkPaneJump,
   checkScrollbackSearch,
   checkSettings,
   checkSidebar,
@@ -132,6 +133,9 @@ const GROUPS: Readonly<
     await checkSettings(report)
     await capture(report, 'settings')
     await checkKeybindings(report)
+    // Last: it lands focus far down the canvas, so nothing after it starts
+    // from a scroll position this check chose.
+    await checkPaneJump(report)
   },
 
   // Session files and terminal input.
