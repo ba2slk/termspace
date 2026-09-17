@@ -52,6 +52,8 @@ export type Action =
   | { readonly t: 'search' }
   /** Zoomed-out map of the current session's canvas. */
   | { readonly t: 'overview' }
+  /** Type a few letters and land on a pane of this session. */
+  | { readonly t: 'pane-jump' }
   /** Bring the focused pane back into view after scrolling away from it. */
   | { readonly t: 'reveal-focus' }
   /** Step the terminal font size, saved like any settings change. */
@@ -103,6 +105,7 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   'fold-others': { t: 'fold-others' },
   'reveal-focus': { t: 'reveal-focus' },
   overview: { t: 'overview' },
+  'pane-jump': { t: 'pane-jump' },
   search: { t: 'search' },
   copy: { t: 'copy' },
   paste: { t: 'paste' },

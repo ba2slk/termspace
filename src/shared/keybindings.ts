@@ -34,6 +34,7 @@ export type ActionId =
   | 'fold-others'
   | 'reveal-focus'
   | 'overview'
+  | 'pane-jump'
   | 'search'
   | 'copy'
   | 'paste'
@@ -83,6 +84,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'fold-others': ['Alt+Shift+KeyD'],
   'reveal-focus': ['Alt+KeyG'],
   overview: ['Alt+KeyM'],
+  'pane-jump': ['Alt+KeyK'],
   search: ['Ctrl+Shift+KeyF'],
   copy: ['Ctrl+Shift+KeyC'],
   paste: ['Ctrl+Shift+KeyV'],
@@ -132,6 +134,8 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   'reveal-focus': ['Meta+KeyG'],
   // Cmd+M minimizes; the overview moves behind Shift.
   overview: ['Shift+Meta+KeyM'],
+  // Cmd+K clears the screen on a mac terminal; the jump moves behind Shift.
+  'pane-jump': ['Shift+Meta+KeyK'],
   search: ['Meta+KeyF'],
   copy: ['Meta+KeyC'],
   paste: ['Meta+KeyV'],
@@ -168,6 +172,7 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'fold-others',
       'reveal-focus',
       'overview',
+      'pane-jump',
     ],
   },
   {

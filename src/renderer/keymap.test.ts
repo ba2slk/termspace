@@ -102,6 +102,11 @@ describe('resolveAction — other bindings', () => {
     expect(resolveAction(chord('KeyM', { altKey: true }))).toEqual({ t: 'overview' })
   })
 
+  it('Alt+K opens the pane jump, and it needs a session', () => {
+    expect(resolveAction(chord('KeyK', { altKey: true }))).toEqual({ t: 'pane-jump' })
+    expect(isAppAction({ t: 'pane-jump' })).toBe(false)
+  })
+
   it('Alt+G scrolls back to the focused pane', () => {
     expect(resolveAction(chord('KeyG', { altKey: true }))).toEqual({ t: 'reveal-focus' })
   })
@@ -353,6 +358,12 @@ describe('resolveAction — mac mode', () => {
 
   it('lets Option+letter fall through to the pty', () => {
     expect(resolveAction(chord('KeyU', { altKey: true }), DEFAULT_BINDINGS_MAC, true)).toBeNull()
+  })
+
+  it('opens the pane jump behind Shift, since Cmd+K clears the screen', () => {
+    expect(
+      resolveAction(chord('KeyK', { metaKey: true, shiftKey: true }), DEFAULT_BINDINGS_MAC, true),
+    ).toEqual({ t: 'pane-jump' })
   })
 
   it('still refuses Meta off mac, where it is Super', () => {
