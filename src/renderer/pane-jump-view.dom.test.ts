@@ -161,6 +161,14 @@ describe('createPaneJumpView', () => {
     expect(host.querySelector('.pane-jump')).toBeNull()
   })
 
+  it('leaves Escape to an open composition', () => {
+    const h = hooks()
+    createPaneJumpView(host, h).open()
+    press('Escape', { isComposing: true })
+    expect(h.onClose).not.toHaveBeenCalled()
+    expect(host.querySelector('.pane-jump')).not.toBeNull()
+  })
+
   it('toggle while open reports a close', () => {
     const h = hooks()
     const view = createPaneJumpView(host, h)

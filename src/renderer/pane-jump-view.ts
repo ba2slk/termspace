@@ -146,7 +146,7 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
   })
 
   input.addEventListener('keydown', (event) => {
-    // An open Hangul composition uses the arrows and Enter itself.
+    // An open Hangul composition uses the arrows, Enter and Escape itself.
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       if (event.isComposing) return
       event.preventDefault()
@@ -156,6 +156,8 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
       event.preventDefault()
       if (selectedId !== null) jump(selectedId)
     } else if (event.key === 'Escape') {
+      // The first Esc cancels the composition; the panel only gets the next one.
+      if (event.isComposing) return
       event.preventDefault()
       dismiss()
     }
