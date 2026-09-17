@@ -1,6 +1,6 @@
 /**
  * The pane jump panel: an input over the canvas, and the panes a few typed
- * letters mean. Drawing only; keys and pointer are wired by the caller.
+ * letters mean. It owns its own keys and pointer; the caller only opens it.
  */
 import { t } from './i18n'
 import { isBlankQuery, rankEntries, type JumpEntry } from './pane-jump-model'
@@ -163,9 +163,24 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
     }
   })
 
+  // Pressing anywhere but the input itself must not pull the caret out of it:
+  // the legend and the panel's own padding blur it as readily as a row does.
+  element.addEventListener('mousedown', (event) => {
+    if (event.target !== input) event.preventDefault()
+  })
+  list.addEventListener('click', (event) => {
+    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.pane-jump__row')
+    if (row?.dataset.paneId !== undefined) jump(row.dataset.paneId)
+  })
+
+  function onOutsideMouseDown(event: MouseEvent): void {
+    if (!element.contains(event.target as Node)) dismiss()
+  }
+
   function teardown(): void {
     opened = false
     generation += 1
+    document.removeEventListener('mousedown', onOutsideMouseDown)
     element.remove()
     scrim.remove()
   }
@@ -189,6 +204,7 @@ export function createPaneJumpView(host: HTMLElement, hooks: PaneJumpHooks): Pan
       host.append(scrim, element)
       render()
       input.focus()
+      document.addEventListener('mousedown', onOutsideMouseDown)
       fill()
     },
     close() {
