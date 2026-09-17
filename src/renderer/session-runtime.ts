@@ -38,6 +38,8 @@ import {
 } from './layout-model'
 import { layoutSnapshot } from './layout-snapshot'
 import { createOverviewView } from './overview-view'
+import { createPaneJumpView } from './pane-jump-view'
+import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
 import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
 import { attachResizeDrag } from './resize-drag'
 import { createSearchBar } from './search-bar'
@@ -60,6 +62,8 @@ const EXITS_ZOOM: readonly Action['t'][] = [
   'add-column',
   'close-pane',
   'overview',
+  // Like the map: the jump lands on a pane the zoom would be covering.
+  'pane-jump',
   // Folding rearranges the column, so the zoom goes first and the bar appears
   // where the layout really puts it.
   'fold',
@@ -353,6 +357,18 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     }, FOLD_REFRESH_MS)
   }
 
+  /** Landing on a pane, whether it was picked on the map or typed. */
+  function jumpTo(paneId: string): void {
+    // A row can outlive its pane; landing on a dead one would focus nothing.
+    if (findPane(layout, paneId) === null) return
+    if (paneId !== layout.focusedPaneId) {
+      setLayout({ ...layout, focusedPaneId: paneId })
+      return
+    }
+    // Same pane: setLayout would be a no-op, but the view should still settle on it.
+    revealFocused()
+  }
+
   const overview = createOverviewView(host, {
     layout: () => layout,
     viewport: () => canvas.getViewport(),
@@ -360,14 +376,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     commands: (paneIds) => api.foregroundCommands(paneIds),
     titles: (paneIds) => api.paneTitles(paneIds),
     wants: (paneId) => attention.has(paneId),
-    onJump: (paneId) => {
-      if (paneId !== layout.focusedPaneId) {
-        setLayout({ ...layout, focusedPaneId: paneId })
-        return
-      }
-      // Same pane: setLayout would be a no-op, but the view should still settle on it.
-      revealFocused()
-    },
+    onJump: jumpTo,
     onRename: (paneId, title) => {
       setLayout(renamePane(layout, paneId, title))
       publishTitle()
@@ -384,6 +393,26 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       if (paneId !== layout.focusedPaneId) setLayout({ ...layout, focusedPaneId: paneId }, 'settle')
       canvas.scrollByExact(scrollX - canvas.scrollState().offset)
     },
+  })
+
+  const paneJump = createPaneJumpView(host, {
+    entries: () =>
+      layout.columns.flatMap((column, index) =>
+        column.panes.map((pane) => ({
+          id: pane.id,
+          name: isDefaultPaneTitle(pane.title) ? DEFAULT_PANE_TITLE : pane.title.trim(),
+          column: index + 1,
+          // The two hooks below fill these in once the answers arrive.
+          command: '',
+          windowTitle: '',
+          focused: pane.id === layout.focusedPaneId,
+          wants: attention.has(pane.id),
+        })),
+      ),
+    commands: (paneIds) => api.foregroundCommands(paneIds),
+    titles: (paneIds) => api.paneTitles(paneIds),
+    onJump: jumpTo,
+    onClose: () => focusFocusedTerminal(),
   })
 
   const detachDrag = attachResizeDrag(canvas.root, {
@@ -520,6 +549,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
    */
   function revealFocused(): void {
     canvas.scrollToPane(layout.focusedPaneId, layout)
+    focusFocusedTerminal()
+  }
+
+  /** The keyboard back to the focused pane; a folded bar has no terminal to take it. */
+  function focusFocusedTerminal(): void {
     if (!isFolded(layout.focusedPaneId)) records.get(layout.focusedPaneId)?.terminal.focus()
   }
 
@@ -646,6 +680,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       // The bar belongs to the focused pane; a bar left on an unfocused one lies.
       searchBar.close()
+      // Same for the jump: focus moving under it would leave the panel up while
+      // the keys went to a pty. The focus() below is the single hand-back.
+      paneJump.close()
       records.get(previousFocus)?.terminal.setFocused(false)
       const record = records.get(layout.focusedPaneId)
       // Focus lands on a folded bar like any other pane, but the terminal under
@@ -769,7 +806,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       options.onEnd() // that was the session's last pane — back to the list screen
       return
     }
+    // The panel would list a pane that is gone. Closing it here also covers the
+    // case setLayout cannot see: an unfocused pane exiting moves no focus.
+    const jumpWasOpen = paneJump.isOpen
+    paneJump.close()
     setLayout(next)
+    if (jumpWasOpen) focusFocusedTerminal()
   }
 
   function applyResize(dir: Direction): void {
@@ -915,7 +957,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // The open overview owns every key, and the pane behind it is not being
     // looked at. The keyboard path returns before the switch for the same
     // reason; the mac menu reaches these directly, so the guard lives here.
-    if (overview.isOpen) return
+    if (overview.isOpen || paneJump.isOpen) return
     // xterm owns the selection; WebGL draws to canvas so the DOM has none.
     const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
     if (selection === '') return
@@ -928,7 +970,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // out of sight; see copySelection. A folded pane is hidden the same way,
     // and the guard lives here rather than on the keyboard path because on mac
     // the Edit menu delivers Cmd+V without a keydown ever reaching the page.
-    if (overview.isOpen || isFolded(layout.focusedPaneId)) return
+    if (overview.isOpen || paneJump.isOpen || isFolded(layout.focusedPaneId)) return
     void api.readClipboard().then((text) => {
       if (text === '') return
       // Through xterm for bracketed paste, so multi-line input isn't executed.
@@ -951,6 +993,16 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         event.stopPropagation()
         // Closed without a jump (Esc, Alt+M): hand the keyboard back to the pane.
         if (!overview.isOpen) records.get(layout.focusedPaneId)?.terminal.focus()
+      }
+      return
+    }
+    // The jump's input holds the keyboard; only its own chord means anything here.
+    if (paneJump.isOpen) {
+      if (action?.t === 'pane-jump') {
+        event.preventDefault()
+        event.stopPropagation()
+        // toggle, not close: it is the one that hands the keyboard back, through onClose.
+        paneJump.toggle()
       }
       return
     }
@@ -1030,6 +1082,11 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       case 'overview':
         overview.toggle()
+        break
+      case 'pane-jump':
+        // Two inputs over the same canvas would both be taking keys.
+        searchBar.close()
+        paneJump.open()
         break
       case 'reveal-focus':
         revealFocused()
@@ -1133,6 +1190,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       if (!next) {
         searchBar.close()
         overview.close()
+        paneJump.close()
         // A session off screen must come back as its layout describes it.
         exitZoom()
         records.get(layout.focusedPaneId)?.terminal.setFocused(false)
@@ -1159,8 +1217,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     focusPane(paneId) {
       if (!records.has(paneId)) return false
       // setLayout is a no-op for the pane that is already focused, but the
-      // canvas may have been scrolled away from it since.
-      if (paneId === layout.focusedPaneId) revealFocused()
+      // canvas may have been scrolled away from it since. setLayout closes the
+      // jump on the other branch; this one has to do it itself, or the panel
+      // would stay up while revealFocused hands the keys to the pty.
+      if (paneId === layout.focusedPaneId) {
+        paneJump.close()
+        revealFocused()
+      }
       else setLayout({ ...layout, focusedPaneId: paneId })
       return true
     },
@@ -1218,6 +1281,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       contextHolders.delete(holder)
       searchBar.close()
       overview.destroy()
+      paneJump.destroy()
       window.removeEventListener('keydown', onKeyDown, true)
       if (settleTimer !== null) window.clearTimeout(settleTimer)
       if (attachTimer !== null) window.clearTimeout(attachTimer)

@@ -404,6 +404,10 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
       // A map that fits keeps letting the canvas scroll underneath.
       if ((event.target as HTMLElement).closest('.overview--pannable') !== null) return
 
+      // The pane jump's list scrolls itself; claiming its wheel would pan the
+      // canvas behind the panel and leave the list stuck at the top.
+      if ((event.target as HTMLElement).closest('.pane-jump') !== null) return
+
       /*
        * Vertical wheel belongs to the terminal's scrollback. The canvas takes it
        * only when the horizontal component wins, the pointer is off a panel, or

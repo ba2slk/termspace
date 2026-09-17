@@ -294,6 +294,22 @@ describe('createCanvasView', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('leaves the wheel to the pane jump, whose list scrolls itself', () => {
+    const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
+    view.render(layout)
+    const panel = document.createElement('div')
+    panel.className = 'pane-jump'
+    const list = document.createElement('ul')
+    list.className = 'pane-jump__list'
+    panel.append(list)
+    host.append(panel)
+
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    list.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
   it('one handle per column, one fewer than the panes', () => {
     const view = createCanvasView(host, { onPaneMouseDown: vi.fn() })
     view.render(layout)
