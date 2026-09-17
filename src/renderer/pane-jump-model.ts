@@ -67,6 +67,7 @@ export function matchField(query: string, text: string): FieldMatch | null {
     if (positions.length < q.length) break // later starts only have less text left
     let score = -Math.min(MAX_LATE_COST, start)
     positions.forEach((position, i) => {
+      // Every matched character earns this, not only the query's first one.
       if (isWordStart(t, position)) score += WORD_START
       if (i === 0) return
       const gap = position - (positions[i - 1] as number) - 1
@@ -77,13 +78,18 @@ export function matchField(query: string, text: string): FieldMatch | null {
   return best
 }
 
+/** Nothing to filter by yet: empty, or only the spaces the ranking drops anyway. */
+export function isBlankQuery(query: string): boolean {
+  return query.trim() === ''
+}
+
 /**
  * The panes a query means, best first. An empty query is not a filter: it lists
  * everything as given, so opening the jump shows the panes before any typing.
  */
 export function rankEntries(query: string, entries: readonly JumpEntry[]): JumpResult[] {
   const q = query.replace(/\s+/g, '')
-  if (q === '') {
+  if (isBlankQuery(query)) {
     return entries.map((entry) => ({ entry, name: null, command: null, windowTitle: null }))
   }
   const scored: { result: JumpResult; score: number; order: number }[] = []

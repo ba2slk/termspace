@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchField, rankEntries, type JumpEntry } from './pane-jump-model'
+import { isBlankQuery, matchField, rankEntries, type JumpEntry } from './pane-jump-model'
 
 const entry = (id: string, over: Partial<JumpEntry> = {}): JumpEntry => ({
   id,
@@ -34,6 +34,14 @@ describe('matchField', () => {
     const run = matchField('run', 'npm run dev')!
     const scattered = matchField('run', 'r u n')!
     expect(run.score).toBeGreaterThan(scattered.score)
+  })
+})
+
+describe('isBlankQuery', () => {
+  it('is true for empty and whitespace-only queries, false once a letter arrives', () => {
+    expect(isBlankQuery('')).toBe(true)
+    expect(isBlankQuery('   ')).toBe(true)
+    expect(isBlankQuery(' n ')).toBe(false)
   })
 })
 
