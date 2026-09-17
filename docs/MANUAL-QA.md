@@ -116,6 +116,13 @@ English copy.
   the target was off screen before the jump, so a pass with nothing to scroll is not read
   as proof of a scroll. Skipped rather than failed when the window is occluded: the reveal
   is a glide and needs frames)
+- **The panel sits on the window's centre line** (its `getBoundingClientRect()` centre
+  against `window.innerWidth / 2`; centred on the session host instead, it lands about
+  half the sidebar's width to the right, which reads as crooked and cannot be seen from
+  the DOM. The report carries the measured centre and the panel's `top`)
+- **The session behind is dimmed** (the scrim's computed background is not transparent and
+  its rect covers the on-screen part of the focused pane — the overview's scrim, over the
+  same area)
 - Not covered: composing a query with a real input method. A synthetic `input` event is
   not a composition, so Hangul or Japanese in the jump field is checked by hand
   ("Korean input" below)
