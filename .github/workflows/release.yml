@@ -29,13 +29,25 @@ jobs:
           cache: npm
 
       - name: Check the tag matches package.json
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          version="$(node -p 'require("./package.json").version')"
-          if [ "$tag" != "v$version" ]; then
-            echo "tag $tag does not match package.json version $version" >&2
-            exit 1
-          fi
+          set -euo pipefail
+          node - "$TAG" <<'NODE'
+          const fs = require('node:fs')
+          const tag = process.argv[2] ?? ''
+          const semver =
+            /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))(?:\.(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+          if (!semver.test(tag)) {
+            console.error(`Tag must be a v-prefixed SemVer release tag: ${tag}`)
+            process.exit(1)
+          }
+          const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version
+          if (tag !== `v${version}`) {
+            console.error(`Tag ${tag} does not match package.json version ${version}`)
+            process.exit(1)
+          }
+          NODE
 
       - run: npm ci
 
@@ -54,15 +66,17 @@ jobs:
       # release, so both must agree on the flag.
       - name: Publish
         env:
+          TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          prerelease=""
-          case "$tag" in *-*) prerelease="--prerelease" ;; esac
-          gh release view "$tag" >/dev/null 2>&1 \
-            || gh release create "$tag" --title "$tag" --generate-notes $prerelease \
-            || gh release view "$tag" >/dev/null 2>&1
-          gh release upload "$tag" release/*.AppImage release/SHA256SUMS.txt --clobber
+          set -euo pipefail
+          version_without_build=${TAG%%+*}
+          release_args=()
+          case "$version_without_build" in *-*) release_args+=(--prerelease) ;; esac
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes "${release_args[@]}" \
+            || gh release view "$TAG" >/dev/null 2>&1
+          gh release upload "$TAG" release/*.AppImage release/SHA256SUMS.txt --clobber
 
   mac:
     runs-on: macos-latest
@@ -80,13 +94,25 @@ jobs:
           cache: npm
 
       - name: Check the tag matches package.json
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          version="$(node -p 'require("./package.json").version')"
-          if [ "$tag" != "v$version" ]; then
-            echo "tag $tag does not match package.json version $version" >&2
-            exit 1
-          fi
+          set -euo pipefail
+          node - "$TAG" <<'NODE'
+          const fs = require('node:fs')
+          const tag = process.argv[2] ?? ''
+          const semver =
+            /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))(?:\.(?:(?:0|[1-9]\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+          if (!semver.test(tag)) {
+            console.error(`Tag must be a v-prefixed SemVer release tag: ${tag}`)
+            process.exit(1)
+          }
+          const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version
+          if (tag !== `v${version}`) {
+            console.error(`Tag ${tag} does not match package.json version ${version}`)
+            process.exit(1)
+          }
+          NODE
 
       - run: npm ci
 
@@ -104,12 +130,14 @@ jobs:
 
       - name: Publish
         env:
+          TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
-          prerelease=""
-          case "$tag" in *-*) prerelease="--prerelease" ;; esac
-          gh release view "$tag" >/dev/null 2>&1 \
-            || gh release create "$tag" --title "$tag" --generate-notes $prerelease \
-            || gh release view "$tag" >/dev/null 2>&1
-          gh release upload "$tag" release/*.dmg release/*.zip release/SHA256SUMS-mac.txt --clobber
+          set -euo pipefail
+          version_without_build=${TAG%%+*}
+          release_args=()
+          case "$version_without_build" in *-*) release_args+=(--prerelease) ;; esac
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes "${release_args[@]}" \
+            || gh release view "$TAG" >/dev/null 2>&1
+          gh release upload "$TAG" release/*.dmg release/*.zip release/SHA256SUMS-mac.txt --clobber
