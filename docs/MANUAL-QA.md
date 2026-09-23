@@ -300,6 +300,34 @@ English copy.
 - **Catches the dialog existing only in the DOM while occupying no space on screen** (all
   queries pass while the user sees nothing)
 
+**Default terminal**
+
+The launch half runs in every window before its groups, then ends the terminal so each
+group starts from nothing open. The save half runs first in `sessions`.
+
+- A launch opens exactly one pane with the top slot present (`defaultTerminalAtLaunch`)
+  — the feature is what the app shows before anything else
+- The pane's shell prints something (`defaultTerminalShell`) — a slot with a dead pty
+  looks the same in the DOM. No prompt at all is `skipped`, not `FAIL`
+- The slot is drawn above the list, by its rectangle (`defaultTerminalAboveList`) — DOM
+  order alone does not say where it lands
+- The slot's bottom border is solid and between 0 and 1px (`defaultTerminalHairline`) —
+  computed widths snap to device pixels, so 1px can read as 0.6px
+- The row's × ends it and the slot goes (`defaultTerminalEnds`)
+- On the empty canvas "New terminal" holds focus (`newTerminalFocused`) — otherwise
+  `Enter` does nothing there. A synthetic `Enter` presses no button, so `Enter` itself
+  is checked by eye
+- After `cd /`, `Alt+Shift+S` opens the dialog with an empty name
+  (`defaultTerminalSaveNameEmpty`) — a pre-filled "Terminal" would let one `Enter`
+  write `Terminal.yaml`
+- The root field reads `/`, where the shell stands (`defaultTerminalSaveRoot`) — the
+  shell starts in `$HOME`, so a root taken from the start would be wrong
+- A taken name disables the button with the "pick another" wording
+  (`defaultTerminalRefusesTaken`) — this dialog must never overwrite a session
+- Saving removes the slot and the title bar shows the new name (`defaultTerminalSaved`)
+- The same xterm, with its earlier output, is on screen after the save
+  (`defaultTerminalKeepsPty`) — a save that restarted the shell would kill what ran in it
+
 **New session and the right-click menu**
 - The sidebar header's `+` is present **even when the list is not empty** (the button
   used to appear only on an empty list, so with even one session there was no way to
@@ -566,6 +594,34 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Do fullscreen apps like nvim/htop survive resizing without breaking
 - [ ] Does the Korean IME display (characters mid-composition) look natural
 
+### Default terminal (by eye)
+
+- [ ] Launch the installed AppImage. A prompt is there and typing reaches it without a
+      click
+- [ ] The sidebar's top slot and its hairline match the archive dock's hairline, and the
+      row reads as part of the list. Check at `uiScale` 1 and a larger one
+- [ ] With enough sessions to scroll the list, the slot stays put and rows pass under the
+      hairline cleanly
+- [ ] The row's dot turns green while something runs, and gold when a program in it rings
+      while you are in another session
+- [ ] `cd` somewhere, split, run something in one pane, `Alt+Shift+S`, save. The
+      self-check covers the empty name, the root field and the kept pty for one pane;
+      by eye: the program in the other pane keeps running, the session lands at the end
+      of the list, and `Alt+Shift+S` again saves without a dialog
+- [ ] Save under an existing session's name: the dialog refuses it (the self-check covers
+      this), and the existing file is unchanged afterwards
+- [ ] Right-click the row: the only item is "Save as session". Dragging the row does
+      nothing and it cannot be dropped on the archive dock. Its × ends it without asking,
+      as on every other row
+- [ ] `Alt+1`–`9` and `Alt+Shift+<` / `>` never land on the default terminal
+- [ ] `Ctrl+D` the last pane: the empty canvas has "New terminal" focused, and `Enter`
+      gives a fresh shell in `$HOME`
+- [ ] Quit with a program running in the unsaved default terminal: the close confirmation
+      appears. Quit with only an idle shell in it and no session open: it does not
+- [ ] Rename a pane in the default terminal, then save: the saved file carries that name
+- [ ] Korean locale (`locale: ko`, restart): "터미널", "저장 안 됨", "세션으로 저장" and
+      "새 터미널" read naturally and fit the row
+
 ### Fold the other panes (no self-check covers this)
 
 - [ ] In a column of three panes, focus one and press `Alt+Shift+D`: the other two become
@@ -713,3 +769,5 @@ below needs a real Mac and a person in front of it. Each line says what "pass" m
 - [ ] **zsh integration.** With the `~/.zshrc` line installed, a saved session captures
       the command that was running, and records the directory a pane was `cd`'d into
       (mac has no `/proc`, so this comes from the hook's `OSC 7`). Pass = both observed
+- [ ] **Default terminal save.** With the default terminal on screen, `Cmd` + `S` opens
+      the save dialog. Pass = the dialog opens with an empty name field
