@@ -738,7 +738,7 @@ describe('the default terminal slot', () => {
     const list = document.querySelector('.sidebar__list')!
     expect(pinned.nextElementSibling).toBe(list)
     expect(list.contains(pinned)).toBe(false)
-    expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Terminal')
+    expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
     expect(pinned.querySelector('.sidebar__meta')?.textContent).toBe('unsaved')
     expect(pinned.querySelector('.sidebar__row--current')).not.toBeNull()
     expect(pinned.querySelector('.sidebar__dot--on')).not.toBeNull()

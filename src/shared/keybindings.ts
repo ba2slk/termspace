@@ -40,6 +40,7 @@ export type ActionId =
   | 'copy'
   | 'paste'
   | 'toggle-sidebar'
+  | 'default-terminal'
   | 'goto-session'
   | 'prev-session'
   | 'next-session'
@@ -91,6 +92,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   copy: ['Ctrl+Shift+KeyC'],
   paste: ['Ctrl+Shift+KeyV'],
   'toggle-sidebar': ['Alt+KeyS'],
+  'default-terminal': ['Alt+Backquote'],
   'goto-session': [`Alt+${DIGIT_CODE}`],
   // The arrows are spent — Ctrl+Alt+Shift+Arrow is the desktop's own.
   'prev-session': ['Alt+Shift+Comma'],
@@ -143,6 +145,8 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   copy: ['Meta+KeyC'],
   paste: ['Meta+KeyV'],
   'toggle-sidebar': ['Meta+KeyB'],
+  // Cmd+0 resets the font size; this moves behind Shift.
+  'default-terminal': ['Shift+Meta+Digit0'],
   'goto-session': [`Meta+${DIGIT_CODE}`],
   'prev-session': ['Shift+Meta+BracketLeft'],
   'next-session': ['Shift+Meta+BracketRight'],
@@ -205,6 +209,7 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
     group: 'app',
     ids: [
       'toggle-sidebar',
+      'default-terminal',
       'goto-session',
       'prev-session',
       'next-session',

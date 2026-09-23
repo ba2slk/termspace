@@ -173,6 +173,7 @@ tmux itself.
 | `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |
 | `Alt` + `G` | `Cmd` + `G` | Scroll back to the focused pane |
 | `Alt` + `1`–`9` | `Cmd` + `1`–`9` | Jump to a session; the same number again bounces back |
+| `Alt` + `` ` `` | `Cmd+Shift` + `0` | Go to the default terminal; again, back to the previous session |
 | `Alt+Shift` + `<` / `>` | `Cmd+Shift` + `[` / `]` | Previous / next open session |
 | `Alt+Shift` + `S` | `Cmd` + `S` | Save the layout over the open session's file |
 | `Ctrl+Shift` + `F` | `Cmd` + `F` | Search the pane's scrollback |
