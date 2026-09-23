@@ -186,6 +186,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
    * live pane underneath. Behind a normal pane the same hairline shows canvas
    * background, which is exactly what this paints.
    */
+
   const scrim = document.createElement('div')
   scrim.className = 'zoom-scrim'
 
@@ -203,7 +204,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
   let press: { readonly paneId: string; readonly x: number; readonly y: number } | null = null
 
-  host.addEventListener('mousedown', (event) => {
+  const onHostMouseDown = (event: MouseEvent): void => {
     const paneId = paneIdAt(event)
     if (paneId === undefined) {
       press = null
@@ -211,7 +212,8 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     }
     press = { paneId, x: event.clientX, y: event.clientY }
     hooks.onPaneMouseDown(paneId)
-  })
+  }
+  host.addEventListener('mousedown', onHostMouseDown)
 
   /*
    * A double-click on the bar opens the pane.
@@ -221,7 +223,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
    * needs none of that. The listener asks for the bar, so nothing on an open
    * pane can reach it and word selection in a terminal is untouched.
    */
-  host.addEventListener('dblclick', (event) => {
+  const onHostDoubleClick = (event: MouseEvent): void => {
     const bar = (event.target as HTMLElement).closest('.pane__fold')
     if (bar === null) return
     const paneId = paneIdAt(event)
@@ -229,15 +231,17 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     // The bar is chrome; a double-click there is a command, not a text selection.
     event.preventDefault()
     hooks.onFoldDoubleClick?.(paneId)
-  })
+  }
+  host.addEventListener('dblclick', onHostDoubleClick)
 
-  host.addEventListener('mouseup', (event) => {
+  const onHostMouseUp = (event: MouseEvent): void => {
     const start = press
     press = null
     if (start === null || paneIdAt(event) !== start.paneId) return
     const moved = Math.abs(event.clientX - start.x) + Math.abs(event.clientY - start.y)
     if (moved <= CLICK_SLOP) hooks.onPaneClick?.(start.paneId)
-  })
+  }
+  host.addEventListener('mouseup', onHostMouseUp)
 
   function syncIndicator(): void {
     const metrics = indicatorMetrics(scrollX, canvasWidthOf(), host.clientWidth)
@@ -362,7 +366,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
    */
   let thumbDrag: { readonly pointerId: number; last: number } | null = null
 
-  indicator.addEventListener('pointerdown', (event) => {
+  const onIndicatorPointerDown = (event: PointerEvent): void => {
     if (currentLayout === null || indicator.hidden || zoomedPaneId !== null) return
     event.preventDefault()
     try {
@@ -372,15 +376,17 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     }
     thumbDrag = { pointerId: event.pointerId, last: event.clientX }
     host.classList.add('canvas--thumb-dragging')
-  })
+  }
+  indicator.addEventListener('pointerdown', onIndicatorPointerDown)
 
-  indicator.addEventListener('pointermove', (event) => {
+  const onIndicatorPointerMove = (event: PointerEvent): void => {
     if (thumbDrag === null || currentLayout === null) return
     const dx = event.clientX - thumbDrag.last
     if (dx === 0) return
     thumbDrag.last = event.clientX
     scrollByExact(scrollForThumbDelta(dx, canvasWidthOf(), host.clientWidth))
-  })
+  }
+  indicator.addEventListener('pointermove', onIndicatorPointerMove)
 
   function endThumbDrag(event: PointerEvent): void {
     if (thumbDrag === null) return
@@ -394,41 +400,38 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   indicator.addEventListener('pointerup', endThumbDrag)
   indicator.addEventListener('pointercancel', endThumbDrag)
 
-  host.addEventListener(
-    'wheel',
-    (event) => {
-      if (currentLayout === null) return
+  const onHostWheel = (event: WheelEvent): void => {
+    if (currentLayout === null) return
 
-      // An open map wider than the window pans itself, and this handler claims
-      // the wheel in capture — so it has to stand back or the map never moves.
-      // A map that fits keeps letting the canvas scroll underneath.
-      if ((event.target as HTMLElement).closest('.overview--pannable') !== null) return
+    // An open map wider than the window pans itself, and this handler claims
+    // the wheel in capture — so it has to stand back or the map never moves.
+    // A map that fits keeps letting the canvas scroll underneath.
+    if ((event.target as HTMLElement).closest('.overview--pannable') !== null) return
 
-      // The pane jump's list scrolls itself; claiming its wheel would pan the
-      // canvas behind the panel and leave the list stuck at the top.
-      if ((event.target as HTMLElement).closest('.pane-jump') !== null) return
+    // The pane jump's list scrolls itself; claiming its wheel would pan the
+    // canvas behind the panel and leave the list stuck at the top.
+    if ((event.target as HTMLElement).closest('.pane-jump') !== null) return
 
-      /*
-       * Vertical wheel belongs to the terminal's scrollback. The canvas takes it
-       * only when the horizontal component wins, the pointer is off a panel, or
-       * Shift is held and that shortcut is enabled.
-       */
-      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      const overTerminal = (event.target as HTMLElement).closest('.pane__body') !== null
-      const shiftPans = hooks.shiftPans?.() ?? true
-      if (!horizontal && overTerminal && !(event.shiftKey && shiftPans)) return
+    /*
+     * Vertical wheel belongs to the terminal's scrollback. The canvas takes it
+     * only when the horizontal component wins, the pointer is off a panel, or
+     * Shift is held and that shortcut is enabled.
+     */
+    const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+    const overTerminal = (event.target as HTMLElement).closest('.pane__body') !== null
+    const shiftPans = hooks.shiftPans?.() ?? true
+    if (!horizontal && overTerminal && !(event.shiftKey && shiftPans)) return
 
-      const raw = horizontal ? event.deltaX : event.deltaY
-      if (raw === 0) return
-      event.preventDefault()
-      // Claim it outright: xterm stops propagation under mouse tracking or an
-      // alternate screen, so a pan decided on the way up would never arrive.
-      event.stopPropagation()
-      panBy(raw, event.deltaMode)
-    },
-    // Capture, for the same reason.
-    { passive: false, capture: true },
-  )
+    const raw = horizontal ? event.deltaX : event.deltaY
+    if (raw === 0) return
+    event.preventDefault()
+    // Claim it outright: xterm stops propagation under mouse tracking or an
+    // alternate screen, so a pan decided on the way up would never arrive.
+    event.stopPropagation()
+    panBy(raw, event.deltaMode)
+  }
+  // Capture, for the same reason.
+  host.addEventListener('wheel', onHostWheel, { passive: false, capture: true })
 
   /** Handles laid over the gaps, wider than the gap itself for easier aiming. */
   function renderHandles(layout: Layout): void {
@@ -607,6 +610,22 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     destroy() {
       cancelAnimation()
       stopWheelGlide()
+      host.removeEventListener('mousedown', onHostMouseDown)
+      host.removeEventListener('dblclick', onHostDoubleClick)
+      host.removeEventListener('mouseup', onHostMouseUp)
+      host.removeEventListener('wheel', onHostWheel, true)
+      indicator.removeEventListener('pointerdown', onIndicatorPointerDown)
+      indicator.removeEventListener('pointermove', onIndicatorPointerMove)
+      indicator.removeEventListener('pointerup', endThumbDrag)
+      indicator.removeEventListener('pointercancel', endThumbDrag)
+      if (thumbDrag !== null) {
+        if (indicator.hasPointerCapture(thumbDrag.pointerId)) {
+          indicator.releasePointerCapture(thumbDrag.pointerId)
+        }
+        thumbDrag = null
+        host.classList.remove('canvas--thumb-dragging')
+      }
+      press = null
       for (const view of views.values()) view.element.remove()
       views.clear()
       track.remove()
