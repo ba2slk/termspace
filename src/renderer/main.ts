@@ -1,7 +1,8 @@
 import '@xterm/xterm/css/xterm.css'
 import './styles/tokens.css'
 import './styles/app.css'
-import type { AppSettings, Bindings, SessionSummary } from '../shared/protocol'
+import type { AppSettings, Bindings, SessionSpec, SessionSummary } from '../shared/protocol'
+import { DEFAULT_TERMINAL_ID, isDefaultTerminal } from '../shared/default-terminal'
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults'
 import { defaultBindingsFor, formatChord, type ActionId } from '../shared/keybindings'
 import { shorten } from '../shared/home-path'
@@ -14,10 +15,11 @@ import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import {
   commandItems as buildCommandItems,
+  defaultTerminalMenuItems,
   sidebarMenuItems as buildSidebarMenuItems,
 } from './menu-model'
 import { isAppAction, resolveAction } from './keymap'
-import { createConfirmCloseView, type ConfirmRequest } from './confirm-close-view'
+import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
 import { gotoTarget, reachableSessions, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
@@ -151,7 +153,7 @@ function restoreCanvas(): void {
 
 const placeholder = createEmptyCanvas({
   onCreateSession: () => openNewSession(),
-  onOpenTerminal: () => undefined,
+  onOpenTerminal: () => void openDefaultTerminal(),
 })
 canvasHost.append(placeholder.el)
 
@@ -187,7 +189,7 @@ function commandItems(): readonly CommandItem[] {
   return buildCommandItems(
     {
       hasSession: session !== undefined,
-      hasSessionId: currentName !== null,
+      hasSessionId: currentName !== null && !isDefaultTerminal(currentName),
       sidebarVisible: sidebar.visible,
       hint: hintFor,
     },
@@ -259,9 +261,12 @@ const sidebar = createSessionSidebar(workspace, {
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
-  onOpenDefaultTerminal: () => undefined,
-  onCloseDefaultTerminal: () => undefined,
-  onDefaultTerminalMenu: () => undefined,
+  onOpenDefaultTerminal: () => void openSession(DEFAULT_TERMINAL_ID),
+  onCloseDefaultTerminal: () => endSession(DEFAULT_TERMINAL_ID),
+  onDefaultTerminalMenu: (at) => {
+    appBar.closeMenus()
+    sidebarMenu.open(at, defaultTerminalMenuItems({ saveAs: () => void saveDefaultTerminal() }))
+  },
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list
@@ -499,6 +504,12 @@ function renderSidebar(): void {
     [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
+  const terminal = runtimes.get(DEFAULT_TERMINAL_ID)
+  sidebar.setDefaultTerminal(
+    terminal === undefined
+      ? null
+      : { current: isDefaultTerminal(currentName), wants: terminal.wantsAttention() },
+  )
   // What the empty canvas offers is "open one", so an archive-only workspace
   // has nothing to offer.
   placeholder.setHasSessions(available().length > 0)
@@ -739,24 +750,40 @@ const confirmView = createConfirmCloseView(canvasHost, {
 })
 
 api.window.onCloseRequested(() => {
-  const running = [...runtimes.values()].map((runtime) => ({
-    name: runtime.spec.name,
-    paneCount: livePaneCount(runtime),
-  }))
-  if (running.length === 0) {
-    api.window.confirmClose()
-    return
-  }
-  askConfirm({
-    title:
-      running.length === 1
-        ? t.firstRun.closeOneRunning
-        : t.firstRun.closeManyRunning(String(running.length)),
-    items: running,
-    lead: t.firstRun.closeLead,
-    confirmLabel: t.firstRun.closeConfirm,
-  }, () => api.window.confirmClose())
+  void openRunning().then((running) => {
+    if (running.length === 0) {
+      api.window.confirmClose()
+      return
+    }
+    askConfirm({
+      title:
+        running.length === 1
+          ? t.firstRun.closeOneRunning
+          : t.firstRun.closeManyRunning(String(running.length)),
+      items: running,
+      lead: t.firstRun.closeLead,
+      confirmLabel: t.firstRun.closeConfirm,
+    }, () => api.window.confirmClose())
+  })
 })
+
+/**
+ * What closing would end. A saved session counts while it is open; the default
+ * terminal only while a program runs in it, since an idle shell there is what a
+ * terminal emulator quits without asking about.
+ */
+async function openRunning(): Promise<RunningSession[]> {
+  const running: RunningSession[] = []
+  for (const [id, runtime] of runtimes) {
+    if (isDefaultTerminal(id)) {
+      const paneIds = runtime.snapshot().columns.flatMap((c) => c.panes.map((p) => p.paneId))
+      const commands = await api.foregroundCommands(paneIds)
+      if (Object.values(commands).every((command) => command === null)) continue
+    }
+    running.push({ name: runtime.spec.name, paneCount: livePaneCount(runtime) })
+  }
+  return running
+}
 
 /** No session takes keys while a dialog is up. */
 function askConfirm(request: ConfirmRequest, onConfirm: () => void): void {
@@ -847,7 +874,8 @@ window.addEventListener('keydown', onAppKeyDown, true)
  */
 function gotoSession(index: number): void {
   const rows = available().map((s) => ({ id: s.id, broken: s.error !== null }))
-  const target = gotoTarget(rows, index, currentName, previousName)
+  const pinned = runtimes.has(DEFAULT_TERMINAL_ID) ? DEFAULT_TERMINAL_ID : null
+  const target = gotoTarget(rows, index, currentName, previousName, pinned)
   if (target !== null) void openSession(target)
 }
 
@@ -942,20 +970,30 @@ async function openSession(id: string): Promise<void> {
     return
   }
 
+  // It has no file to load; once it ends, only openDefaultTerminal brings it back.
+  if (isDefaultTerminal(id)) return
+
   const loaded = await api.loadSession(id)
   if (!loaded.ok || loaded.spec === null) {
     await refreshSidebar()
     return
   }
 
+  mountRuntime(id, loaded.spec, loaded.file)
+  showOnly(id)
+  void refreshSidebar()
+}
+
+/** Build a session's runtime and file it under id. The caller shows it. */
+function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRuntime {
   const element = document.createElement('div')
   element.className = 'session-host'
   canvasHost.append(element)
   hosts.set(id, element)
 
   const runtime = startSession({
-    spec: loaded.spec,
-    file: loaded.file,
+    spec,
+    file,
     home,
     host: element,
     settings: () => settings,
@@ -977,8 +1015,35 @@ async function openSession(id: string): Promise<void> {
     },
   })
   runtimes.set(id, runtime)
-  showOnly(id)
-  void refreshSidebar()
+  return runtime
+}
+
+/**
+ * The shell a launch opens, before any session: no file, one pane at home.
+ * At most one; the empty canvas's button brings it back after it ends.
+ */
+async function openDefaultTerminal(): Promise<void> {
+  if (runtimes.has(DEFAULT_TERMINAL_ID)) {
+    void openSession(DEFAULT_TERMINAL_ID)
+    return
+  }
+  const spec = await api.defaultTerminalSpec(t.sidebar.defaultTerminal)
+  // A second call that passed the check above before the first mounted: mounting
+  // again would orphan the first terminal and its shell.
+  if (runtimes.has(DEFAULT_TERMINAL_ID)) {
+    void openSession(DEFAULT_TERMINAL_ID)
+    return
+  }
+  dismissOverlays()
+  mountRuntime(DEFAULT_TERMINAL_ID, spec, '')
+  showOnly(DEFAULT_TERMINAL_ID)
+  renderSidebar()
+}
+
+/** Give the default terminal a file. Task 6 fills in the dialog. */
+async function saveDefaultTerminal(): Promise<void> {
+  await openSession(DEFAULT_TERMINAL_ID)
+  void openSaveSession()
 }
 
 // ── Startup ─────────────────────────────────────────────
@@ -993,6 +1058,7 @@ async function boot(): Promise<void> {
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)
+  await openDefaultTerminal()
   syncPlaceholder()
   revealListWhenEmpty()
   appBar.syncControls()
