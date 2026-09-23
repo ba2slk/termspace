@@ -52,19 +52,19 @@
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/xterm": "6.0.0",
     "node-pty": "1.1.0",
-    "yaml": "2.9.0",
-    "zod": "4.4.3"
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",
-    "@types/node": "22.19.1",
-    "electron": "43.3.0",
+    "@types/node": "26.6.2",
+    "electron": "44.4.3",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
-    "happy-dom": "20.11.1",
-    "sharp": "0.35.3",
+    "happy-dom": "20.14.5",
+    "sharp": "0.35.4",
     "typescript": "7.0.2",
-    "vite": "7.3.6",
-    "vitest": "4.1.10"
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
   }
 }
