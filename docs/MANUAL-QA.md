@@ -614,6 +614,8 @@ These can't be replaced by automated judgment. They're matters of impression, no
       nothing and it cannot be dropped on the archive dock. Its × ends it without asking,
       as on every other row
 - [ ] `Alt+1`–`9` and `Alt+Shift+<` / `>` never land on the default terminal
+- [ ] ``Alt+` `` (mac `Cmd+Shift+0`) goes to the default terminal, creates one when none
+      exists, and pressed again returns to the previous session
 - [ ] `Ctrl+D` the last pane: the empty canvas has "New terminal" focused, and `Enter`
       gives a fresh shell in `$HOME`
 - [ ] Quit with a program running in the unsaved default terminal: the close confirmation

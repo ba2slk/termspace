@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gotoTarget, reachableSessions, stepSession } from './session-ring'
+import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
 
 describe('stepSession', () => {
   const ring = ['api', 'web', 'logs']
@@ -30,6 +30,39 @@ describe('stepSession', () => {
     expect(stepSession(ring, null, 1)).toBe('api')
     expect(stepSession(ring, null, -1)).toBe('logs')
     expect(stepSession(ring, 'gone', 1)).toBe('api')
+  })
+})
+
+describe('the default terminal key', () => {
+  const pinned = '.terminal'
+  const rows = ['work', 'notes']
+
+  it('goes to the default terminal from another session', () => {
+    expect(defaultTerminalTarget('work', 'notes', pinned, rows)).toBe(pinned)
+  })
+
+  it('goes back where you came from when already on it', () => {
+    expect(defaultTerminalTarget(pinned, 'work', pinned, rows)).toBe('work')
+  })
+
+  it('stays on it with nowhere to go back to', () => {
+    expect(defaultTerminalTarget(pinned, null, pinned, rows)).toBe(pinned)
+  })
+
+  it('does not go back to a session archived since', () => {
+    expect(defaultTerminalTarget(pinned, 'shelved', pinned, rows)).toBe(pinned)
+  })
+
+  it('goes to it with nothing open', () => {
+    expect(defaultTerminalTarget(null, null, pinned, rows)).toBe(pinned)
+  })
+})
+
+describe('stepping off the default terminal', () => {
+  it('enters the ring of listed rows from an end, not the reserved key', () => {
+    const ring = ['api', 'web']
+    expect(stepSession(ring, '.terminal', 1)).toBe('api')
+    expect(stepSession(ring, '.terminal', -1)).toBe('web')
   })
 })
 

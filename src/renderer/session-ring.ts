@@ -34,6 +34,26 @@ export function reachableSessions<T extends { readonly archived: boolean }>(
   return sessions.filter((session) => !session.archived)
 }
 
+/**
+ * The default terminal's key: where it lands, given what is on screen.
+ *
+ * Pressed on the default terminal it goes back, like a numbered key pressed on
+ * its own session. With nothing behind, it stays: the caller creates the
+ * terminal when none exists, so the key always has somewhere to go.
+ *
+ * As with the numbered keys, going back needs the destination to still be a
+ * row: `rows` are the reachable ids, so the key is no way out of the archive.
+ */
+export function defaultTerminalTarget(
+  current: string | null,
+  previous: string | null,
+  pinnedId: string,
+  rows: readonly string[],
+): string {
+  const back = current === pinnedId && previous !== null && rows.includes(previous)
+  return back ? previous : pinnedId
+}
+
 /** A row of the session list, as far as a shortcut is concerned. */
 export interface Reachable {
   readonly id: string

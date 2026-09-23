@@ -300,6 +300,11 @@ describe('resolveAction — session shortcuts', () => {
     expect(isAppAction({ t: 'goto-session', index: 0 })).toBe(true)
   })
 
+  it('Alt+` goes to the default terminal, with nothing open too', () => {
+    expect(resolveAction(chord('Backquote', { altKey: true }))).toEqual({ t: 'default-terminal' })
+    expect(isAppAction({ t: 'default-terminal' })).toBe(true)
+  })
+
   it('Alt+Shift+< and Alt+Shift+> step through the open sessions', () => {
     expect(resolveAction(chord('Comma', { altKey: true, shiftKey: true }))).toEqual({
       t: 'step-session',
@@ -374,6 +379,15 @@ describe('resolveAction — mac mode', () => {
     expect(
       resolveAction(chord('KeyK', { metaKey: true, shiftKey: true }), DEFAULT_BINDINGS_MAC, true),
     ).toEqual({ t: 'pane-jump' })
+  })
+
+  it('goes to the default terminal on Cmd+Shift+0, leaving Cmd+0 to the font', () => {
+    expect(
+      resolveAction(chord('Digit0', { metaKey: true, shiftKey: true }), DEFAULT_BINDINGS_MAC, true),
+    ).toEqual({ t: 'default-terminal' })
+    expect(resolveAction(chord('Digit0', { metaKey: true }), DEFAULT_BINDINGS_MAC, true)).toEqual({
+      t: 'font-reset',
+    })
   })
 
   it('still refuses Meta off mac, where it is Super', () => {

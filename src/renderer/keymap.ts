@@ -40,6 +40,8 @@ export type Action =
   /** Fold everything in the focused pane's column but itself, and back again. */
   | { readonly t: 'fold-others' }
   | { readonly t: 'toggle-sidebar' }
+  /** Show the default terminal, or go back from it. */
+  | { readonly t: 'default-terminal' }
   /** Jump to the nth session in the sidebar, zero-based. */
   | { readonly t: 'goto-session'; readonly index: number }
   /** Step to the session before or after this one, among those running. */
@@ -76,6 +78,7 @@ export function isAppAction(action: Action): boolean {
     // than doing anything to a pane.
     action.t === 'save-layout' ||
     action.t === 'fullscreen' ||
+    action.t === 'default-terminal' ||
     action.t === 'goto-session' ||
     action.t === 'step-session' ||
     action.t === 'font-size' ||
@@ -113,6 +116,7 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   copy: { t: 'copy' },
   paste: { t: 'paste' },
   'toggle-sidebar': { t: 'toggle-sidebar' },
+  'default-terminal': { t: 'default-terminal' },
   'prev-session': { t: 'step-session', delta: -1 },
   'next-session': { t: 'step-session', delta: 1 },
   settings: { t: 'settings' },

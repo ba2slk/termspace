@@ -21,7 +21,7 @@ import {
 import { isAppAction, resolveAction } from './keymap'
 import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
-import { gotoTarget, reachableSessions, stepSession } from './session-ring'
+import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createSettingsView } from './settings-view'
@@ -886,6 +886,9 @@ function onAppKeyDown(event: KeyboardEvent): void {
   event.stopPropagation()
 
   switch (action.t) {
+    case 'default-terminal':
+      goToDefaultTerminal()
+      break
     case 'goto-session':
       gotoSession(action.index)
       break
@@ -926,6 +929,14 @@ function gotoSession(index: number): void {
   const pinned = runtimes.has(DEFAULT_TERMINAL_ID) ? DEFAULT_TERMINAL_ID : null
   const target = gotoTarget(rows, index, currentName, previousName, pinned)
   if (target !== null) void openSession(target)
+}
+
+/** Alt+`: the default terminal, creating it when none exists; again, back. */
+function goToDefaultTerminal(): void {
+  const rows = available().map((s) => s.id)
+  const target = defaultTerminalTarget(currentName, previousName, DEFAULT_TERMINAL_ID, rows)
+  if (target === DEFAULT_TERMINAL_ID) void openDefaultTerminal()
+  else void openSession(target)
 }
 
 /**
