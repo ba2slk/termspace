@@ -119,7 +119,7 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
     return
   }
 
-  api.write(paneId, 'cd /tmp && echo selfcheck-marker-7\n')
+  api.write(paneId, 'cd / && echo selfcheck-marker-7\n')
   // The typed line and its output both carry the marker: two means it ran.
   const markers = (): number => {
     term.selectAll()
@@ -132,7 +132,7 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
   const field = document.querySelector<HTMLInputElement>('.save-session__input')
   const cwdField = document.querySelector<HTMLInputElement>('.save-session__cwd')
   report['defaultTerminalSaveNameEmpty'] = field?.value === '' ? 'ok' : `FAIL (${String(field?.value)})`
-  report['defaultTerminalSaveRoot'] = cwdField?.value === '/tmp' ? 'ok' : `FAIL (${String(cwdField?.value)})`
+  report['defaultTerminalSaveRoot'] = cwdField?.value === '/' ? 'ok' : `FAIL (${String(cwdField?.value)})`
 
   // Taken: 'verify' is every group's session.
   if (field !== null) {
