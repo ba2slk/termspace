@@ -369,6 +369,23 @@ async function restoreSession(id: string): Promise<void> {
   renderSidebar()
 }
 
+/** File a live runtime under a new key; its ptys and view are untouched. */
+function moveRuntime(from: string, to: string): void {
+  if (from === to) return
+  const runtime = runtimes.get(from)
+  if (runtime !== undefined) {
+    runtimes.delete(from)
+    runtimes.set(to, runtime)
+  }
+  const host = hosts.get(from)
+  if (host !== undefined) {
+    hosts.delete(from)
+    hosts.set(to, host)
+  }
+  if (currentName === from) currentName = to
+  if (previousName === from) previousName = to
+}
+
 /** Rename a session. The file follows the name, so the id can change under us. */
 async function renameSession(id: string, newName: string): Promise<void> {
   const result = await api.renameSession(id, newName)
@@ -378,20 +395,7 @@ async function renameSession(id: string, newName: string): Promise<void> {
   }
   // Main decides the file name; read the id back rather than deriving it twice.
   const newId = result.file.replace(/\.ya?ml$/, '').split('/').pop() ?? id
-  if (newId !== id) {
-    const runtime = runtimes.get(id)
-    if (runtime !== undefined) {
-      runtimes.delete(id)
-      runtimes.set(newId, runtime)
-    }
-    const host = hosts.get(id)
-    if (host !== undefined) {
-      hosts.delete(id)
-      hosts.set(newId, host)
-    }
-    if (currentName === id) currentName = newId
-    if (previousName === id) previousName = newId
-  }
+  moveRuntime(id, newId)
   runtimes.get(newId)?.rename(newName)
   if (newId === currentName) {
     setTitle(newName, runtimes.get(newId)?.focusedPaneTitle() ?? null)
@@ -655,8 +659,13 @@ const settingsView = createSettingsView(canvasHost, {
 
 const saveSessionView = createSaveSessionView(canvasHost, {
   onSaved: (file, wasBlank) => {
+    const from = savingFrom
     closeSaveSession()
     void refreshSidebar()
+    if (!wasBlank && isDefaultTerminal(from)) {
+      void adoptSavedTerminal(file)
+      return
+    }
     // Open a new blank session straight away rather than making it a second step.
     if (wasBlank) {
       void openSession(file.replace(/\.ya?ml$/, '').split('/').pop() ?? '')
@@ -667,6 +676,32 @@ const saveSessionView = createSaveSessionView(canvasHost, {
   },
   onDismiss: () => closeSaveSession(),
 })
+
+/**
+ * The default terminal was saved: the same runtime becomes that session. Its
+ * ptys keep running; only the key, the name and the root change. The root is
+ * read back from the file, since main resolved what was typed.
+ */
+async function adoptSavedTerminal(file: string): Promise<void> {
+  const id = file.replace(/\.ya?ml$/, '').split('/').pop() ?? ''
+  const runtime = runtimes.get(DEFAULT_TERMINAL_ID)
+  if (runtime === undefined || id === '') return
+  // A session open under that key lost its file outside the app; filing over it
+  // would orphan its runtime.
+  if (runtimes.has(id)) {
+    toast.show(t.firstRun.saveFailed)
+    return
+  }
+  moveRuntime(DEFAULT_TERMINAL_ID, id)
+  const loaded = await api.loadSession(id)
+  if (loaded.ok && loaded.spec !== null) {
+    runtime.rename(loaded.spec.name)
+    runtime.rebase(loaded.spec.cwd)
+  }
+  if (currentName === id) setTitle(runtime.spec.name, runtime.focusedPaneTitle())
+  await refreshSidebar()
+  toast.show(t.firstRun.saved(file.split('/').pop() ?? file))
+}
 
 /** ~-shorten for display; main expands it back on save. */
 function shortenHome(path: string): string {
@@ -688,6 +723,11 @@ function shortenHome(path: string): string {
 async function saveCurrentLayout(): Promise<void> {
   const runtime = current()
   if (runtime === undefined || currentName === null) return
+  // No file to write over yet: the first save names one.
+  if (isDefaultTerminal(currentName)) {
+    void openSaveSession()
+    return
+  }
   appBar.closeMenus()
   const result = await api.saveSessionAs(
     currentName,
@@ -705,6 +745,9 @@ async function saveCurrentLayout(): Promise<void> {
   toast.show(t.firstRun.savedLayout(result.file.split('/').pop() ?? result.file))
 }
 
+/** The session the save dialog was opened from; the default terminal moves on success. */
+let savingFrom: string | null = null
+
 async function openSaveSession(): Promise<void> {
   const runtime = current()
   if (runtime === undefined) return
@@ -720,10 +763,16 @@ async function openSaveSession(): Promise<void> {
     runtime.spec.cwd === home
       ? await api.suggestRootCwd(paneIds)
       : shortenHome(runtime.spec.cwd)
-  saveSessionView.open(runtime.spec.name, rootCwd, () => runtime.snapshot())
+  savingFrom = currentName
+  const fromTerminal = isDefaultTerminal(currentName)
+  // Empty: pre-filled, one Enter would name the file after the placeholder.
+  saveSessionView.open(fromTerminal ? '' : runtime.spec.name, rootCwd, () => runtime.snapshot(), {
+    mayOverwrite: !fromTerminal,
+  })
 }
 
 function closeSaveSession(): void {
+  savingFrom = null
   saveSessionView.close()
   restoreCanvas()
 }
@@ -1002,9 +1051,11 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
     onTitle: setTitle,
     onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
     onPanesChanged: renderSidebar,
-    // The same write as Alt+Shift+S: a title lives in the layout, so the
-    // whole layout is what there is to save.
-    onPaneRenamed: () => void saveCurrentLayout(),
+    // The same write as Alt+Shift+S, except for the default terminal, which
+    // has no file yet; the title waits in the layout for its first save.
+    onPaneRenamed: () => {
+      if (!isDefaultTerminal(idOf(runtime))) void saveCurrentLayout()
+    },
     onAttentionChanged: renderSidebar,
     onWatchedPaneChanged: reportWatchedPane,
     // By identity, not by the id captured here: a rename moves the session to a

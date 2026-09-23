@@ -150,6 +150,8 @@ export interface SessionRuntime {
   readonly spec: SessionSpec
   /** Adopt a new display name, so a later save writes it. */
   rename(name: string): void
+  /** Adopt a new session root, so a later save writes paths relative to it. */
+  rebase(cwd: string): void
   /** Whether this session takes keyboard input; hidden ones must not. */
   setActive(active: boolean): void
   /** The focused pane's title, for the title bar. Null with nothing focused. */
@@ -1189,6 +1191,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     },
     rename(name) {
       spec = { ...spec, name }
+    },
+    rebase(cwd) {
+      spec = { ...spec, cwd }
     },
     applySettings(next) {
       const appearance = {
