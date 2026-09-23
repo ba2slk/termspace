@@ -337,6 +337,15 @@ body {
   padding: 0 6px 8px;
 }
 
+/* The default terminal: above the list and not in it, across the same hairline
+   that sets the archive dock apart below. The row inside is an ordinary row. */
+.sidebar__pinned {
+  flex: 0 0 auto;
+  padding: 0 6px 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
 .sidebar__row {
   display: flex;
   align-items: center;

@@ -56,6 +56,11 @@ export interface SidebarHooks {
    * held over the list goes back to the dock, since no render is coming.
    */
   readonly onRestore: (id: string) => void | Promise<void>
+  /** The default terminal's row: it has no id to pass, and no file behind it. */
+  readonly onOpenDefaultTerminal: () => void
+  readonly onCloseDefaultTerminal: () => void
+  /** Right-click on the default terminal's row; it has its own, shorter menu. */
+  readonly onDefaultTerminalMenu: (at: { x: number; y: number }) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
 }
@@ -79,6 +84,11 @@ export interface SessionSidebar {
   ): void
   /** Turn the row's name into an input, in place. */
   startRename(sessionId: string): void
+  /**
+   * The file-less terminal a launch opens, drawn above the list rather than in
+   * it: no number, no drag, no archive. Null takes the slot away.
+   */
+  setDefaultTerminal(state: { readonly current: boolean; readonly wants: boolean } | null): void
   setVisible(visible: boolean): void
   setWidth(width: number): void
   readonly visible: boolean
@@ -153,6 +163,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   list.className = 'sidebar__list'
 
   /*
+   * The default terminal's slot. Outside the list, across a hairline, as the
+   * archive dock is below it: the list's wheel dial and drag listen on the list
+   * alone, so neither can reach this row.
+   */
+  const pinned = document.createElement('div')
+  pinned.className = 'sidebar__pinned'
+
+  /*
    * The archive dock: a header pinned under the list, and the archived rows
    * expanding in flow above it. In flow, not over the list, because the list is
    * resident furniture — anything that covers it hides what you came to read.
@@ -200,6 +218,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   // Over a row or over empty space decides which commands appear.
   aside.addEventListener('contextmenu', (event) => {
     event.preventDefault()
+    if ((event.target as HTMLElement | null)?.closest('.sidebar__pinned') != null) {
+      hooks.onDefaultTerminalMenu({ x: event.clientX, y: event.clientY })
+      return
+    }
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sidebar__row')
     hooks.onContextMenu(
       { x: event.clientX, y: event.clientY },
@@ -772,6 +794,47 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     return item
   }
 
+  /** Built like a running row, minus what belongs to a file: count, number. */
+  function defaultTerminalRow(current: boolean, wants: boolean): HTMLElement {
+    const item = document.createElement('div')
+    item.className = 'sidebar__row'
+    if (current) item.classList.add('sidebar__row--current')
+
+    const open = document.createElement('button')
+    open.type = 'button'
+    open.className = 'sidebar__open'
+
+    const dot = document.createElement('span')
+    dot.className = 'sidebar__dot sidebar__dot--on'
+    if (wants) dot.classList.add('sidebar__dot--wants')
+    dot.title = wants ? t.sidebar.wants : t.sidebar.running
+
+    const name = document.createElement('span')
+    name.className = 'sidebar__name'
+    name.textContent = t.sidebar.defaultTerminal
+
+    const meta = document.createElement('span')
+    meta.className = 'sidebar__meta'
+    meta.textContent = t.sidebar.unsaved
+
+    open.append(dot, name, meta)
+    open.addEventListener('click', () => hooks.onOpenDefaultTerminal())
+
+    const close = document.createElement('button')
+    close.type = 'button'
+    close.className = 'sidebar__close'
+    close.title = t.sidebar.endSession
+    close.setAttribute('aria-label', t.sidebar.endSessionNamed(t.sidebar.defaultTerminal))
+    close.append(icon([POWER_PATH, POWER_RING], 13))
+    close.addEventListener('click', (event) => {
+      event.stopPropagation()
+      hooks.onCloseDefaultTerminal()
+    })
+
+    item.append(open, close)
+    return item
+  }
+
   /** Name only: an archived session has no panes running and nothing to do. */
   function archivedRow(session: SessionSummary): HTMLElement {
     const item = document.createElement('div')
@@ -827,6 +890,16 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     element: aside,
 
     startRename,
+
+    setDefaultTerminal(state) {
+      if (state === null) {
+        pinned.remove()
+        pinned.replaceChildren()
+        return
+      }
+      pinned.replaceChildren(defaultTerminalRow(state.current, state.wants))
+      if (!pinned.isConnected) list.before(pinned)
+    },
 
     render(sessions, live, current, wanting) {
       wantingIds = wanting ?? new Set()
