@@ -369,6 +369,8 @@ export interface TermspaceApi {
     onCloseRequested(handler: () => void): () => void
     toggleFullScreen(): Promise<boolean>
     toggleDevTools(): void
+    /** Resolves once the window is shown and the window manager has sized it. */
+    settled(): Promise<void>
     onMaximizeChange(handler: (maximized: boolean) => void): () => void
   }
   /** Release checks. Main keeps the URL; the renderer only sees a state. */

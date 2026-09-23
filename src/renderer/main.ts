@@ -450,7 +450,7 @@ function openNewSession(): void {
   silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
-  saveSessionView.openBlank(fillWidth())
+  saveSessionView.openBlank(fillWidth)
 }
 
 function toggleSidebar(): void {
@@ -1129,6 +1129,8 @@ async function boot(): Promise<void> {
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)
+  // The terminal's width is fixed at creation; take it from the window's final size.
+  await api.window.settled()
   await openDefaultTerminal()
   syncPlaceholder()
   revealListWhenEmpty()

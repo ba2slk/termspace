@@ -67,6 +67,7 @@ const INVOKE_CHANNELS = [
   'clipboard:read',
   'window:toggle-maximize',
   'window:toggle-fullscreen',
+  'window:settled',
   'settings:get',
   'settings:save',
   'keybindings:get',
@@ -99,6 +100,15 @@ const ON_CHANNELS = [
   'app:visible-pane',
   'update:open-release',
 ]
+
+/**
+ * The window counts as sized once it has gone this long without a resize after
+ * show. A floating window manager never resizes, so this is the whole wait there;
+ * short, because the launch terminal waits on it.
+ */
+const SETTLE_QUIET_MS = 150
+/** A window manager that keeps resizing must not hold the launch terminal back. */
+const SETTLE_CAP_MS = 1000
 
 export function registerIpcHandlers(
   win: BrowserWindow,
@@ -425,6 +435,33 @@ export function registerIpcHandlers(
     win.setFullScreen(!win.isFullScreen())
     return win.isFullScreen()
   })
+  /*
+   * Settled: shown, then no resize for SETTLE_QUIET_MS. A tiling window manager
+   * resizes in several steps (a move, then the tile), so the first resize is
+   * not the last. A promise rather than an event, so a late ask still resolves.
+   */
+  const settled = new Promise<void>((resolve) => {
+    if (win.isVisible()) {
+      resolve()
+      return
+    }
+    win.once('show', () => {
+      const done = (): void => {
+        clearTimeout(quiet)
+        clearTimeout(cap)
+        win.off('resize', onResize)
+        resolve()
+      }
+      const onResize = (): void => {
+        clearTimeout(quiet)
+        quiet = setTimeout(done, SETTLE_QUIET_MS)
+      }
+      let quiet = setTimeout(done, SETTLE_QUIET_MS)
+      const cap = setTimeout(done, SETTLE_CAP_MS)
+      win.on('resize', onResize)
+    })
+  })
+  ipcMain.handle('window:settled', () => settled)
   const notifyMaximize = (): void => send('window:maximize-changed', win.isMaximized())
   win.on('maximize', notifyMaximize)
   win.on('unmaximize', notifyMaximize)

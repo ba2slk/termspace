@@ -72,6 +72,7 @@ const api: TermspaceApi = {
     },
     toggleFullScreen: () => ipcRenderer.invoke('window:toggle-fullscreen'),
     toggleDevTools: () => ipcRenderer.send('window:toggle-devtools'),
+    settled: () => ipcRenderer.invoke('window:settled'),
     onMaximizeChange: (handler) => {
       const listener = (_e: unknown, maximized: boolean): void => handler(maximized)
       ipcRenderer.on('window:maximize-changed', listener)

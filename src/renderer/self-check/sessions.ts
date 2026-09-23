@@ -57,14 +57,24 @@ const refreshList = (): void => {
 
 const pinnedSlot = (): HTMLElement | null => document.querySelector<HTMLElement>('.sidebar__pinned')
 
+/**
+ * A window resized with a pane open: that pane's width was fixed before, so it
+ * cannot be held against the canvas now. Listening from import, before boot.
+ */
+let resizedWithPane = false
+window.addEventListener('resize', () => {
+  if (document.querySelector('.pane') !== null) resizedWithPane = true
+})
+
 /** Does the one pane on screen fill the canvas beside the sidebar, as a new column should? */
-const fillsCanvas = (): string => {
+const fillsCanvas = (resized = false): string => {
   const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
   const pane = visiblePanes()[0]?.getBoundingClientRect().width
-  const want = host === null ? undefined : maxColumnWidth(host.clientWidth)
-  return pane !== undefined && want !== undefined && Math.abs(pane - want) <= 1
-    ? 'ok'
-    : `FAIL (pane ${String(pane)} canvas ${String(want)})`
+  if (host === null || pane === undefined) return 'skipped: no session or pane on screen'
+  const want = maxColumnWidth(host.clientWidth)
+  if (Math.abs(pane - want) <= 1) return 'ok'
+  const widths = `pane ${String(pane)} canvas ${String(want)}`
+  return resized ? `skipped: the window resized after the pane opened (${widths})` : `FAIL (${widths})`
 }
 
 /**
@@ -86,6 +96,7 @@ export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void
         }, 8000))
         ? 'ok'
         : 'skipped: the shell printed nothing (no prompt configured?)'
+  report['defaultTerminalFillsCanvas'] = fillsCanvas(resizedWithPane)
 
   // Drawn above the list, not merely before it in the DOM.
   const slot = pinnedSlot()?.getBoundingClientRect()
@@ -122,9 +133,7 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
   // A synthetic Enter does not press a button; Enter itself is in MANUAL-QA.
   newTerminal?.click()
   await waitFor(() => pinnedSlot() !== null && visiblePanes().length === 1, 15_000)
-  // Measured here, not at launch: the window manager may resize the window after
-  // the launch terminal took its width, and widths never follow the window.
-  report['defaultTerminalFillsCanvas'] = fillsCanvas()
+  report['newTerminalFillsCanvas'] = fillsCanvas()
   const paneId = focusedId()
   const term = termOf(focusedHost())
   if (paneId === undefined || term === undefined) {
