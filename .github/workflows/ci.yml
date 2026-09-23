@@ -32,6 +32,9 @@ jobs:
       - run: npm test
 
   mac:
+    # A stacked PR targets the layer below it, not main. Only the PR that
+    # lands on main, main itself and a manual run pay for the mac job.
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
     runs-on: macos-latest
 
     steps:
