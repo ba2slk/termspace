@@ -54,6 +54,11 @@ describe('nextFitWidth', () => {
     expect(nextFitWidth(700, 1400, null)).toEqual({ width: 1400, custom: null })
   })
 
+  it('goes to full when the remembered width is where the column already is', () => {
+    // Remembered at a wider view; the view shrank until the half landed on it.
+    expect(nextFitWidth(600, 1200, 600)).toEqual({ width: 1200, custom: null })
+  })
+
   it('reads a width within 1px as full or half', () => {
     expect(nextFitWidth(1399, 1400, 500)).toEqual({ width: 700, custom: 500 })
     expect(nextFitWidth(701, 1400, 500)).toEqual({ width: 500, custom: 500 })

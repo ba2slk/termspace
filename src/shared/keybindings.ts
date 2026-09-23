@@ -411,7 +411,7 @@ export function chordRisk(chord: string, isMac = false): ChordRisk | null {
     if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyH' || code === 'KeyM') return 'system-key'
   }
   // Readline's word motions, which every shell inherits. Not on mac: the mac
-  // table leaves Option to the terminal, so an Option chord there is the
+  // table binds Option only together with Cmd, so an Option chord there is the
   // user's own deliberate choice, not a collision the defaults walked into.
   if (!isMac && only('Alt') && (code === 'KeyB' || code === 'KeyF')) return 'shell-word'
   // Anything unmodified is typing, apart from the function keys.

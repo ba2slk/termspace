@@ -857,8 +857,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     const found = findPane(layout, layout.focusedPaneId)
     if (found === null) return
     const { id, width } = found.column
+    for (const known of fitCustom.keys()) {
+      if (!layout.columns.some((c) => c.id === known)) fitCustom.delete(known)
+    }
     const next = nextFitWidth(width, columnWidthCap(), fitCustom.get(id) ?? null)
-    if (next.custom !== null) fitCustom.set(id, next.custom)
+    if (next.custom === null) fitCustom.delete(id)
+    else fitCustom.set(id, next.custom)
     // A remembered width may be past the cap; restoring it is not widening.
     const cap = Math.max(next.width, columnWidthCap())
     setLayout(resizeColumn(layout, id, next.width - width, cap), 'settle')

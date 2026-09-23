@@ -77,7 +77,11 @@ export function nextFitWidth(
   const half = Math.max(MIN_COLUMN_WIDTH, Math.round(full / 2))
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
   if (near(current, full) && !near(half, full)) return { width: half, custom }
-  if (near(current, full) || near(current, half)) return { width: custom ?? full, custom }
+  if (near(current, full) || near(current, half)) {
+    // Remembered under another view width, it can land where the column already is.
+    if (custom === null || near(custom, current)) return { width: full, custom: null }
+    return { width: custom, custom }
+  }
   return { width: full, custom: current }
 }
 
