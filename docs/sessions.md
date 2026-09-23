@@ -101,6 +101,19 @@ in place without asking, keeping the previous version beside it as
 way. ☰ → edit session file (or right-click a session in the sidebar) splits a
 pane and opens the file in `$EDITOR`, falling back to `$VISUAL`, then `vi`.
 
+## The default terminal
+
+Every launch opens one shell in `$HOME`, shown above the session list as
+"Terminal". It has no file, and nothing about it is written until you save it.
+
+`Alt+Shift` + `S` (mac `Cmd` + `S`), ☰ → save as, or right-click the row →
+save as session opens the same dialog as above. The name field starts empty;
+the base directory is suggested from where the shells stand. A name that is
+already taken is refused, with no overwrite offered. Saving writes an ordinary
+session file, captured by the same rules as any other save, and the running
+programs keep running: the terminal becomes that session in place, at the end
+of the list.
+
 ## What a save captures
 
 The **base directory** becomes `cwd` at the top of the file — the session's
