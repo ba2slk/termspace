@@ -318,8 +318,8 @@ group starts from nothing open. The save half runs first in `sessions`.
   `Enter` does nothing there. A synthetic `Enter` presses no button, so `Enter` itself
   is checked by eye
 - After `cd /`, `Alt+Shift+S` opens the dialog with an empty name
-  (`defaultTerminalSaveNameEmpty`) — a pre-filled "Terminal" would let one `Enter`
-  write `Terminal.yaml`
+  (`defaultTerminalSaveNameEmpty`) — a pre-filled "Default" would let one `Enter`
+  write `Default.yaml`
 - The root field reads `/`, where the shell stands (`defaultTerminalSaveRoot`) — the
   shell starts in `$HOME`, so a root taken from the start would be wrong
 - A taken name disables the button with the "pick another" wording
@@ -619,7 +619,7 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Quit with a program running in the unsaved default terminal: the close confirmation
       appears. Quit with only an idle shell in it and no session open: it does not
 - [ ] Rename a pane in the default terminal, then save: the saved file carries that name
-- [ ] Korean locale (`locale: ko`, restart): "터미널", "저장 안 됨", "세션으로 저장" and
+- [ ] Korean locale (`locale: ko`, restart): "기본", "저장 안 됨", "세션으로 저장" and
       "새 터미널" read naturally and fit the row
 
 ### Fold the other panes (no self-check covers this)

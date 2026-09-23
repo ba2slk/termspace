@@ -104,7 +104,7 @@ pane and opens the file in `$EDITOR`, falling back to `$VISUAL`, then `vi`.
 ## The default terminal
 
 Every launch opens one shell in `$HOME`, shown above the session list as
-"Terminal". It has no file, and nothing about it is written until you save it.
+"Default". It has no file, and nothing about it is written until you save it.
 
 `Alt+Shift` + `S` (mac `Cmd` + `S`), ☰ → save as, or right-click the row →
 save as session opens the same dialog as above. The name field starts empty;
