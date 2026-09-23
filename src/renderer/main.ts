@@ -149,7 +149,10 @@ function restoreCanvas(): void {
 
 // ── Empty canvas ────────────────────────────────────────
 
-const placeholder = createEmptyCanvas({ onCreateSession: () => openNewSession() })
+const placeholder = createEmptyCanvas({
+  onCreateSession: () => openNewSession(),
+  onOpenTerminal: () => undefined,
+})
 canvasHost.append(placeholder.el)
 
 function syncPlaceholder(): void {

@@ -721,8 +721,12 @@ body {
   color: var(--fg-faint);
 }
 
-/* The block ignores the pointer; the one thing here to click must not. */
-.canvas-empty__create {
+/* The block ignores the pointer; the buttons here must not. */
+.canvas-empty__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   margin-top: 18px;
   pointer-events: auto;
 }
