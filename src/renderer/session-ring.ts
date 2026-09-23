@@ -54,17 +54,24 @@ export interface Reachable {
  *
  * Null when the key has nowhere to go: past the end of the list, on a broken
  * row, or bouncing back with nothing reachable behind you.
+ *
+ * `pinned` is the default terminal's key while one exists. It has no row, so
+ * no number opens it, but the bounce may return to it: the bounce follows
+ * what was on screen.
  */
 export function gotoTarget(
   rows: readonly Reachable[],
   index: number,
   current: string | null,
   previous: string | null,
+  pinned: string | null = null,
 ): string | null {
   const target = rows[index]
   if (target === undefined) return null
   if (target.id === current) {
-    return previous !== null && rows.some((row) => row.id === previous) ? previous : null
+    if (previous === null) return null
+    if (previous === pinned) return previous
+    return rows.some((row) => row.id === previous) ? previous : null
   }
   return target.broken ? null : target.id
 }

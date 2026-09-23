@@ -35,6 +35,8 @@ export interface EmptyCanvas {
 
 export interface EmptyCanvasHooks {
   readonly onCreateSession: () => void
+  /** Start the file-less terminal a launch opens. */
+  readonly onOpenTerminal: () => void
 }
 
 export function createEmptyCanvas(hooks: EmptyCanvasHooks): EmptyCanvas {
@@ -65,6 +67,13 @@ export function createEmptyCanvas(hooks: EmptyCanvasHooks): EmptyCanvas {
   more.className = 'canvas-empty__more'
   more.textContent = t.firstRun.moreKeys
 
+  // Always offered: the empty canvas only shows when no default terminal exists.
+  const terminal = document.createElement('button')
+  terminal.type = 'button'
+  terminal.className = 'button canvas-empty__terminal'
+  terminal.textContent = t.firstRun.newTerminal
+  terminal.addEventListener('click', () => hooks.onOpenTerminal())
+
   const create = document.createElement('button')
   create.type = 'button'
   create.className = 'button canvas-empty__create'
@@ -72,7 +81,11 @@ export function createEmptyCanvas(hooks: EmptyCanvasHooks): EmptyCanvas {
   create.hidden = true
   create.addEventListener('click', () => hooks.onCreateSession())
 
-  el.append(mark, word, keys, more, create)
+  const actions = document.createElement('div')
+  actions.className = 'canvas-empty__actions'
+  actions.append(terminal, create)
+
+  el.append(mark, word, keys, more, actions)
 
   return {
     el,
@@ -86,7 +99,10 @@ export function createEmptyCanvas(hooks: EmptyCanvasHooks): EmptyCanvas {
       }
     },
     setHidden(hidden) {
+      const appearing = el.hidden && !hidden
       el.hidden = hidden
+      // Nothing else wants keys with the canvas empty; Enter starts a shell.
+      if (appearing) terminal.focus()
     },
     setHasSessions(has) {
       create.hidden = has

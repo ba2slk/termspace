@@ -44,6 +44,15 @@ describe('the session a numbered key opens', () => {
     expect(gotoTarget(rows, 1, 'work', null)).toBe('notes')
   })
 
+  /* The default terminal has no row, but the bounce follows what was on screen. */
+  it('bounces back to the pinned terminal', () => {
+    expect(gotoTarget(rows, 0, 'work', '.terminal', '.terminal')).toBe('.terminal')
+  })
+
+  it('does not bounce to a pinned id that is gone', () => {
+    expect(gotoTarget(rows, 0, 'work', '.terminal', null)).toBeNull()
+  })
+
   it('has nowhere to go past the end of the list', () => {
     expect(gotoTarget(rows, 7, 'work', null)).toBeNull()
   })
