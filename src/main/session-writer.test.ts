@@ -7,6 +7,7 @@ import {
   toSessionYaml,
   type SessionDraft,
 } from './session-writer'
+import { DEFAULT_TERMINAL_ID } from '../shared/default-terminal'
 
 const HOME = '/home/user'
 
@@ -300,5 +301,13 @@ describe('deepestCommonAncestor', () => {
 
   it('an empty list has no ancestor', () => {
     expect(deepestCommonAncestor([])).toBe(null)
+  })
+})
+
+describe('the default terminal id', () => {
+  // Main refuses it on every write that validates ids; the renderer's guards
+  // only cover the rest. Loosening the id rule must break this line.
+  it('can never name a session file', () => {
+    expect(isValidSessionId(DEFAULT_TERMINAL_ID)).toBe(false)
   })
 })

@@ -301,6 +301,8 @@ export interface TermspaceApi {
   ): Promise<SaveSessionResult>
   /** Create a blank one-pane session rooted at rootCwd. Fails rather than overwriting. */
   createBlankSession(id: string, displayName: string, rootCwd: string): Promise<SaveSessionResult>
+  /** The spec of the file-less shell a launch opens. main knows the shell. */
+  defaultTerminalSpec(name: string): Promise<SessionSpec>
   /** $HOME, for showing paths in `~` form. */
   userHome(): Promise<string>
   /**

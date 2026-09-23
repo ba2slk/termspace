@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSession, resolveCwd, type ParseEnv } from './session-schema'
+import { defaultTerminalSpec, parseSession, resolveCwd, type ParseEnv } from './session-schema'
 
 const env: ParseEnv = { home: '/home/u', shell: '/usr/bin/zsh' }
 
@@ -198,5 +198,37 @@ describe('parseSession — error isolation', () => {
   it('a non-object YAML fails the whole session', () => {
     expect(parseSession('그냥 문자열', env).ok).toBe(false)
     expect(parseSession(null, env).ok).toBe(false)
+  })
+})
+
+describe('defaultTerminalSpec', () => {
+  it('is one shell pane at home, as wide as asked', () => {
+    const spec = defaultTerminalSpec({ name: 'Terminal', home: '/home/u', shell: '/usr/bin/zsh', width: 700 })
+    expect(spec).toEqual({
+      name: 'Terminal',
+      cwd: '/home/u',
+      shell: '/usr/bin/zsh',
+      columns: [
+        {
+          width: 700,
+          panes: [
+            {
+              kind: 'pane',
+              title: 'shell',
+              command: null,
+              prefill: null,
+              cwd: '/home/u',
+              heightRatio: 1,
+              minimized: false,
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('falls back to the parser shell without $SHELL', () => {
+    const spec = defaultTerminalSpec({ name: 'T', home: '/h', shell: null, width: 640 })
+    expect(spec.shell).toBe('/bin/sh')
   })
 })
