@@ -51,6 +51,8 @@ import {
   checkAttentionClearsOnReturn,
   checkCloseGuard,
   checkCopyToast,
+  checkDefaultTerminalAtLaunch,
+  checkDefaultTerminalSave,
   checkErrorRowStaysDraggable,
   checkFileDrop,
   checkHeldSessionJump,
@@ -142,6 +144,7 @@ const GROUPS: Readonly<
 
   // Session files and terminal input.
   sessions: async (report) => {
+    await checkDefaultTerminalSave(report)
     // Before anything else: the jump lands on the second row, and later checks
     // add sessions to the list, which would move it.
     await openSession('spare')
@@ -181,10 +184,11 @@ export async function run(): Promise<void> {
      * sessions are the last thing boot draws, so they are the ready signal —
      * a fixed sleep was too short on a cold, shared machine.
      */
-    await waitFor(() => document.querySelector('.sidebar__row') !== null, 20_000)
+    await waitFor(() => document.querySelector('.sidebar__list .sidebar__row') !== null, 20_000)
     // Nothing marks the end of boot: the list is the last thing drawn, and the
     // settings and bindings behind it arrive on IPC replies of their own.
     await sleep(300)
+    await checkDefaultTerminalAtLaunch(report)
     for (const name of names) {
       const group = GROUPS[name]
       if (group === undefined) throw new Error(`no such group: ${name}`)
