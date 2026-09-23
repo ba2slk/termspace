@@ -317,6 +317,10 @@ group starts from nothing open. The save half runs first in `sessions`.
 - On the empty canvas "New terminal" holds focus (`newTerminalFocused`) — otherwise
   `Enter` does nothing there. A synthetic `Enter` presses no button, so `Enter` itself
   is checked by eye
+- The terminal it opens is one pane as wide as the canvas beside the sidebar, within
+  1px of the column cap (`defaultTerminalFillsCanvas`) — measured here rather than at
+  launch, because the window manager may resize the window after the launch terminal
+  took its width
 - After `cd /`, `Alt+Shift+S` opens the dialog with an empty name
   (`defaultTerminalSaveNameEmpty`) — a pre-filled "Default" would let one `Enter`
   write `Default.yaml`
@@ -339,6 +343,8 @@ group starts from nothing open. The save half runs first in `sessions`.
 - An empty session cannot be created under an existing name (no overwrite option is
   offered)
 - Creating one opens it immediately
+- Its one column fills the canvas beside the sidebar, within 1px of the column cap
+  (`blankSessionFillsCanvas`) — the width is measured when the dialog opens
 - **"Delete session" in the right-click menu appears in red** (it's the
   only warning before the dialog)
 - **Deleting a session asks first, then moves the file to the trash** (a hand-written
