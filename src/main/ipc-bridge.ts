@@ -8,6 +8,7 @@ import type {
   PaneAttention,
   LoadSessionResult,
   SaveSessionResult,
+  SessionSpec,
   SessionSummary,
   ShellIntegrationStatus,
   SpawnRequest,
@@ -41,7 +42,7 @@ import { orderFile } from './session-order-file'
 import { archiveFile } from './session-archive-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
-import { resolveCwd } from './session-schema'
+import { defaultTerminalSpec, resolveCwd } from './session-schema'
 import { deepestCommonAncestor, shorten, type SessionDraft } from './session-writer'
 
 const FLUSH_INTERVAL_MS = 16
@@ -53,6 +54,7 @@ const INVOKE_CHANNELS = [
   'session:exists',
   'session:save-as',
   'session:create-blank',
+  'session:default-terminal',
   'session:delete',
   'session:rename',
   'session:reorder',
@@ -256,6 +258,17 @@ export function registerIpcHandlers(
       return createBlankSession(dir, id, displayName, defaultColumnWidth, env['HOME'] ?? '', rootCwd)
     },
   )
+
+  ipcMain.handle('session:default-terminal', async (_e, name: string): Promise<SessionSpec> => {
+    // Width follows the setting, as a blank session's does.
+    const { defaultColumnWidth } = await loadSettings(env)
+    return defaultTerminalSpec({
+      name,
+      home: env['HOME'] ?? '',
+      shell: env['SHELL'] ?? null,
+      width: defaultColumnWidth,
+    })
+  })
 
   ipcMain.handle('app:home', () => env['HOME'] ?? '')
 

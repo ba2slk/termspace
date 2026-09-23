@@ -214,3 +214,34 @@ export function parseSession(raw: unknown, env: ParseEnv): ParseResult {
     },
   }
 }
+
+/** The shell a launch opens: one pane at home, no file behind it. */
+export function defaultTerminalSpec(options: {
+  readonly name: string
+  readonly home: string
+  readonly shell: string | null
+  readonly width: number
+}): SessionSpec {
+  const { name, home, shell, width } = options
+  return {
+    name,
+    cwd: home,
+    shell: shell ?? FALLBACK_SHELL,
+    columns: [
+      {
+        width,
+        panes: [
+          {
+            kind: 'pane',
+            title: 'shell',
+            command: null,
+            prefill: null,
+            cwd: home,
+            heightRatio: 1,
+            minimized: false,
+          },
+        ],
+      },
+    ],
+  }
+}
