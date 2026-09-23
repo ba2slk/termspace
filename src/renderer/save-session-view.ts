@@ -15,11 +15,15 @@ export interface SaveSessionHooks {
 }
 
 export interface SaveSessionView {
-  /** suggested: the current session's name, usually edited rather than replaced. */
+  /**
+   * suggested: the current session's name, usually edited rather than replaced.
+   * mayOverwrite: false refuses a taken name, as creating a blank session does.
+   */
   open(
     suggested: string,
     rootCwd: string,
     snapshot: () => import('../shared/protocol').LayoutSnapshot,
+    options?: { readonly mayOverwrite?: boolean },
   ): void
   /** Create a blank one-pane session; same dialog, since it asks the same thing. */
   openBlank(): void
@@ -130,24 +134,26 @@ export function createSaveSessionView(
   let getSnapshot: (() => import('../shared/protocol').LayoutSnapshot) | null = null
   /** Whether the name is taken, which turns the button into an overwrite. */
   let exists = false
+  /** False when saving must not replace a file: a taken name then blocks. */
+  let mayOverwrite = true
   let busy = false
 
   function sync(): void {
     const id = toSessionId(field.value)
     path.textContent = id === '' ? t.saveSession.namePrompt : t.saveSession.pathFor(id)
-    save.disabled = id === '' || busy
-    // Overwriting is never silent — the label itself changes. Creating a blank
-    // session never overwrites, so a taken name simply blocks.
-    save.textContent = exists
+    // Overwriting is never silent — the label itself changes.
+    // A blank session and a no-overwrite save both treat a taken name as a wall.
+    const blocks = getSnapshot === null || !mayOverwrite
+    save.textContent = exists && !blocks
       ? t.saveSession.overwrite
       : getSnapshot === null
         ? t.saveSession.create
         : t.saveSession.save
-    save.classList.toggle('button--danger', exists && getSnapshot !== null)
-    save.disabled = id === '' || busy || (exists && getSnapshot === null)
+    save.classList.toggle('button--danger', exists && !blocks)
+    save.disabled = id === '' || busy || (exists && blocks)
     status.textContent = !exists
       ? ''
-      : getSnapshot === null
+      : blocks
         ? t.saveSession.nameTakenPickAnother
         : t.saveSession.nameTakenOverwrites
     status.classList.toggle('save-session__status--warn', exists)
@@ -182,7 +188,7 @@ export function createSaveSessionView(
     const request =
       snapshot === null
         ? api.createBlankSession(id, field.value.trim(), rootCwd)
-        : api.saveSessionAs(id, field.value.trim(), snapshot(), exists, rootCwd)
+        : api.saveSessionAs(id, field.value.trim(), snapshot(), exists && mayOverwrite, rootCwd)
     void request
       .then((result) => {
         busy = false
@@ -225,8 +231,9 @@ export function createSaveSessionView(
       return !layer.hidden
     },
 
-    open(suggested, rootCwd, snapshot) {
+    open(suggested, rootCwd, snapshot, options) {
       getSnapshot = snapshot
+      mayOverwrite = options?.mayOverwrite ?? true
       title.textContent = t.saveSession.title
       lead.textContent = t.saveSession.lead
       busy = false
@@ -240,6 +247,7 @@ export function createSaveSessionView(
 
     openBlank() {
       getSnapshot = null
+      mayOverwrite = true
       title.textContent = t.saveSession.blankTitle
       lead.textContent = t.saveSession.blankLead
       busy = false
