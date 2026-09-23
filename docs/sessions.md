@@ -95,7 +95,7 @@ otherwise the moving around you just did would be lost.
 If the name exists, the button turns into an explicit **overwrite**. Once a
 session has a file, `Alt+Shift` + `S` (the title bar's save button) re-saves it
 in place without asking, keeping the previous version beside it as
-`<id>.yaml.bak`.
+`<id>.yaml.bak` (or `<id>.yml.bak` for an existing `.yml` file).
 
 **By hand** — files the app wrote are ordinary YAML and can be edited the same
 way. ☰ → edit session file (or right-click a session in the sidebar) splits a

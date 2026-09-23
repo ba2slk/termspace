@@ -27,6 +27,14 @@ import {
   type SessionDraft,
 } from './session-writer'
 
+function isMissingFile(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
+}
+
+function errorDetail(err: unknown): string {
+  return err instanceof Error ? err.message.split('\n')[0] ?? err.message : String(err)
+}
+
 export function sessionsDir(env: NodeJS.ProcessEnv): string {
   return join(configDir(env), 'sessions')
 }
@@ -132,12 +140,32 @@ async function summarize(dir: string, file: string): Promise<SessionEntry> {
     // this pass, then drops out on the next listing.
   }
 
+  let text: string
+  try {
+    text = await readFile(path, 'utf8')
+  } catch (err) {
+    return {
+      id,
+      name: id,
+      file: path,
+      paneCount: 0,
+      createdMs,
+      error: `Could not read session file: ${errorDetail(err)}`,
+    }
+  }
+
   let raw: unknown
   try {
-    raw = parseYaml(await readFile(path, 'utf8'))
+    raw = parseYaml(text)
   } catch (err) {
-    const detail = err instanceof Error ? err.message.split('\n')[0] : String(err)
-    return { id, name: id, file: path, paneCount: 0, createdMs, error: `YAML syntax error: ${detail}` }
+    return {
+      id,
+      name: id,
+      file: path,
+      paneCount: 0,
+      createdMs,
+      error: `YAML syntax error: ${errorDetail(err)}`,
+    }
   }
 
   // The list only needs a name and pane count, so skip path resolution.
@@ -176,8 +204,9 @@ export async function listSessions(
   let files: string[]
   try {
     files = (await readdir(dir)).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
-  } catch {
-    return [] // No directory yet — first run
+  } catch (err) {
+    if (isMissingFile(err)) return [] // No directory yet — first run
+    throw err
   }
 
   const summaries = await Promise.all(files.map((f) => summarize(dir, f)))
@@ -187,7 +216,11 @@ export async function listSessions(
   // Seeds the file on a first run and prunes deleted sessions on every later one.
   const resolved = listed.map((s) => s.id)
   if (resolved.length !== order.length || resolved.some((id, i) => order[i] !== id)) {
-    await writeOrder(orderPath, resolved)
+    try {
+      await writeOrder(orderPath, resolved)
+    } catch {
+      // The list still works when the app-owned config directory is read-only.
+    }
   }
   return markArchived(listed, await readArchive(archivePath))
 }
@@ -216,7 +249,11 @@ export async function restoreSession(
   await writeArchive(archivePath, withoutArchived(await readArchive(archivePath), id))
   // Seeds the order first, so a restore before any listing still has ids to move.
   const seeded = (await listSessions(dir, orderPath, archivePath)).map((s) => s.id)
-  await writeOrder(orderPath, moveTo(seeded, id, seeded.length))
+  try {
+    await writeOrder(orderPath, moveTo(seeded, id, seeded.length))
+  } catch {
+    // A read-only config dir must not break restoring a session.
+  }
   return listSessions(dir, orderPath, archivePath)
 }
 
@@ -236,16 +273,32 @@ export async function loadSession(
     }
   }
 
-  // The listing accepts both extensions, so opening must too.
+  // Prefer .yaml, but only fall back to .yml when it is genuinely absent.
   let file = join(dir, `${id}.yaml`)
   let text: string
   try {
     text = await readFile(file, 'utf8')
-  } catch {
+  } catch (err) {
+    if (!isMissingFile(err)) {
+      return {
+        ok: false,
+        spec: null,
+        file,
+        issues: [{ path: '', message: `Could not read session file: ${errorDetail(err)}` }],
+      }
+    }
     file = join(dir, `${id}.yml`)
     try {
       text = await readFile(file, 'utf8')
-    } catch {
+    } catch (fallbackError) {
+      if (!isMissingFile(fallbackError)) {
+        return {
+          ok: false,
+          spec: null,
+          file,
+          issues: [{ path: '', message: `Could not read session file: ${errorDetail(fallbackError)}` }],
+        }
+      }
       return {
         ok: false,
         spec: null,
@@ -259,8 +312,7 @@ export async function loadSession(
   try {
     raw = parseYaml(text)
   } catch (err) {
-    const detail = err instanceof Error ? err.message.split('\n')[0] : String(err)
-    return { ok: false, spec: null, file, issues: [{ path: '', message: `YAML syntax error: ${detail}` }] }
+    return { ok: false, spec: null, file, issues: [{ path: '', message: `YAML syntax error: ${errorDetail(err)}` }] }
   }
 
   const parsed = parseSession(raw, { home: env['HOME'] ?? '/', shell: env['SHELL'] ?? null })
@@ -276,7 +328,8 @@ export async function sessionExists(dir: string, id: string): Promise<boolean> {
     try {
       await stat(join(dir, `${id}.${ext}`))
       return true
-    } catch {
+    } catch (err) {
+      if (!isMissingFile(err)) throw err
       // Missing — try the other extension
     }
   }
@@ -299,12 +352,13 @@ export async function saveSession(
     }
   }
 
-  const path = join(dir, `${id}.yaml`)
-  if (!overwrite && (await sessionExists(dir, id))) {
-    return { ok: false, file: path, error: 'A session with this name already exists' }
-  }
-
+  let path = join(dir, `${id}.yaml`)
   try {
+    if (overwrite) path = (await sessionFilePath(dir, id)) ?? path
+    if (!overwrite && (await sessionExists(dir, id))) {
+      return { ok: false, file: path, error: 'A session with this name already exists' }
+    }
+
     await mkdir(dir, { recursive: true })
     /*
      * Keep the previous file. A save reads live state, and once a bad reading
@@ -314,14 +368,15 @@ export async function saveSession(
     if (overwrite) {
       try {
         await copyFile(path, `${path}.bak`)
-      } catch {
+      } catch (err) {
+        if (!isMissingFile(err)) throw err
         // Nothing to keep on the first save of a name.
       }
     }
     await writeFile(path, toSessionYaml(draft, home), 'utf8')
     return { ok: true, file: path, error: null }
   } catch (err) {
-    return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, file: path, error: errorDetail(err) }
   }
 }
 
@@ -354,7 +409,8 @@ export async function sessionFilePath(dir: string, id: string): Promise<string |
     try {
       await stat(path)
       return path
-    } catch {
+    } catch (err) {
+      if (!isMissingFile(err)) throw err
       // Missing — try the other extension
     }
   }
@@ -374,9 +430,11 @@ export async function renameSessionName(
 ): Promise<SaveSessionResult> {
   const name = newName.trim()
   if (name === '') return { ok: false, file: '', error: 'Name must not be empty' }
-  const path = await sessionFilePath(dir, id)
-  if (path === null) return { ok: false, file: '', error: `Session file not found: ${id}` }
+  let path = ''
   try {
+    const found = await sessionFilePath(dir, id)
+    if (found === null) return { ok: false, file: '', error: `Session file not found: ${id}` }
+    path = found
     const before = await readFile(path, 'utf8')
     const doc = parseDocument(before)
     if (doc.errors.length > 0) {
@@ -399,15 +457,83 @@ export async function renameSessionName(
     }
 
     const moved = join(dir, `${newId}.yaml`)
+    const backup = `${moved}.bak`
     // The new file's one generation back is the file as it stood before the rename.
-    await writeFile(`${moved}.bak`, before, 'utf8')
-    await writeFile(moved, text, 'utf8')
-    await unlink(path)
-    // The file moved, so the id did; the position must not follow it.
-    await writeOrder(orderPath, renameInOrder(await readOrder(orderPath), id, newId))
+    await writeFile(backup, before, { encoding: 'utf8', flag: 'wx' })
+    try {
+      await writeFile(moved, text, { encoding: 'utf8', flag: 'wx' })
+    } catch (err) {
+      const recoveryErrors: string[] = []
+      if (!(typeof err === 'object' && err !== null && 'code' in err && err.code === 'EEXIST')) {
+        try {
+          await unlink(moved)
+        } catch (recoveryError) {
+          if (!isMissingFile(recoveryError)) recoveryErrors.push(`${moved}: ${errorDetail(recoveryError)}`)
+        }
+      }
+      try {
+        await unlink(backup)
+      } catch (recoveryError) {
+        if (!isMissingFile(recoveryError)) recoveryErrors.push(`${backup}: ${errorDetail(recoveryError)}`)
+      }
+      const recovery =
+        recoveryErrors.length === 0 ? '' : `; cleanup failed (${recoveryErrors.join('; ')})`
+      return { ok: false, file: path, error: `Could not create renamed session: ${errorDetail(err)}${recovery}` }
+    }
+
+    try {
+      await unlink(path)
+    } catch (err) {
+      const recoveryErrors: string[] = []
+      for (const created of [moved, backup]) {
+        try {
+          await unlink(created)
+        } catch (recoveryError) {
+          if (!isMissingFile(recoveryError)) recoveryErrors.push(`${created}: ${errorDetail(recoveryError)}`)
+        }
+      }
+      const recovery =
+        recoveryErrors.length === 0 ? '' : `; cleanup failed (${recoveryErrors.join('; ')})`
+      return {
+        ok: false,
+        file: recoveryErrors.some((failure) => failure.startsWith(`${moved}:`)) ? moved : path,
+        error: `Could not remove the old session file: ${errorDetail(err)}${recovery}`,
+      }
+    }
+
+    try {
+      // The file moved, so the id did; the position must not follow it.
+      await writeOrder(orderPath, renameInOrder(await readOrder(orderPath), id, newId))
+    } catch (err) {
+      const recoveryErrors: string[] = []
+      try {
+        await writeFile(path, before, { encoding: 'utf8', flag: 'wx' })
+      } catch (recoveryError) {
+        // The renamed file is the only surviving copy if restoring the source failed.
+        return {
+          ok: false,
+          file: moved,
+          error: `Could not update session order: ${errorDetail(err)}; recovery incomplete (${path}: ${errorDetail(recoveryError)})`,
+        }
+      }
+      for (const created of [moved, backup]) {
+        try {
+          await unlink(created)
+        } catch (recoveryError) {
+          if (!isMissingFile(recoveryError)) recoveryErrors.push(`${created}: ${errorDetail(recoveryError)}`)
+        }
+      }
+      const recovery =
+        recoveryErrors.length === 0 ? '' : `; recovery incomplete (${recoveryErrors.join('; ')})`
+      return {
+        ok: false,
+        file: recoveryErrors.some((failure) => failure.startsWith(`${moved}:`)) ? moved : path,
+        error: `Could not update session order: ${errorDetail(err)}${recovery}`,
+      }
+    }
     return { ok: true, file: moved, error: null }
   } catch (err) {
-    return { ok: false, file: path, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, file: path, error: errorDetail(err) }
   }
 }
 
@@ -427,7 +553,11 @@ export async function reorderSession(
   // toIndex counts the rows the sidebar draws, and it draws no archived row.
   const archived = new Set(seeded.filter((s) => s.archived).map((s) => s.id))
   const order = seeded.map((s) => s.id)
-  await writeOrder(orderPath, moveToVisible(order, archived, id, toIndex))
+  try {
+    await writeOrder(orderPath, moveToVisible(order, archived, id, toIndex))
+  } catch {
+    // A read-only config dir must not break reordering's list response.
+  }
   return listSessions(dir, orderPath, archivePath)
 }
 
@@ -442,7 +572,8 @@ export async function seedFirstRun(dir: string, locale: string, isMac: boolean):
   try {
     await stat(dir)
     return false
-  } catch {
+  } catch (err) {
+    if (!isMissingFile(err)) throw err
     // No directory — this is a first run.
   }
   await mkdir(dir, { recursive: true })
