@@ -10,8 +10,9 @@ import type {
   PaneSpec,
   SessionSpec,
   TerminalTheme,
+  TermspaceApi,
 } from '../shared/protocol'
-import { api } from './api'
+import type { PageWebglCoordinator, WebglContextHolder } from './page-webgl-coordinator'
 import { IS_MAC } from './platform'
 import { t } from './i18n'
 import { createCanvasView, type CanvasView } from './canvas-view'
@@ -114,38 +115,6 @@ const FOLD_REFRESH_MS = 500
 let nextId = 0
 const newId = (prefix: string): string => `${prefix}${++nextId}`
 
-/**
- * Who holds a WebGL context, across every session on the page.
- *
- * The cap is the page's, but a session leaving is not a reason to spend it:
- * sessions keep their contexts and give them up only when the one on screen
- * genuinely runs out of slots.
- */
-interface ContextHolder {
-  readonly isActive: () => boolean
-  readonly held: () => number
-  /** Give up at most `count` contexts; returns how many actually went. */
-  readonly release: (count: number) => number
-}
-
-const contextHolders = new Set<ContextHolder>()
-
-function pageContexts(): number {
-  let total = 0
-  for (const holder of contextHolders) total += holder.held()
-  return total
-}
-
-/** Take slots back from sessions that are off screen, oldest holder first. */
-function freeContexts(count: number, mine: ContextHolder): void {
-  let freed = 0
-  for (const holder of contextHolders) {
-    if (freed >= count) return
-    if (holder === mine || holder.isActive()) continue
-    freed += holder.release(count - freed)
-  }
-}
-
 export interface SessionRuntime {
   readonly spec: SessionSpec
   /** Adopt a new display name, so a later save writes it. */
@@ -216,6 +185,23 @@ export interface StartSessionOptions {
   readonly file: string
   readonly home: string
   readonly host: HTMLElement
+  /** The page-owned ledger for contexts held across session runtimes. */
+  readonly webgl: PageWebglCoordinator
+  /** Only the IPC operations this runtime needs. */
+  readonly api: Pick<
+    TermspaceApi,
+    | 'cwdOf'
+    | 'foregroundCommands'
+    | 'kill'
+    | 'onData'
+    | 'onExit'
+    | 'paneTitles'
+    | 'readClipboard'
+    | 'resize'
+    | 'spawn'
+    | 'write'
+    | 'writeClipboard'
+  >
   /** Settings as a function, since they change while the app runs. */
   readonly settings: () => AppSettings
   /** Keybindings, likewise — the settings screen edits them live. */
@@ -340,7 +326,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   /** Ask what the pane is running, the way the overview asks for its cards. */
   function loadFoldDetail(paneId: string): void {
-    void api.foregroundCommands([paneId]).then((commands) => {
+    void options.api.foregroundCommands([paneId]).then((commands) => {
       foldCommands.set(paneId, commands[paneId] ?? '')
       refreshFoldDetail(paneId)
     })
@@ -376,8 +362,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     layout: () => layout,
     viewport: () => canvas.getViewport(),
     isError: (paneId) => paneErrors.has(paneId),
-    commands: (paneIds) => api.foregroundCommands(paneIds),
-    titles: (paneIds) => api.paneTitles(paneIds),
+    commands: (paneIds) => options.api.foregroundCommands(paneIds),
+    titles: (paneIds) => options.api.paneTitles(paneIds),
     wants: (paneId) => attention.has(paneId),
     onJump: jumpTo,
     onRename: (paneId, title) => {
@@ -412,8 +398,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
           wants: attention.has(pane.id),
         })),
       ),
-    commands: (paneIds) => api.foregroundCommands(paneIds),
-    titles: (paneIds) => api.paneTitles(paneIds),
+    commands: (paneIds) => options.api.foregroundCommands(paneIds),
+    titles: (paneIds) => options.api.paneTitles(paneIds),
     onJump: jumpTo,
     onClose: () => focusFocusedTerminal(),
   })
@@ -440,7 +426,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     },
   })
 
-  const holder: ContextHolder = {
+  const holder: WebglContextHolder = {
     isActive: () => active,
     held: () => attached.length,
     release: (count) => {
@@ -454,7 +440,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       return victims.size
     },
   }
-  contextHolders.add(holder)
+  const unregisterHolder = options.webgl.register(holder)
 
   function budgetDecision(): BudgetDecision {
     // Error cards have no terminal and would only consume WebGL slots.
@@ -514,9 +500,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // Decide again: a burst of switches has left the earlier answer stale.
       const decision = budgetDecision()
       // Sessions off screen are still holding slots; take only what is short.
-      const shortfall = decision.attach.length - (MAX_WEBGL_CONTEXTS - pageContexts())
-      if (shortfall > 0) freeContexts(shortfall, holder)
-      const room = Math.max(0, MAX_WEBGL_CONTEXTS - pageContexts())
+      const shortfall =
+        decision.attach.length - (MAX_WEBGL_CONTEXTS - options.webgl.heldContexts())
+      if (shortfall > 0) options.webgl.reclaimInactive(shortfall, holder)
+      const room = Math.max(0, MAX_WEBGL_CONTEXTS - options.webgl.heldContexts())
       const take = decision.attach.slice(0, room)
       for (const paneId of take) records.get(paneId)?.terminal.attachRenderer()
       attached = attached.concat(take)
@@ -706,7 +693,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     void (async () => {
       const cwd = cwdOverride !== undefined ? await cwdOverride : paneSpec.cwd
       paneSpecs.set(paneId, { ...paneSpec, cwd })
-      return api.spawn({
+      return options.api.spawn({
         paneId,
         cwd,
         shell: spec.shell,
@@ -751,14 +738,14 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         theme: options.theme(),
         textRendering,
       },
-      onInput: (data) => api.write(paneId, data),
+      onInput: (data) => options.api.write(paneId, data),
       // The addon detaches itself on context loss; untrack it or it never returns.
       onRendererLost: () => {
         attached = attached.filter((id) => id !== paneId)
       },
       onSelected: (text) => {
         if (options.settings().copyOnSelect !== 1) return
-        api.writeClipboard(text)
+        options.api.writeClipboard(text)
         options.onCopied(text.length)
       },
       onResize: (cols, rows) => {
@@ -767,7 +754,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         if (record.resizeTimer !== null) window.clearTimeout(record.resizeTimer)
         record.resizeTimer = window.setTimeout(() => {
           record.resizeTimer = null
-          api.resize(paneId, cols, rows)
+          options.api.resize(paneId, cols, rows)
         }, PTY_RESIZE_DEBOUNCE_MS)
       },
     })
@@ -789,7 +776,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     frozen = frozen.filter((id) => id !== paneId)
     lastSeen.delete(paneId)
     foldCommands.delete(paneId)
-    api.kill(paneId)
+    options.api.kill(paneId)
   }
 
   // ── Actions ──────────────────────────────────────────
@@ -880,7 +867,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       return failedPaneCwd !== spec.cwd ? spec.cwd : options.home
     }
 
-    const liveCwd = await api.cwdOf(focusedPaneId)
+    const liveCwd = await options.api.cwdOf(focusedPaneId)
     if (liveCwd !== null && liveCwd !== '') return liveCwd
 
     return paneSpecs.get(focusedPaneId)?.cwd ?? spec.cwd
@@ -984,7 +971,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // xterm owns the selection; WebGL draws to canvas so the DOM has none.
     const selection = records.get(layout.focusedPaneId)?.terminal.getSelection() ?? ''
     if (selection === '') return
-    api.writeClipboard(selection)
+    options.api.writeClipboard(selection)
     options.onCopied(selection.length)
   }
 
@@ -994,7 +981,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // and the guard lives here rather than on the keyboard path because on mac
     // the Edit menu delivers Cmd+V without a keydown ever reaching the page.
     if (overview.isOpen || paneJump.isOpen || isFolded(layout.focusedPaneId)) return
-    void api.readClipboard().then((text) => {
+    void options.api.readClipboard().then((text) => {
       if (text === '') return
       // Through xterm for bracketed paste, so multi-line input isn't executed.
       records.get(layout.focusedPaneId)?.terminal.paste(text)
@@ -1131,13 +1118,13 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── External events ──────────────────────────────────
 
-  const offData = api.onData((paneId, data) => {
+  const offData = options.api.onData((paneId, data) => {
     records.get(paneId)?.terminal.write(data)
     // A prompt coming back is how a finished command announces itself.
     if (isFolded(paneId)) scheduleFoldRefresh()
   })
 
-  const offExit = api.onExit(({ paneId, exitCode, signal }) => {
+  const offExit = options.api.onExit(({ paneId, exitCode, signal }) => {
     if (!records.has(paneId)) return
     const paneSpec = paneSpecs.get(paneId)
     // A clean exit (0 or Ctrl+C 130), or any exit from a shell with no command, closes the pane.
@@ -1307,7 +1294,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
     },
     destroy() {
-      contextHolders.delete(holder)
+      unregisterHolder()
       searchBar.close()
       overview.destroy()
       paneJump.destroy()

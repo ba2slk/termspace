@@ -25,6 +25,7 @@ import { createSaveSessionView } from './save-session-view'
 import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
+import { createPageWebglCoordinator } from './page-webgl-coordinator'
 import { createSettingsView } from './settings-view'
 import { createToast } from './toast'
 import { t } from './i18n'
@@ -40,12 +41,11 @@ const shell = document.getElementById('app')!
 const workspace = document.getElementById('workspace')!
 const canvasHost = document.getElementById('canvas')!
 
-/**
- * Live runtimes per session. Switching keeps ptys, focus and scroll position,
- * so returning finds things as they were. The sidebar's dots mirror this map.
- */
-const runtimes = new Map<string, SessionRuntime>()
-const hosts = new Map<string, HTMLElement>()
+/** Live runtime and DOM host share one session lifetime. */
+const sessions = new Map<string, { runtime: SessionRuntime; host: HTMLElement }>()
+
+/** WebGL contexts are page-wide even though their terminals are session-owned. */
+const pageWebgl = createPageWebglCoordinator()
 let currentName: string | null = null
 /** $HOME, only for showing paths in `~` form. Empty until boot fills it in. */
 let home = ''
@@ -129,11 +129,11 @@ function applyFocusBorder(next: AppSettings, theme: TerminalTheme): void {
 const toast = createToast(workspace)
 
 const current = (): SessionRuntime | undefined =>
-  currentName === null ? undefined : runtimes.get(currentName)
+  currentName === null ? undefined : sessions.get(currentName)?.runtime
 
 /** No session takes keys while a dialog or a sheet is in front. */
 function silenceSessions(): void {
-  for (const runtime of runtimes.values()) runtime.setActive(false)
+  for (const { runtime } of sessions.values()) runtime.setActive(false)
 }
 
 /**
@@ -283,7 +283,7 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
   return buildSidebarMenuItems(
     {
       sessionId,
-      running: sessionId !== null && runtimes.has(sessionId),
+      running: sessionId !== null && sessions.has(sessionId),
       isCurrent: sessionId === currentName,
       archived,
     },
@@ -327,7 +327,7 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
  * one right-click away from being undone.
  */
 function archiveSession(id: string): void {
-  const runtime = runtimes.get(id)
+  const runtime = sessions.get(id)?.runtime
   if (runtime === undefined) {
     void applyArchive(id)
     return
@@ -373,15 +373,10 @@ async function restoreSession(id: string): Promise<void> {
 /** File a live runtime under a new key; its ptys and view are untouched. */
 function moveRuntime(from: string, to: string): void {
   if (from === to) return
-  const runtime = runtimes.get(from)
-  if (runtime !== undefined) {
-    runtimes.delete(from)
-    runtimes.set(to, runtime)
-  }
-  const host = hosts.get(from)
-  if (host !== undefined) {
-    hosts.delete(from)
-    hosts.set(to, host)
+  const entry = sessions.get(from)
+  if (entry !== undefined) {
+    sessions.delete(from)
+    sessions.set(to, entry)
   }
   if (currentName === from) currentName = to
   if (previousName === from) previousName = to
@@ -397,9 +392,9 @@ async function renameSession(id: string, newName: string): Promise<void> {
   // Main decides the file name; read the id back rather than deriving it twice.
   const newId = result.file.replace(/\.ya?ml$/, '').split('/').pop() ?? id
   moveRuntime(id, newId)
-  runtimes.get(newId)?.rename(newName)
+  sessions.get(newId)?.runtime.rename(newName)
   if (newId === currentName) {
-    setTitle(newName, runtimes.get(newId)?.focusedPaneTitle() ?? null)
+    setTitle(newName, sessions.get(newId)?.runtime.focusedPaneTitle() ?? null)
   }
   await refreshSidebar()
 }
@@ -489,7 +484,7 @@ let previousName: string | null = null
  * carry the id they were made with; they ask by identity instead.
  */
 function idOf(runtime: SessionRuntime): string | null {
-  for (const [id, candidate] of runtimes) if (candidate === runtime) return id
+  for (const [id, entry] of sessions) if (entry.runtime === runtime) return id
   return null
 }
 
@@ -504,12 +499,12 @@ function livePaneCount(runtime: SessionRuntime): number {
  * Splitting changes no file, so re-reading the list would report the old count.
  */
 function renderSidebar(): void {
-  const live = new Map([...runtimes].map(([id, runtime]) => [id, livePaneCount(runtime)]))
+  const live = new Map([...sessions].map(([id, entry]) => [id, livePaneCount(entry.runtime)]))
   const wanting = new Set(
-    [...runtimes].filter(([, runtime]) => runtime.wantsAttention()).map(([id]) => id),
+    [...sessions].filter(([, entry]) => entry.runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
-  const terminal = runtimes.get(DEFAULT_TERMINAL_ID)
+  const terminal = sessions.get(DEFAULT_TERMINAL_ID)?.runtime
   sidebar.setDefaultTerminal(
     terminal === undefined
       ? null
@@ -528,7 +523,7 @@ function renderSidebar(): void {
  * the sessions behind this one keep running.
  */
 function reportWatchedPane(): void {
-  const runtime = currentName === null ? undefined : runtimes.get(currentName)
+  const runtime = currentName === null ? undefined : sessions.get(currentName)?.runtime
   api.setVisiblePane(runtime?.watchedPaneId() ?? null)
 }
 
@@ -537,14 +532,14 @@ function reportWatchedPane(): void {
  * that is off screen and frozen — which is the pane it matters for.
  */
 api.onAttention((attention) => {
-  for (const runtime of runtimes.values()) {
+  for (const { runtime } of sessions.values()) {
     if (runtime.noteAttention(attention.paneId)) return
   }
 })
 
 /** Which session holds a pane. Null once its session has ended. */
 function sessionOwningPane(paneId: string): string | null {
-  for (const [id, runtime] of runtimes) {
+  for (const [id, { runtime }] of sessions) {
     for (const column of runtime.snapshot().columns) {
       for (const pane of column.panes) if (pane.paneId === paneId) return id
     }
@@ -561,7 +556,7 @@ api.onFocusPane((paneId) => {
   const owner = sessionOwningPane(paneId)
   if (owner === null) return
   void openSession(owner).then(() => {
-    runtimes.get(owner)?.focusPane(paneId)
+    sessions.get(owner)?.runtime.focusPane(paneId)
   })
 })
 
@@ -623,7 +618,7 @@ function applySettings(next: AppSettings): void {
   applyTerminalBackground(currentTheme())
   applyFocusBorder(next, currentTheme())
   appBar.syncControls()
-  for (const runtime of runtimes.values()) runtime.applySettings(next)
+  for (const { runtime } of sessions.values()) runtime.applySettings(next)
 }
 
 /** Write, then apply what was actually stored — main may clamp a value. */
@@ -685,11 +680,11 @@ const saveSessionView = createSaveSessionView(canvasHost, {
  */
 async function adoptSavedTerminal(file: string): Promise<void> {
   const id = file.replace(/\.ya?ml$/, '').split('/').pop() ?? ''
-  const runtime = runtimes.get(DEFAULT_TERMINAL_ID)
+  const runtime = sessions.get(DEFAULT_TERMINAL_ID)?.runtime
   if (runtime === undefined || id === '') return
   // A session open under that key lost its file outside the app; filing over it
   // would orphan its runtime.
-  if (runtimes.has(id)) {
+  if (sessions.has(id)) {
     toast.show(t.firstRun.saveFailed)
     return
   }
@@ -824,7 +819,7 @@ api.window.onCloseRequested(() => {
  */
 async function openRunning(): Promise<RunningSession[]> {
   const running: RunningSession[] = []
-  for (const [id, runtime] of runtimes) {
+  for (const [id, { runtime }] of sessions) {
     if (isDefaultTerminal(id)) {
       const paneIds = runtime.snapshot().columns.flatMap((c) => c.panes.map((p) => p.paneId))
       const commands = await api.foregroundCommands(paneIds)
@@ -927,7 +922,7 @@ window.addEventListener('keydown', onAppKeyDown, true)
  */
 function gotoSession(index: number): void {
   const rows = available().map((s) => ({ id: s.id, broken: s.error !== null }))
-  const pinned = runtimes.has(DEFAULT_TERMINAL_ID) ? DEFAULT_TERMINAL_ID : null
+  const pinned = sessions.has(DEFAULT_TERMINAL_ID) ? DEFAULT_TERMINAL_ID : null
   const target = gotoTarget(rows, index, currentName, previousName, pinned)
   if (target !== null) void openSession(target)
 }
@@ -947,7 +942,7 @@ function goToDefaultTerminal(): void {
  * between the ones you are working in, the way a tab strip does.
  */
 function stepToSession(delta: 1 | -1): void {
-  const running = available().filter((s) => runtimes.has(s.id)).map((s) => s.id)
+  const running = available().filter((s) => sessions.has(s.id)).map((s) => s.id)
   const target = stepSession(running, currentName, delta)
   if (target !== null) void openSession(target)
 }
@@ -969,14 +964,14 @@ function setTitle(session: string | null, paneTitle: string | null = null): void
 function showOnly(name: string | null): void {
   // Remember where we came from, so Alt+N can bounce back.
   if (currentName !== null && currentName !== name) previousName = currentName
-  for (const [key, element] of hosts) element.hidden = key !== name
+  for (const [key, entry] of sessions) entry.host.hidden = key !== name
   // Before setActive, which reports the watched pane: a report made while this
   // still named the session being left would be for the wrong one.
   currentName = name
   // Every other session first: leaving means giving up WebGL contexts, and the
   // arriving session needs them free before it asks for its own.
-  for (const [key, runtime] of runtimes) if (key !== name) runtime.setActive(false)
-  if (name !== null) runtimes.get(name)?.setActive(true)
+  for (const [key, entry] of sessions) if (key !== name) entry.runtime.setActive(false)
+  if (name !== null) sessions.get(name)?.runtime.setActive(true)
   // With nothing running, neither loop above ran and nothing has been reported;
   // ending the last session still has to say that no pane is being watched.
   reportWatchedPane()
@@ -989,15 +984,15 @@ function showOnly(name: string | null): void {
 function endSession(id: string): void {
   // Ending a session from the list also means returning to the canvas.
   dismissOverlays()
-  runtimes.get(id)?.destroy()
-  runtimes.delete(id)
-  hosts.get(id)?.remove()
-  hosts.delete(id)
+  const entry = sessions.get(id)
+  entry?.runtime.destroy()
+  entry?.host.remove()
+  sessions.delete(id)
   if (previousName === id) previousName = null
 
   if (currentName === id) {
     // If it was the visible one, move to whatever remains.
-    const next = runtimes.keys().next()
+    const next = sessions.keys().next()
     showOnly(next.done === true ? null : next.value)
     const runtime = current()
     if (runtime !== undefined) {
@@ -1022,7 +1017,7 @@ function dismissOverlays(): void {
 
 async function openSession(id: string): Promise<void> {
   dismissOverlays()
-  const existing = runtimes.get(id)
+  const existing = sessions.get(id)?.runtime
   if (existing !== undefined) {
     showOnly(id)
     // refresh publishes the title, pane part included.
@@ -1050,13 +1045,14 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
   const element = document.createElement('div')
   element.className = 'session-host'
   canvasHost.append(element)
-  hosts.set(id, element)
 
   const runtime = startSession({
     spec,
     file,
     home,
     host: element,
+    webgl: pageWebgl,
+    api,
     settings: () => settings,
     bindings: () => bindings,
     theme: currentTheme,
@@ -1077,7 +1073,7 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
       if (at !== null) endSession(at)
     },
   })
-  runtimes.set(id, runtime)
+  sessions.set(id, { runtime, host: element })
   return runtime
 }
 
@@ -1094,14 +1090,14 @@ function fillWidth(): number {
  * At most one; the empty canvas's button brings it back after it ends.
  */
 async function openDefaultTerminal(): Promise<void> {
-  if (runtimes.has(DEFAULT_TERMINAL_ID)) {
+  if (sessions.has(DEFAULT_TERMINAL_ID)) {
     void openSession(DEFAULT_TERMINAL_ID)
     return
   }
   const spec = await api.defaultTerminalSpec(t.sidebar.defaultTerminal, fillWidth())
   // A second call that passed the check above before the first mounted: mounting
   // again would orphan the first terminal and its shell.
-  if (runtimes.has(DEFAULT_TERMINAL_ID)) {
+  if (sessions.has(DEFAULT_TERMINAL_ID)) {
     void openSession(DEFAULT_TERMINAL_ID)
     return
   }
