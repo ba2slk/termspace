@@ -3,6 +3,7 @@ import type { ActionId } from '../shared/keybindings'
 import { t } from './i18n'
 import {
   commandItems,
+  defaultTerminalMenuItems,
   sidebarMenuItems,
   type CommandActions,
   type CommandState,
@@ -235,5 +236,15 @@ describe('the sidebar menu', () => {
       t.firstRun.refreshList,
       t.firstRun.openSessionsDir,
     ])
+  })
+})
+
+describe('the default terminal row menu', () => {
+  it('only offers to save it as a session', () => {
+    const saveAs = vi.fn()
+    const items = defaultTerminalMenuItems({ saveAs })
+    expect(items.map((item) => item.label)).toEqual([t.firstRun.saveAsSession])
+    items[0]!.run()
+    expect(saveAs).toHaveBeenCalledTimes(1)
   })
 })

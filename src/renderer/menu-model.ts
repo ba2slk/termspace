@@ -216,3 +216,17 @@ export function sidebarMenuItems(
     },
   ]
 }
+
+export interface DefaultTerminalMenuActions {
+  readonly saveAs: () => void
+}
+
+/**
+ * The default terminal's row. It has no file, so everything a session row offers
+ * about its file is absent; what is left is giving it one.
+ */
+export function defaultTerminalMenuItems(
+  actions: DefaultTerminalMenuActions,
+): readonly CommandItem[] {
+  return [{ label: t.firstRun.saveAsSession, run: actions.saveAs }]
+}
