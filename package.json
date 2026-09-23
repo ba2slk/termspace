@@ -37,7 +37,9 @@
     "predist": "node -e \"require('node:fs').rmSync('release',{recursive:true,force:true})\"",
     "dist": "electron-vite build && electron-builder --linux AppImage --publish never",
     "postdist": "node -e \"require('node:fs').rmSync('release/linux-unpacked',{recursive:true,force:true})\"",
+    "predist:mac": "node -e \"require('node:fs').rmSync('release',{recursive:true,force:true})\"",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "postdist:mac": "node -e \"for (const d of ['mac','mac-arm64']) require('node:fs').rmSync('release/'+d,{recursive:true,force:true})\"",
     "icons": "node scripts/make-icons.mjs",
     "install:local": "node scripts/install-local.mjs",
     "verify:app": "node scripts/verify-app.mjs"
