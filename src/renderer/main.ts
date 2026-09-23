@@ -19,6 +19,7 @@ import {
   sidebarMenuItems as buildSidebarMenuItems,
 } from './menu-model'
 import { isAppAction, resolveAction } from './keymap'
+import { maxColumnWidth } from './layout-geometry'
 import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
 import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
@@ -449,7 +450,7 @@ function openNewSession(): void {
   silenceSessions()
   appBar.closeMenus()
   sidebarMenu.close()
-  saveSessionView.openBlank()
+  saveSessionView.openBlank(fillWidth)
 }
 
 function toggleSidebar(): void {
@@ -1081,6 +1082,14 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
 }
 
 /**
+ * A new column's width: fills the canvas beside the sidebar as it is now. Decided
+ * once, since widths are absolute; main falls back to the setting when it is 0.
+ */
+function fillWidth(): number {
+  return Math.max(0, maxColumnWidth(canvasHost.clientWidth))
+}
+
+/**
  * The shell a launch opens, before any session: no file, one pane at home.
  * At most one; the empty canvas's button brings it back after it ends.
  */
@@ -1089,7 +1098,7 @@ async function openDefaultTerminal(): Promise<void> {
     void openSession(DEFAULT_TERMINAL_ID)
     return
   }
-  const spec = await api.defaultTerminalSpec(t.sidebar.defaultTerminal)
+  const spec = await api.defaultTerminalSpec(t.sidebar.defaultTerminal, fillWidth())
   // A second call that passed the check above before the first mounted: mounting
   // again would orphan the first terminal and its shell.
   if (runtimes.has(DEFAULT_TERMINAL_ID)) {
@@ -1120,6 +1129,8 @@ async function boot(): Promise<void> {
   sidebar.setWidth(settings.sidebarWidth)
   sidebar.setVisible(settings.sidebarVisible === 1)
   appBar.setSidebarVisible(settings.sidebarVisible === 1)
+  // The terminal's width is fixed at creation; take it from the window's final size.
+  await api.window.settled()
   await openDefaultTerminal()
   syncPlaceholder()
   revealListWhenEmpty()

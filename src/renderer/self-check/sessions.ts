@@ -58,6 +58,26 @@ const refreshList = (): void => {
 const pinnedSlot = (): HTMLElement | null => document.querySelector<HTMLElement>('.sidebar__pinned')
 
 /**
+ * A window resized with a pane open: that pane's width was fixed before, so it
+ * cannot be held against the canvas now. Listening from import, before boot.
+ */
+let resizedWithPane = false
+window.addEventListener('resize', () => {
+  if (document.querySelector('.pane') !== null) resizedWithPane = true
+})
+
+/** Does the one pane on screen fill the canvas beside the sidebar, as a new column should? */
+const fillsCanvas = (resized = false): string => {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  const pane = visiblePanes()[0]?.getBoundingClientRect().width
+  if (host === null || pane === undefined) return 'skipped: no session or pane on screen'
+  const want = maxColumnWidth(host.clientWidth)
+  if (Math.abs(pane - want) <= 1) return 'ok'
+  const widths = `pane ${String(pane)} canvas ${String(want)}`
+  return resized ? `skipped: the window resized after the pane opened (${widths})` : `FAIL (${widths})`
+}
+
+/**
  * What a launch opens, then closed again: every group starts from nothing open.
  * Runs in each process before its groups.
  */
@@ -76,6 +96,7 @@ export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void
         }, 8000))
         ? 'ok'
         : 'skipped: the shell printed nothing (no prompt configured?)'
+  report['defaultTerminalFillsCanvas'] = fillsCanvas(resizedWithPane)
 
   // Drawn above the list, not merely before it in the DOM.
   const slot = pinnedSlot()?.getBoundingClientRect()
@@ -112,6 +133,7 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
   // A synthetic Enter does not press a button; Enter itself is in MANUAL-QA.
   newTerminal?.click()
   await waitFor(() => pinnedSlot() !== null && visiblePanes().length === 1, 15_000)
+  report['newTerminalFillsCanvas'] = fillsCanvas()
   const paneId = focusedId()
   const term = termOf(focusedHost())
   if (paneId === undefined || term === undefined) {
@@ -842,6 +864,8 @@ export async function checkNewSession(report: Report): Promise<void> {
     created !== undefined && created.error === null ? 'ok' : `FAIL (${created?.error ?? 'none'})`
   // Opens immediately — picking it again would be a second step.
   report['blankSessionOpened'] = document.title.includes(name) ? 'ok' : `FAIL (${document.title})`
+  await waitFor(() => visiblePanes().length === 1)
+  report['blankSessionFillsCanvas'] = fillsCanvas()
 
   /*
    * Delete it again. Must ask first, and must disappear from the list —
@@ -932,7 +956,7 @@ export async function checkNewSession(report: Report): Promise<void> {
  */
 export async function checkWheelSessionSwitch(report: Report): Promise<void> {
   const name = 'selfcheck-wheel'
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['wheelSwitchSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
@@ -1012,7 +1036,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
     return
   }
 
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['returnClearsSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
@@ -1048,7 +1072,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
  */
 export async function checkSessionStepShortcut(report: Report): Promise<void> {
   const name = 'selfcheck-step'
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['stepSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return

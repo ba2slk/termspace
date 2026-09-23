@@ -215,6 +215,14 @@ export function parseSession(raw: unknown, env: ParseEnv): ParseResult {
   }
 }
 
+/**
+ * A new column's width: what the renderer measured to fill the canvas, else the
+ * setting. The value crosses IPC, so anything but a positive number is ignored.
+ */
+export function newColumnWidth(measured: unknown, fallback: number): number {
+  return typeof measured === 'number' && Number.isFinite(measured) && measured > 0 ? measured : fallback
+}
+
 /** The shell a launch opens: one pane at home, no file behind it. */
 export function defaultTerminalSpec(options: {
   readonly name: string

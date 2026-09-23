@@ -42,7 +42,7 @@ import { orderFile } from './session-order-file'
 import { archiveFile } from './session-archive-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
-import { defaultTerminalSpec, resolveCwd } from './session-schema'
+import { defaultTerminalSpec, newColumnWidth, resolveCwd } from './session-schema'
 import { deepestCommonAncestor, shorten, type SessionDraft } from './session-writer'
 
 const FLUSH_INTERVAL_MS = 16
@@ -67,6 +67,7 @@ const INVOKE_CHANNELS = [
   'clipboard:read',
   'window:toggle-maximize',
   'window:toggle-fullscreen',
+  'window:settled',
   'settings:get',
   'settings:save',
   'keybindings:get',
@@ -99,6 +100,15 @@ const ON_CHANNELS = [
   'app:visible-pane',
   'update:open-release',
 ]
+
+/**
+ * The window counts as sized once it has gone this long without a resize after
+ * show. A floating window manager never resizes, so this is the whole wait there;
+ * short, because the launch terminal waits on it.
+ */
+const SETTLE_QUIET_MS = 150
+/** A window manager that keeps resizing must not hold the launch terminal back. */
+const SETTLE_CAP_MS = 1000
 
 export function registerIpcHandlers(
   win: BrowserWindow,
@@ -252,21 +262,20 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:create-blank',
-    async (_e, id: string, displayName: string, rootCwd: string): Promise<SaveSessionResult> => {
-      // Column width follows the setting; defining another default here would drift.
+    async (_e, id: string, displayName: string, rootCwd: string, width: unknown): Promise<SaveSessionResult> => {
       const { defaultColumnWidth } = await loadSettings(env)
-      return createBlankSession(dir, id, displayName, defaultColumnWidth, env['HOME'] ?? '', rootCwd)
+      const columnWidth = newColumnWidth(width, defaultColumnWidth)
+      return createBlankSession(dir, id, displayName, columnWidth, env['HOME'] ?? '', rootCwd)
     },
   )
 
-  ipcMain.handle('session:default-terminal', async (_e, name: string): Promise<SessionSpec> => {
-    // Width follows the setting, as a blank session's does.
+  ipcMain.handle('session:default-terminal', async (_e, name: string, width: unknown): Promise<SessionSpec> => {
     const { defaultColumnWidth } = await loadSettings(env)
     return defaultTerminalSpec({
       name,
       home: env['HOME'] ?? '',
       shell: env['SHELL'] ?? null,
-      width: defaultColumnWidth,
+      width: newColumnWidth(width, defaultColumnWidth),
     })
   })
 
@@ -426,6 +435,33 @@ export function registerIpcHandlers(
     win.setFullScreen(!win.isFullScreen())
     return win.isFullScreen()
   })
+  /*
+   * Settled: shown, then no resize for SETTLE_QUIET_MS. A tiling window manager
+   * resizes in several steps (a move, then the tile), so the first resize is
+   * not the last. A promise rather than an event, so a late ask still resolves.
+   */
+  const settled = new Promise<void>((resolve) => {
+    if (win.isVisible()) {
+      resolve()
+      return
+    }
+    win.once('show', () => {
+      const done = (): void => {
+        clearTimeout(quiet)
+        clearTimeout(cap)
+        win.off('resize', onResize)
+        resolve()
+      }
+      const onResize = (): void => {
+        clearTimeout(quiet)
+        quiet = setTimeout(done, SETTLE_QUIET_MS)
+      }
+      let quiet = setTimeout(done, SETTLE_QUIET_MS)
+      const cap = setTimeout(done, SETTLE_CAP_MS)
+      win.on('resize', onResize)
+    })
+  })
+  ipcMain.handle('window:settled', () => settled)
   const notifyMaximize = (): void => send('window:maximize-changed', win.isMaximized())
   win.on('maximize', notifyMaximize)
   win.on('unmaximize', notifyMaximize)

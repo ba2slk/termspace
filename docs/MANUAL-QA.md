@@ -313,10 +313,15 @@ group starts from nothing open. The save half runs first in `sessions`.
   order alone does not say where it lands
 - The slot's bottom border is solid and between 0 and 1px (`defaultTerminalHairline`) —
   computed widths snap to device pixels, so 1px can read as 0.6px
+- The pane is as wide as the canvas beside the sidebar, within 1px of the column cap
+  (`defaultTerminalFillsCanvas`) — boot waits for the window manager to finish sizing
+  the window first. A window resized after the pane opened is `skipped`, with both widths
 - The row's × ends it and the slot goes (`defaultTerminalEnds`)
 - On the empty canvas "New terminal" holds focus (`newTerminalFocused`) — otherwise
   `Enter` does nothing there. A synthetic `Enter` presses no button, so `Enter` itself
   is checked by eye
+- The terminal it opens is one pane as wide as the canvas beside the sidebar, within
+  1px of the column cap (`newTerminalFillsCanvas`)
 - After `cd /`, `Alt+Shift+S` opens the dialog with an empty name
   (`defaultTerminalSaveNameEmpty`) — a pre-filled "Default" would let one `Enter`
   write `Default.yaml`
@@ -339,6 +344,8 @@ group starts from nothing open. The save half runs first in `sessions`.
 - An empty session cannot be created under an existing name (no overwrite option is
   offered)
 - Creating one opens it immediately
+- Its one column fills the canvas beside the sidebar, within 1px of the column cap
+  (`blankSessionFillsCanvas`) — the width is measured when the dialog submits
 - **"Delete session" in the right-click menu appears in red** (it's the
   only warning before the dialog)
 - **Deleting a session asks first, then moves the file to the trash** (a hand-written

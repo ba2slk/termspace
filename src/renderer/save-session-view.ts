@@ -25,8 +25,11 @@ export interface SaveSessionView {
     snapshot: () => import('../shared/protocol').LayoutSnapshot,
     options?: { readonly mayOverwrite?: boolean },
   ): void
-  /** Create a blank one-pane session; same dialog, since it asks the same thing. */
-  openBlank(): void
+  /**
+   * Create a blank one-pane session; same dialog, since it asks the same thing.
+   * columnWidth: its column's, read at submit; the canvas may change while it is open.
+   */
+  openBlank(columnWidth: () => number): void
   close(): void
   readonly visible: boolean
   destroy(): void
@@ -132,6 +135,7 @@ export function createSaveSessionView(
 
   /** null means create blank; otherwise save this layout. */
   let getSnapshot: (() => import('../shared/protocol').LayoutSnapshot) | null = null
+  let blankWidth = (): number => 0
   /** Whether the name is taken, which turns the button into an overwrite. */
   let exists = false
   /** False when saving must not replace a file: a taken name then blocks. */
@@ -187,7 +191,7 @@ export function createSaveSessionView(
     const rootCwd = cwdField.value.trim() === '' ? '~' : cwdField.value.trim()
     const request =
       snapshot === null
-        ? api.createBlankSession(id, field.value.trim(), rootCwd)
+        ? api.createBlankSession(id, field.value.trim(), rootCwd, blankWidth())
         : api.saveSessionAs(id, field.value.trim(), snapshot(), exists && mayOverwrite, rootCwd)
     void request
       .then((result) => {
@@ -245,8 +249,9 @@ export function createSaveSessionView(
       field.select()
     },
 
-    openBlank() {
+    openBlank(columnWidth) {
       getSnapshot = null
+      blankWidth = columnWidth
       mayOverwrite = true
       title.textContent = t.saveSession.blankTitle
       lead.textContent = t.saveSession.blankLead

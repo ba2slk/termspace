@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultTerminalSpec, parseSession, resolveCwd, type ParseEnv } from './session-schema'
+import { defaultTerminalSpec, newColumnWidth, parseSession, resolveCwd, type ParseEnv } from './session-schema'
 
 const env: ParseEnv = { home: '/home/u', shell: '/usr/bin/zsh' }
 
@@ -230,5 +230,23 @@ describe('defaultTerminalSpec', () => {
   it('falls back to the parser shell without $SHELL', () => {
     const spec = defaultTerminalSpec({ name: 'T', home: '/h', shell: null, width: 640 })
     expect(spec.shell).toBe('/bin/sh')
+  })
+})
+
+describe('newColumnWidth', () => {
+  it('takes the width the renderer measured', () => {
+    expect(newColumnWidth(1180, 640)).toBe(1180)
+  })
+
+  it('falls back to the setting when nothing was laid out', () => {
+    expect(newColumnWidth(0, 640)).toBe(640)
+    expect(newColumnWidth(-24, 640)).toBe(640)
+  })
+
+  it('falls back to the setting for anything but a finite number', () => {
+    expect(newColumnWidth(undefined, 640)).toBe(640)
+    expect(newColumnWidth(Number.NaN, 640)).toBe(640)
+    expect(newColumnWidth(Number.POSITIVE_INFINITY, 640)).toBe(640)
+    expect(newColumnWidth('900', 640)).toBe(640)
   })
 })
