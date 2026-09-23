@@ -30,6 +30,7 @@ import {
   checkPaneTitlePeek,
   checkPaneFold,
   checkPaneZoom,
+  checkFitColumn,
   checkTerminalSignals,
   checkRendererBudget,
   checkSessionAndPty,
@@ -97,6 +98,7 @@ const GROUPS: Readonly<
     await checkTerminalSignals(report)
     await checkLayoutEditing(report)
     await checkPaneZoom(report)
+    await checkFitColumn(report)
     await checkPaneFold(report)
     await checkOverviewWithFoldedPanes(report)
     checkRendererBudget(report)

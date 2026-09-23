@@ -10,6 +10,7 @@ import {
   expandedRatioSum,
   expandedRoom,
   FOLD_BAR_HEIGHT,
+  MIN_COLUMN_WIDTH,
   PANE_GAP,
   type Layout,
 } from './layout-model'
@@ -60,6 +61,28 @@ export function columnHeightIn(canvasHeight: number): number {
  */
 export function maxColumnWidth(viewportWidth: number): number {
   return viewportWidth - CANVAS_EDGE * 2
+}
+
+/**
+ * One press of the fit key: custom → full → half → custom. Where it goes is
+ * read off the current width, so a manual resize mid-cycle simply becomes the
+ * new custom width. The half never goes below the minimum column width, and
+ * a view too narrow for it to differ from full skips it.
+ */
+export function nextFitWidth(
+  current: number,
+  full: number,
+  custom: number | null,
+): { width: number; custom: number | null } {
+  const half = Math.max(MIN_COLUMN_WIDTH, Math.round(full / 2))
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
+  if (near(current, full) && !near(half, full)) return { width: half, custom }
+  if (near(current, full) || near(current, half)) {
+    // Remembered under another view width, it can land where the column already is.
+    if (custom === null || near(custom, current)) return { width: full, custom: null }
+    return { width: custom, custom }
+  }
+  return { width: full, custom: current }
 }
 
 export function paneRects(layout: Layout, canvasHeight: number): PaneRect[] {

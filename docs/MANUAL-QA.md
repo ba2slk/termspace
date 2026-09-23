@@ -134,6 +134,13 @@ English copy.
 - `Alt+Shift+U I O P` moves panes — swaps are measured via top coordinates, horizontal
   moves via a round trip of the left coordinate, and focus must stay on the pane
   throughout the move
+- `fitColumnFull`: `Alt+Shift+Z` widens the focused column to fill the visible canvas
+  (the pane's `getBoundingClientRect()` width against `maxColumnWidth` of the host)
+- `fitColumnHalf`: the second press halves it (the half is a real width, so it is
+  measured, not read off the layout)
+- `fitColumnRestores`: the third press returns the width it had before the cycle (the
+  remembered width lives in memory only; a column started at full or half is nudged
+  one resize step off first, so the cycle starts from a width of its own)
 
 **Pane zoom**
 - **`Alt+Z` lays the focused pane over the visible canvas, and `Alt+Z` again puts it

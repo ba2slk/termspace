@@ -16,7 +16,7 @@ import { IS_MAC } from './platform'
 import { t } from './i18n'
 import { createCanvasView, type CanvasView } from './canvas-view'
 import { renderConfigError, renderExitBanner } from './error-card'
-import { columnHeightIn, maxColumnWidth, visiblePaneIds } from './layout-geometry'
+import { columnHeightIn, maxColumnWidth, nextFitWidth, visiblePaneIds } from './layout-geometry'
 import { isAppAction, resolveAction, type Action } from './keymap'
 import {
   addColumn,
@@ -57,6 +57,7 @@ import { createTerminalPane, type TerminalPane } from './terminal-pane'
 const EXITS_ZOOM: readonly Action['t'][] = [
   'focus',
   'resize',
+  'fit-column',
   'split',
   'move',
   'add-column',
@@ -849,6 +850,26 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     }
   }
 
+  /** Each column's width from before the fit cycle; in memory only, never saved. */
+  const fitCustom = new Map<string, number>()
+
+  function fitColumn(): void {
+    const found = findPane(layout, layout.focusedPaneId)
+    if (found === null) return
+    const { id, width } = found.column
+    for (const known of fitCustom.keys()) {
+      if (!layout.columns.some((c) => c.id === known)) fitCustom.delete(known)
+    }
+    const next = nextFitWidth(width, columnWidthCap(), fitCustom.get(id) ?? null)
+    if (next.custom === null) fitCustom.delete(id)
+    else fitCustom.set(id, next.custom)
+    // A remembered width may be past the cap; restoring it is not widening.
+    const cap = Math.max(next.width, columnWidthCap())
+    setLayout(resizeColumn(layout, id, next.width - width, cap), 'settle')
+    // As with the resize keys: the far edge moves, so the scroll follows it.
+    canvas.scrollToPane(layout.focusedPaneId, layout)
+  }
+
   async function focusedCwd(focusedPaneId = layout.focusedPaneId): Promise<string> {
     if (options.settings().inheritWorkingDir === 0) return spec.cwd
 
@@ -1047,6 +1068,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         break
       case 'resize':
         applyResize(action.dir)
+        break
+      case 'fit-column':
+        fitColumn()
         break
       case 'split':
         splitFocused(action.side)

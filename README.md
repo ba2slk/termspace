@@ -163,6 +163,7 @@ tmux itself.
 | `Alt` + `D` | `Cmd` + `D` | Fold the focused pane to a bar; `Enter` on the bar opens it |
 | `Alt+Shift` + `D` | `Cmd+Shift` + `D` | Fold the other panes in the column |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
+| `Alt+Shift` + `Z` | `Cmd+Option` + `Enter` | Cycle the column's width: full view, half view, its own |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
 | Hold `Alt` | Hold `Cmd` | Label every pane on screen with its title (can be turned off in settings) |
 | `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |

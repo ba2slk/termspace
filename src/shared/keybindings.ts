@@ -30,6 +30,7 @@ export type ActionId =
   | 'add-column-right'
   | 'close-pane'
   | 'zoom-pane'
+  | 'fit-column'
   | 'minimize-pane'
   | 'fold-others'
   | 'reveal-focus'
@@ -79,6 +80,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'add-column-right': ['Alt+Shift+ArrowRight'],
   'close-pane': ['Alt+Shift+KeyW'],
   'zoom-pane': ['Alt+KeyZ'],
+  'fit-column': ['Alt+Shift+KeyZ'],
   // Next to the zoom: the two opposite ends of how much room a pane gets.
   'minimize-pane': ['Alt+KeyD'],
   'fold-others': ['Alt+Shift+KeyD'],
@@ -129,6 +131,7 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   'close-pane': ['Shift+Meta+KeyW'],
   // Cmd+Z is undo everywhere on mac; iTerm maximizes a pane with this instead.
   'zoom-pane': ['Shift+Meta+Enter'],
+  'fit-column': ['Alt+Meta+Enter'],
   'minimize-pane': ['Meta+KeyD'],
   'fold-others': ['Shift+Meta+KeyD'],
   'reveal-focus': ['Meta+KeyG'],
@@ -187,6 +190,7 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'resize-right',
       'resize-up',
       'resize-down',
+      'fit-column',
       'move-left',
       'move-right',
       'move-up',
@@ -407,7 +411,7 @@ export function chordRisk(chord: string, isMac = false): ChordRisk | null {
     if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyH' || code === 'KeyM') return 'system-key'
   }
   // Readline's word motions, which every shell inherits. Not on mac: the mac
-  // table leaves Option to the terminal, so an Option chord there is the
+  // table binds Option only together with Cmd, so an Option chord there is the
   // user's own deliberate choice, not a collision the defaults walked into.
   if (!isMac && only('Alt') && (code === 'KeyB' || code === 'KeyF')) return 'shell-word'
   // Anything unmodified is typing, apart from the function keys.

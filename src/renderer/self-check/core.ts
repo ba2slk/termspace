@@ -641,6 +641,47 @@ export async function checkPaneZoom(report: Report): Promise<void> {
   await trackSettles()
 }
 
+/** Alt+Shift+Z: the focused column goes full, then half, then back to its own width. */
+export async function checkFitColumn(report: Report): Promise<void> {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  const width = (): number =>
+    document.querySelector<HTMLElement>('.pane--focused')?.getBoundingClientRect().width ?? 0
+  if (host === null) {
+    report['fitColumnFull'] = 'FAIL (no session host)'
+    return
+  }
+  const full = maxColumnWidth(host.clientWidth)
+  const half = Math.max(MIN_COLUMN_WIDTH, Math.round(full / 2))
+  const near = (target: number) => (): boolean => Math.abs(width() - target) <= 1
+  if (half >= full - 1) {
+    report['fitColumnFull'] = `skipped (window too narrow for a half, full ${String(full)}px)`
+    return
+  }
+  // A column already at full or half would not start the cycle from its own
+  // width: nudge it one step off, and back once the cycle is done.
+  const nudge = near(full)() ? 'KeyU' : near(half)() ? 'KeyP' : null
+  const original = width()
+  if (nudge !== null) {
+    press(nudge, { altKey: true })
+    await waitFor(() => Math.abs(width() - original) > 1)
+  }
+  const start = width()
+  const step = async (key: string, target: number): Promise<void> => {
+    press('KeyZ', { altKey: true, shiftKey: true })
+    const ok = await waitFor(near(target))
+    report[key] = ok
+      ? `ok (${String(Math.round(width()))}px)`
+      : `FAIL (${String(Math.round(width()))}px, expected ${String(Math.round(target))}px)`
+  }
+  await step('fitColumnFull', full)
+  await step('fitColumnHalf', half)
+  await step('fitColumnRestores', start)
+  if (nudge !== null) {
+    press(nudge === 'KeyU' ? 'KeyP' : 'KeyU', { altKey: true })
+    await waitFor(near(original))
+  }
+}
+
 /**
  * Folding: the pane becomes a bar of a fixed height, and stops taking keys.
  *

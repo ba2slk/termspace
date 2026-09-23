@@ -120,6 +120,16 @@ describe('resolveAction — other bindings', () => {
     expect(resolveAction(chord('KeyZ', { altKey: true }))).toEqual({ t: 'zoom' })
   })
 
+  it('Alt+Shift+Z fits the focused column, Cmd+Option+Enter on mac', () => {
+    expect(resolveAction(chord('KeyZ', { altKey: true, shiftKey: true }))).toEqual({
+      t: 'fit-column',
+    })
+    expect(
+      resolveAction(chord('Enter', { altKey: true, metaKey: true }), DEFAULT_BINDINGS_MAC, true),
+    ).toEqual({ t: 'fit-column' })
+    expect(isAppAction({ t: 'fit-column' })).toBe(false)
+  })
+
   it('zoom acts on the focused pane, so it is not an app action', () => {
     expect(isAppAction({ t: 'zoom' })).toBe(false)
   })
