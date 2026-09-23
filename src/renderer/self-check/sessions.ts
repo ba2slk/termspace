@@ -55,6 +55,125 @@ const refreshList = (): void => {
     ?.click()
 }
 
+const pinnedSlot = (): HTMLElement | null => document.querySelector<HTMLElement>('.sidebar__pinned')
+
+/**
+ * What a launch opens, then closed again: every group starts from nothing open.
+ * Runs in each process before its groups.
+ */
+export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void> {
+  await waitFor(() => pinnedSlot() !== null && visiblePanes().length > 0, 15_000)
+  report['defaultTerminalAtLaunch'] =
+    pinnedSlot() !== null && visiblePanes().length === 1 ? 'ok' : `FAIL (${String(visiblePanes().length)} panes)`
+
+  const term = termOf(focusedHost())
+  report['defaultTerminalShell'] =
+    term === undefined
+      ? 'FAIL (no terminal)'
+      : (await waitFor(() => {
+          term.selectAll()
+          return term.getSelection().trim() !== ''
+        }, 8000))
+        ? 'ok'
+        : 'skipped: the shell printed nothing (no prompt configured?)'
+
+  // Drawn above the list, not merely before it in the DOM.
+  const slot = pinnedSlot()?.getBoundingClientRect()
+  const list = document.querySelector<HTMLElement>('.sidebar__list')?.getBoundingClientRect()
+  report['defaultTerminalAboveList'] =
+    slot !== undefined && list !== undefined && slot.height > 0 && slot.bottom <= list.top + 1
+      ? 'ok'
+      : `FAIL (slot ${String(slot?.bottom)} list ${String(list?.top)})`
+  const line = pinnedSlot() === null ? null : getComputedStyle(pinnedSlot()!)
+  // Border widths snap to device pixels, so 1px reads as 0.6px at dpr 1.67.
+  const width = Number.parseFloat(line?.borderBottomWidth ?? '')
+  report['defaultTerminalHairline'] =
+    line !== null && line.borderBottomStyle === 'solid' && width > 0 && width <= 1
+      ? 'ok'
+      : `FAIL (${String(line?.borderBottomStyle)} ${String(line?.borderBottomWidth)})`
+
+  pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
+  await waitFor(() => pinnedSlot() === null && visiblePanes().length === 0)
+  report['defaultTerminalEnds'] = pinnedSlot() === null ? 'ok' : 'FAIL (the slot stayed)'
+}
+
+/**
+ * The default terminal becomes a session in place: same pty, root from where the
+ * shell stands, a taken name refused. First in its group: it needs the empty
+ * canvas, so whatever is open is ended first.
+ */
+export async function checkDefaultTerminalSave(report: Report): Promise<void> {
+  for (const close of document.querySelectorAll<HTMLButtonElement>('.sidebar__close')) close.click()
+  await waitFor(() => visiblePanes().length === 0)
+
+  const newTerminal = document.querySelector<HTMLButtonElement>('.canvas-empty__terminal')
+  report['newTerminalFocused'] =
+    newTerminal !== null && document.activeElement === newTerminal ? 'ok' : 'FAIL (not focused)'
+  // A synthetic Enter does not press a button; Enter itself is in MANUAL-QA.
+  newTerminal?.click()
+  await waitFor(() => pinnedSlot() !== null && visiblePanes().length === 1, 15_000)
+  const paneId = focusedId()
+  const term = termOf(focusedHost())
+  if (paneId === undefined || term === undefined) {
+    report['defaultTerminalSave'] = 'FAIL (no terminal after New terminal)'
+    return
+  }
+
+  api.write(paneId, 'cd / && echo selfcheck-marker-7\n')
+  // The typed line and its output both carry the marker: two means it ran.
+  const markers = (): number => {
+    term.selectAll()
+    return term.getSelection().split('selfcheck-marker-7').length - 1
+  }
+  await waitFor(() => markers() >= 2, 5000)
+
+  press('KeyS', { altKey: true, shiftKey: true })
+  await waitFor(saveDialogOpen)
+  const field = document.querySelector<HTMLInputElement>('.save-session__input')
+  const cwdField = document.querySelector<HTMLInputElement>('.save-session__cwd')
+  report['defaultTerminalSaveNameEmpty'] = field?.value === '' ? 'ok' : `FAIL (${String(field?.value)})`
+  report['defaultTerminalSaveRoot'] = cwdField?.value === '/' ? 'ok' : `FAIL (${String(cwdField?.value)})`
+
+  // Taken: 'verify' is every group's session.
+  if (field !== null) {
+    field.value = 'verify'
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  await dialogChecked('verify')
+  const button = document.querySelector<HTMLButtonElement>('.save-session .button--accent')
+  report['defaultTerminalRefusesTaken'] =
+    button?.disabled === true &&
+    document.querySelector('.save-session__status')?.textContent === t.saveSession.nameTakenPickAnother
+      ? 'ok'
+      : 'FAIL (a taken name could be overwritten)'
+
+  const name = 'selfcheck-terminal'
+  if (field !== null) {
+    field.value = name
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  await dialogChecked(name)
+  button?.click()
+  await waitFor(() => !saveDialogOpen() && pinnedSlot() === null, 5000)
+  report['defaultTerminalSaved'] =
+    pinnedSlot() === null && document.title.includes(name) ? 'ok' : `FAIL (title ${document.title})`
+
+  // Same pty: what the shell printed before the save is still on screen.
+  term.selectAll()
+  report['defaultTerminalKeepsPty'] =
+    termOf(focusedHost()) === term && term.getSelection().includes('selfcheck-marker-7')
+      ? 'ok'
+      : 'FAIL (the terminal was replaced)'
+
+  document
+    .querySelector<HTMLElement>('.sidebar__row--current')
+    ?.querySelector<HTMLButtonElement>('.sidebar__close')
+    ?.click()
+  await api.deleteSession(name)
+  refreshList()
+  await waitFor(() => visiblePanes().length === 0)
+}
+
 /**
  * A file dropped on a terminal.
  *

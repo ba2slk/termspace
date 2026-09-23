@@ -260,11 +260,14 @@ export async function checkWheelScroll(report: Report): Promise<void> {
     const box = pane.getBoundingClientRect()
     return lowest === null || box.bottom > lowest.bottom ? box : lowest
   }, null)
+  // Read with the panes, not before the drag: a window closing in another
+  // group lets the window manager resize this one in between.
+  const barNow = bar?.getBoundingClientRect()
   report['scrollBarClearsPane'] =
-    barBox !== undefined && bottomPane !== null
-      ? barBox.top - bottomPane.bottom >= 2
-        ? `ok (${(barBox.top - bottomPane.bottom).toFixed(1)}px clear)`
-        : `FAIL (${(barBox.top - bottomPane.bottom).toFixed(1)}px from the pane outline)`
+    barNow !== undefined && bottomPane !== null
+      ? barNow.top - bottomPane.bottom >= 2
+        ? `ok (${(barNow.top - bottomPane.bottom).toFixed(1)}px clear)`
+        : `FAIL (${(barNow.top - bottomPane.bottom).toFixed(1)}px from the pane outline)`
       : 'skipped (no pane on screen)'
 
   // A horizontal component hands the wheel to the canvas.
