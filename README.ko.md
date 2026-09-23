@@ -154,6 +154,7 @@ detach/attach 기능은 없습니다. 창을 닫으면 안에서 돌던 프로�
 | `Alt+Shift` + `←` / `→` | `Cmd+Shift` + `←` / `→` | 왼쪽 / 오른쪽에 새 컬럼 |
 | `Alt+Shift` + `W` | `Cmd+Shift` + `W` | 패인 닫기 |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | 크기 조절. 한 줄에 나란한 네 키를 vim 방향 순서로 |
+| `Alt+Shift` + `Z` | `Cmd+Option` + `Enter` | 컬럼 너비 순환: 화면 전체, 화면 절반, 원래 너비 |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | 패인 자체를 옮기기 |
 | `Alt` 누르고 있기 | `Cmd` 누르고 있기 | 화면의 모든 패인에 제목 띄우기 (설정에서 끌 수 있음) |
 | `Alt` + `M` | `Cmd+Shift+M` | 세션 전체 보기 |
