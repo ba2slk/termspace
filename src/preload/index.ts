@@ -19,9 +19,9 @@ const api: TermspaceApi = {
   sessionExists: (id) => ipcRenderer.invoke('session:exists', id),
   saveSessionAs: (id, displayName, layout, overwrite, rootCwd) =>
     ipcRenderer.invoke('session:save-as', id, displayName, layout, overwrite, rootCwd),
-  createBlankSession: (id, displayName, rootCwd) =>
-    ipcRenderer.invoke('session:create-blank', id, displayName, rootCwd),
-  defaultTerminalSpec: (name) => ipcRenderer.invoke('session:default-terminal', name),
+  createBlankSession: (id, displayName, rootCwd, width) =>
+    ipcRenderer.invoke('session:create-blank', id, displayName, rootCwd, width),
+  defaultTerminalSpec: (name, width) => ipcRenderer.invoke('session:default-terminal', name, width),
   userHome: () => ipcRenderer.invoke('app:home'),
   suggestRootCwd: (paneIds) => ipcRenderer.invoke('session:suggest-root', paneIds),
   pickDirectory: (current) => ipcRenderer.invoke('session:pick-directory', current),

@@ -299,10 +299,13 @@ export interface TermspaceApi {
     /** `~`-style or absolute; main resolves it. Session root for the file. */
     rootCwd: string,
   ): Promise<SaveSessionResult>
-  /** Create a blank one-pane session rooted at rootCwd. Fails rather than overwriting. */
-  createBlankSession(id: string, displayName: string, rootCwd: string): Promise<SaveSessionResult>
-  /** The spec of the file-less shell a launch opens. main knows the shell. */
-  defaultTerminalSpec(name: string): Promise<SessionSpec>
+  /**
+   * Create a blank one-pane session rooted at rootCwd. Fails rather than overwriting.
+   * width: the column's, measured to fill the canvas; 0 means use the setting.
+   */
+  createBlankSession(id: string, displayName: string, rootCwd: string, width: number): Promise<SaveSessionResult>
+  /** The spec of the file-less shell a launch opens. main knows the shell. width as above. */
+  defaultTerminalSpec(name: string, width: number): Promise<SessionSpec>
   /** $HOME, for showing paths in `~` form. */
   userHome(): Promise<string>
   /**

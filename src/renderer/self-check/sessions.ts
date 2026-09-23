@@ -57,6 +57,16 @@ const refreshList = (): void => {
 
 const pinnedSlot = (): HTMLElement | null => document.querySelector<HTMLElement>('.sidebar__pinned')
 
+/** Does the one pane on screen fill the canvas beside the sidebar, as a new column should? */
+const fillsCanvas = (): string => {
+  const host = document.querySelector<HTMLElement>('.session-host:not([hidden])')
+  const pane = visiblePanes()[0]?.getBoundingClientRect().width
+  const want = host === null ? undefined : maxColumnWidth(host.clientWidth)
+  return pane !== undefined && want !== undefined && Math.abs(pane - want) <= 1
+    ? 'ok'
+    : `FAIL (pane ${String(pane)} canvas ${String(want)})`
+}
+
 /**
  * What a launch opens, then closed again: every group starts from nothing open.
  * Runs in each process before its groups.
@@ -112,6 +122,9 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
   // A synthetic Enter does not press a button; Enter itself is in MANUAL-QA.
   newTerminal?.click()
   await waitFor(() => pinnedSlot() !== null && visiblePanes().length === 1, 15_000)
+  // Measured here, not at launch: the window manager may resize the window after
+  // the launch terminal took its width, and widths never follow the window.
+  report['defaultTerminalFillsCanvas'] = fillsCanvas()
   const paneId = focusedId()
   const term = termOf(focusedHost())
   if (paneId === undefined || term === undefined) {
@@ -842,6 +855,8 @@ export async function checkNewSession(report: Report): Promise<void> {
     created !== undefined && created.error === null ? 'ok' : `FAIL (${created?.error ?? 'none'})`
   // Opens immediately — picking it again would be a second step.
   report['blankSessionOpened'] = document.title.includes(name) ? 'ok' : `FAIL (${document.title})`
+  await waitFor(() => visiblePanes().length === 1)
+  report['blankSessionFillsCanvas'] = fillsCanvas()
 
   /*
    * Delete it again. Must ask first, and must disappear from the list —
@@ -932,7 +947,7 @@ export async function checkNewSession(report: Report): Promise<void> {
  */
 export async function checkWheelSessionSwitch(report: Report): Promise<void> {
   const name = 'selfcheck-wheel'
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['wheelSwitchSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
@@ -1012,7 +1027,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
     return
   }
 
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['returnClearsSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return
@@ -1048,7 +1063,7 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
  */
 export async function checkSessionStepShortcut(report: Report): Promise<void> {
   const name = 'selfcheck-step'
-  const made = await api.createBlankSession(name, name, '~')
+  const made = await api.createBlankSession(name, name, '~', 0)
   if (!made.ok) {
     report['stepSetup'] = `FAIL (${made.error ?? 'create failed'})`
     return

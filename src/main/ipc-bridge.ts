@@ -42,7 +42,7 @@ import { orderFile } from './session-order-file'
 import { archiveFile } from './session-archive-file'
 import { APP_NAME } from '../shared/version'
 import { shellQuote } from '../shared/shell-quote'
-import { defaultTerminalSpec, resolveCwd } from './session-schema'
+import { defaultTerminalSpec, newColumnWidth, resolveCwd } from './session-schema'
 import { deepestCommonAncestor, shorten, type SessionDraft } from './session-writer'
 
 const FLUSH_INTERVAL_MS = 16
@@ -252,21 +252,20 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:create-blank',
-    async (_e, id: string, displayName: string, rootCwd: string): Promise<SaveSessionResult> => {
-      // Column width follows the setting; defining another default here would drift.
+    async (_e, id: string, displayName: string, rootCwd: string, width: unknown): Promise<SaveSessionResult> => {
       const { defaultColumnWidth } = await loadSettings(env)
-      return createBlankSession(dir, id, displayName, defaultColumnWidth, env['HOME'] ?? '', rootCwd)
+      const columnWidth = newColumnWidth(width, defaultColumnWidth)
+      return createBlankSession(dir, id, displayName, columnWidth, env['HOME'] ?? '', rootCwd)
     },
   )
 
-  ipcMain.handle('session:default-terminal', async (_e, name: string): Promise<SessionSpec> => {
-    // Width follows the setting, as a blank session's does.
+  ipcMain.handle('session:default-terminal', async (_e, name: string, width: unknown): Promise<SessionSpec> => {
     const { defaultColumnWidth } = await loadSettings(env)
     return defaultTerminalSpec({
       name,
       home: env['HOME'] ?? '',
       shell: env['SHELL'] ?? null,
-      width: defaultColumnWidth,
+      width: newColumnWidth(width, defaultColumnWidth),
     })
   })
 
