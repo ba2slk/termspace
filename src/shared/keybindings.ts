@@ -30,6 +30,7 @@ export type ActionId =
   | 'add-column-right'
   | 'close-pane'
   | 'zoom-pane'
+  | 'fit-column'
   | 'minimize-pane'
   | 'fold-others'
   | 'reveal-focus'
@@ -79,6 +80,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'add-column-right': ['Alt+Shift+ArrowRight'],
   'close-pane': ['Alt+Shift+KeyW'],
   'zoom-pane': ['Alt+KeyZ'],
+  'fit-column': ['Alt+Shift+KeyZ'],
   // Next to the zoom: the two opposite ends of how much room a pane gets.
   'minimize-pane': ['Alt+KeyD'],
   'fold-others': ['Alt+Shift+KeyD'],
@@ -129,6 +131,7 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   'close-pane': ['Shift+Meta+KeyW'],
   // Cmd+Z is undo everywhere on mac; iTerm maximizes a pane with this instead.
   'zoom-pane': ['Shift+Meta+Enter'],
+  'fit-column': ['Alt+Meta+Enter'],
   'minimize-pane': ['Meta+KeyD'],
   'fold-others': ['Shift+Meta+KeyD'],
   'reveal-focus': ['Meta+KeyG'],
@@ -187,6 +190,7 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'resize-right',
       'resize-up',
       'resize-down',
+      'fit-column',
       'move-left',
       'move-right',
       'move-up',

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { columnContentHeight, createLayout, FOLD_BAR_HEIGHT, PANE_GAP } from './layout-model'
+import { columnContentHeight, createLayout, FOLD_BAR_HEIGHT, MIN_COLUMN_WIDTH, PANE_GAP } from './layout-model'
 import {
   CANVAS_EDGE,
   canvasWidth,
   columnHeightIn,
   maxColumnWidth,
+  nextFitWidth,
   maxScrollX,
   paneRects,
   type Rect,
@@ -31,6 +32,42 @@ describe('maxColumnWidth', () => {
     const width = maxColumnWidth(1400)
     const single = createLayout([{ id: 'c1', width, panes: [{ id: 'p', title: 'p' }] }])
     expect(canvasWidth(single)).toBe(1400)
+  })
+})
+
+describe('nextFitWidth', () => {
+  it('sends a custom width to full, remembering it', () => {
+    expect(nextFitWidth(600, 1400, null)).toEqual({ width: 1400, custom: 600 })
+    expect(nextFitWidth(500, 1400, 700)).toEqual({ width: 1400, custom: 500 })
+  })
+
+  it('halves a full column', () => {
+    expect(nextFitWidth(1400, 1400, 700)).toEqual({ width: 700, custom: 700 })
+    expect(nextFitWidth(1401, 1401, null)).toEqual({ width: 701, custom: null })
+  })
+
+  it('returns a half column to the remembered width', () => {
+    expect(nextFitWidth(700, 1400, 500)).toEqual({ width: 500, custom: 500 })
+  })
+
+  it('returns a half column to full when nothing is remembered', () => {
+    expect(nextFitWidth(700, 1400, null)).toEqual({ width: 1400, custom: null })
+  })
+
+  it('reads a width within 1px as full or half', () => {
+    expect(nextFitWidth(1399, 1400, 500)).toEqual({ width: 700, custom: 500 })
+    expect(nextFitWidth(701, 1400, 500)).toEqual({ width: 500, custom: 500 })
+    expect(nextFitWidth(702, 1400, 500)).toEqual({ width: 1400, custom: 702 })
+  })
+
+  it('keeps the half at the minimum column width', () => {
+    expect(nextFitWidth(400, 400, 300).width).toBe(MIN_COLUMN_WIDTH)
+  })
+
+  it('skips the half when the view is too narrow for one to differ from full', () => {
+    const full = MIN_COLUMN_WIDTH
+    expect(nextFitWidth(full, full, 400)).toEqual({ width: 400, custom: 400 })
+    expect(nextFitWidth(full, full, null)).toEqual({ width: full, custom: null })
   })
 })
 

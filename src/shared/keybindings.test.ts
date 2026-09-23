@@ -334,7 +334,11 @@ describe('mac defaults', () => {
 
   it('has no bare-Alt chords — Option types characters on a Mac', () => {
     for (const chords of Object.values(DEFAULT_BINDINGS_MAC)) {
-      for (const chord of chords) expect(chord.split('+')).not.toContain('Alt')
+      // With Cmd held, Option types nothing, so Cmd+Option is fair game.
+      for (const chord of chords) {
+        const mods = chord.split('+')
+        if (mods.includes('Alt')) expect(mods).toContain('Meta')
+      }
     }
   })
 
