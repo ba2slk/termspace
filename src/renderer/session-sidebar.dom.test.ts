@@ -36,6 +36,9 @@ const hooks = (): SidebarHooks => ({
   onReorder: vi.fn(),
   onArchive: vi.fn(),
   onRestore: vi.fn(),
+  onOpenDefaultTerminal: vi.fn(),
+  onCloseDefaultTerminal: vi.fn(),
+  onDefaultTerminalMenu: vi.fn(),
 })
 
 let host: HTMLElement
@@ -715,5 +718,59 @@ describe('reordering by drag', () => {
       list.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }))
     }
     expect(host.querySelectorAll('.sidebar__row--preview')).toHaveLength(0)
+  })
+})
+
+describe('the default terminal slot', () => {
+  const slot = (): HTMLElement | null => document.querySelector('.sidebar__pinned')
+
+  it('is absent until there is a default terminal', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.render([summary()], new Map(), null)
+    expect(slot()).toBeNull()
+  })
+
+  it('sits above the list, outside it, and reads as unsaved', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.render([summary()], new Map(), null)
+    sidebar.setDefaultTerminal({ current: true, wants: false })
+    const pinned = slot()!
+    const list = document.querySelector('.sidebar__list')!
+    expect(pinned.nextElementSibling).toBe(list)
+    expect(list.contains(pinned)).toBe(false)
+    expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Terminal')
+    expect(pinned.querySelector('.sidebar__meta')?.textContent).toBe('unsaved')
+    expect(pinned.querySelector('.sidebar__row--current')).not.toBeNull()
+    expect(pinned.querySelector('.sidebar__dot--on')).not.toBeNull()
+  })
+
+  it('goes away whole when the terminal ends', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.setDefaultTerminal({ current: false, wants: false })
+    sidebar.setDefaultTerminal(null)
+    expect(slot()).toBeNull()
+  })
+
+  it('opens, ends and asks for its menu through its own hooks', () => {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.setDefaultTerminal({ current: false, wants: true })
+    expect(slot()!.querySelector('.sidebar__dot--wants')).not.toBeNull()
+    slot()!.querySelector<HTMLButtonElement>('.sidebar__open')!.click()
+    expect(h.onOpenDefaultTerminal).toHaveBeenCalledTimes(1)
+    slot()!.querySelector<HTMLButtonElement>('.sidebar__close')!.click()
+    expect(h.onCloseDefaultTerminal).toHaveBeenCalledTimes(1)
+    expect(h.onOpen).not.toHaveBeenCalled()
+    slot()!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 6 }))
+    expect(h.onDefaultTerminalMenu).toHaveBeenCalledWith({ x: 5, y: 6 })
+    expect(h.onContextMenu).not.toHaveBeenCalled()
+  })
+
+  it('is not one of the rows the list numbers', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.setDefaultTerminal({ current: false, wants: false })
+    sidebar.render([summary()], new Map(), null)
+    expect(slot()!.querySelector('.sidebar__hint')).toBeNull()
+    expect(document.querySelectorAll('.sidebar__list .sidebar__row')).toHaveLength(1)
   })
 })

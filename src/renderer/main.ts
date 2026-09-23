@@ -256,6 +256,9 @@ const sidebar = createSessionSidebar(workspace, {
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
+  onOpenDefaultTerminal: () => undefined,
+  onCloseDefaultTerminal: () => undefined,
+  onDefaultTerminalMenu: () => undefined,
   onReorder: (id, toIndex) => {
     void api.reorderSession(id, toIndex).then((list) => {
       knownSessions = list
