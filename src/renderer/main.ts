@@ -396,7 +396,8 @@ async function renameSession(id: string, newName: string): Promise<void> {
   moveRuntime(id, newId)
   sessions.get(newId)?.runtime.rename(newName)
   if (newId === currentName) {
-    setTitle(newName, sessions.get(newId)?.runtime.focusedPaneTitle() ?? null)
+    const runtime = sessions.get(newId)?.runtime
+    setTitle(newName, runtime?.focusedPaneTitle() ?? null, runtime?.barSides())
   }
   await refreshSidebar()
 }
@@ -696,7 +697,7 @@ async function adoptSavedTerminal(file: string): Promise<void> {
     runtime.rename(loaded.spec.name)
     runtime.rebase(loaded.spec.cwd)
   }
-  if (currentName === id) setTitle(runtime.spec.name, runtime.focusedPaneTitle())
+  if (currentName === id) setTitle(runtime.spec.name, runtime.focusedPaneTitle(), runtime.barSides())
   await refreshSidebar()
   toast.show(t.firstRun.saved(file.split('/').pop() ?? file))
 }
