@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barNeighbours } from './bar-neighbours'
+import { barNeighbours, barStrip, panesToAskCommands } from './bar-neighbours'
 import { createLayout, focusDir, type ColumnSeed, type Layout } from './layout-model'
 
 const HEIGHT = 600
@@ -85,5 +85,51 @@ describe('barNeighbours', () => {
   it('passes the layout title through untouched', () => {
     const layout = layoutOf([single('a', 'shell'), single('b')], 'b')
     expect(barNeighbours(layout, HEIGHT, none).left?.title).toBe('shell')
+  })
+})
+
+describe('barStrip', () => {
+  const noCommand = (): string | null => null
+
+  it('names the focused pane by its own title, without the session', () => {
+    const layout = layoutOf([single('a'), single('b', 'server'), single('c')], 'b')
+    expect(barStrip(layout, HEIGHT, none, noCommand).here).toBe('server')
+  })
+
+  it('names an untitled focused pane by what it runs, as the sides do', () => {
+    const layout = layoutOf([single('a', 'shell'), single('b', 'shell')], 'b')
+    const commands: Record<string, string> = { a: 'htop', b: 'nvim' }
+    const strip = barStrip(layout, HEIGHT, none, (id) => commands[id] ?? null)
+    expect(strip.here).toBe('nvim')
+    expect(strip.left?.name).toBe('htop')
+    expect(strip.right).toBeNull()
+  })
+
+  it('leaves the centre unnamed when there is neither a title nor a command', () => {
+    const layout = layoutOf([single('a', 'shell')], 'a')
+    expect(barStrip(layout, HEIGHT, none, noCommand)).toEqual({ here: null, left: null, right: null })
+  })
+
+  it('carries the side counts and marks through', () => {
+    const layout = layoutOf([single('a'), single('b'), single('c'), single('d')], 'b')
+    const { right } = barStrip(layout, HEIGHT, (id) => id === 'd', noCommand)
+    expect(right).toEqual({ paneId: 'c', name: 'c', beyond: 1, wants: true })
+  })
+})
+
+describe('panesToAskCommands', () => {
+  it('asks for the focused pane and each side that keep the default title', () => {
+    const layout = layoutOf([single('a', 'shell'), single('b', 'shell'), single('c', 'shell')], 'b')
+    expect(panesToAskCommands(layout, HEIGHT)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('skips panes someone named', () => {
+    const layout = layoutOf([single('a', 'api'), single('b', 'server'), single('c', 'shell')], 'b')
+    expect(panesToAskCommands(layout, HEIGHT)).toEqual(['c'])
+  })
+
+  it('asks for a lone untitled pane', () => {
+    const layout = layoutOf([single('a', 'shell')], 'a')
+    expect(panesToAskCommands(layout, HEIGHT)).toEqual(['a'])
   })
 })

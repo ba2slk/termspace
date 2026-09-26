@@ -1,11 +1,12 @@
 /**
- * The panes either side of the focused one, as the title bar names them.
+ * The focused pane and the panes either side of it, as the title bar names them.
  *
  * A side is where a ←/→ focus move would land, so the bar previews the
  * keypress. The "drawn across" rule is focusDir's own, called rather than
  * copied, so the two cannot drift apart.
  */
 import { findPane, focusDir, type Layout } from './layout-model'
+import { isDefaultPaneTitle, neighbourName } from './pane-title'
 
 export interface NeighbourSide {
   readonly paneId: string
@@ -35,11 +36,10 @@ export interface BarSides {
   readonly right: BarSide | null
 }
 
-export interface BarTitle extends BarSides {
-  readonly text: string
+/** The whole strip. Null centre: the focused pane has nothing to call it. */
+export interface BarStrip extends BarSides {
+  readonly here: string | null
 }
-
-export const NO_SIDES: BarSides = { left: null, right: null }
 
 export function barNeighbours(
   layout: Layout,
@@ -74,4 +74,43 @@ function sideOf(
     beyond: onSide.length - 1,
     wants: onSide.some((column) => column.panes.some((pane) => wants(pane.id))),
   }
+}
+
+/** The strip, every name resolved: a chosen title, else the running command. */
+export function barStrip(
+  layout: Layout,
+  columnHeight: number,
+  wants: (paneId: string) => boolean,
+  commandOf: (paneId: string) => string | null,
+): BarStrip {
+  const raw = barNeighbours(layout, columnHeight, wants)
+  const named = (side: NeighbourSide | null): BarSide | null =>
+    side === null
+      ? null
+      : {
+          paneId: side.paneId,
+          name: neighbourName(side.title, commandOf(side.paneId)),
+          beyond: side.beyond,
+          wants: side.wants,
+        }
+  const focused = findPane(layout, layout.focusedPaneId)?.pane ?? null
+  return {
+    here: focused === null ? null : neighbourName(focused.title, commandOf(focused.id)),
+    left: named(raw.left),
+    right: named(raw.right),
+  }
+}
+
+/** The strip's panes that go by their command, since nobody titled them. Focused first. */
+export function panesToAskCommands(layout: Layout, columnHeight: number): string[] {
+  const { left, right } = barNeighbours(layout, columnHeight, () => false)
+  const focused = findPane(layout, layout.focusedPaneId)?.pane ?? null
+  return [
+    focused === null ? null : { paneId: focused.id, title: focused.title },
+    left,
+    right,
+  ]
+    .filter((pane): pane is { paneId: string; title: string } => pane !== null)
+    .filter((pane) => isDefaultPaneTitle(pane.title))
+    .map((pane) => pane.paneId)
 }

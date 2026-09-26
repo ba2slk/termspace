@@ -1268,7 +1268,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
   report['peekLabelsStayInsideTheirPane'] =
     spilled === '' ? `ok (${String(contained)} measured)` : `FAIL (${spilled})`
 
-  // The strip names the focused pane while the label says the same title.
+  // The strip's centre is the focused pane's title alone; the session is not in it.
   const focusedLabel = document
     .querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused .pane__label')
     ?.textContent
@@ -1276,7 +1276,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
   report['barNamesTheFocusedPane'] =
     focusedLabel === undefined || focusedLabel === null || focusedLabel === ''
       ? 'skipped: the focused pane has no title of its own'
-      : bar.endsWith(focusedLabel) && bar !== focusedLabel
+      : bar === focusedLabel
         ? `ok (${bar})`
         : `FAIL (bar reads "${bar}", pane is "${focusedLabel}")`
 

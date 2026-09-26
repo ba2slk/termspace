@@ -240,6 +240,31 @@ body {
   width: 28px;
 }
 
+/* The list toggle naming the session: the icon keeps its place, the name follows. */
+.app-bar__btn--labelled {
+  width: auto;
+  gap: 6px;
+  padding: 0 8px 0 6px;
+}
+
+/* A button's font is the platform's, not the page's. */
+.app-bar__btn-label {
+  max-width: 160px;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-ui-sm);
+}
+
+.app-bar__btn--labelled svg {
+  flex: none;
+}
+
+.app-bar__btn-label[hidden] {
+  display: none;
+}
+
 .app-bar__win {
   width: 32px;
 }

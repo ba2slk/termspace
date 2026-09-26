@@ -40,8 +40,8 @@ import {
 import { layoutSnapshot } from './layout-snapshot'
 import { createOverviewView } from './overview-view'
 import { createPaneJumpView } from './pane-jump-view'
-import { DEFAULT_PANE_TITLE, isDefaultPaneTitle, neighbourName } from './pane-title'
-import { barNeighbours, type BarSide, type BarSides, type NeighbourSide } from './bar-neighbours'
+import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
+import { barStrip as stripOf, panesToAskCommands, type BarStrip } from './bar-neighbours'
 import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
 import { attachResizeDrag } from './resize-drag'
 import { createSearchBar } from './search-bar'
@@ -124,10 +124,8 @@ export interface SessionRuntime {
   rebase(cwd: string): void
   /** Whether this session takes keyboard input; hidden ones must not. */
   setActive(active: boolean): void
-  /** The focused pane's title, for the title bar. Null with nothing focused. */
-  focusedPaneTitle(): string | null
-  /** The panes a ←/→ move would land on, named as the title bar shows them. */
-  barSides(): BarSides
+  /** The focused pane and the panes a ←/→ move would land on, as the title bar names them. */
+  barStrip(): BarStrip
   /** Reapply settings to every live terminal. */
   applySettings(settings: AppSettings): void
   /**
@@ -213,11 +211,8 @@ export interface StartSessionOptions {
    * Current palette. The shell resolves the name, since it holds the user list.
    */
   readonly theme: () => TerminalTheme
-  /**
-   * Title changed; the app bar draws it. The pane title is the focused pane's,
-   * or null when nothing is focused.
-   */
-  readonly onTitle: (title: string, paneTitle: string | null, sides: BarSides) => void
+  /** Title changed; the app bar draws the session name and the strip. */
+  readonly onTitle: (session: string, strip: BarStrip) => void
   /** Something reached the clipboard — invisible, so it needs announcing. */
   readonly onCopied: (chars: number) => void
   /** A pane was added or removed; the session list shows the count. */
@@ -515,54 +510,42 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── State ────────────────────────────────────────────
 
-  function focusedPaneTitle(): string | null {
-    return findPane(layout, layout.focusedPaneId)?.pane.title ?? null
-  }
+  /** What untitled strip panes are running. Filled on demand, never polled. */
+  const stripCommands = new Map<string, string>()
+  let stripKey = ''
 
-  /** What untitled neighbours are running. Filled on demand, never polled. */
-  const neighbourCommands = new Map<string, string>()
-  let neighbourKey = ''
-
-  function barSides(): BarSides {
-    const raw = barNeighbours(layout, columnHeight(), (paneId) => attention.has(paneId))
-    const named = (side: NeighbourSide | null): BarSide | null =>
-      side === null
-        ? null
-        : {
-            paneId: side.paneId,
-            name: neighbourName(side.title, neighbourCommands.get(side.paneId) ?? null),
-            beyond: side.beyond,
-            wants: side.wants,
-          }
-    return { left: named(raw.left), right: named(raw.right) }
+  function barStrip(): BarStrip {
+    return stripOf(
+      layout,
+      columnHeight(),
+      (paneId) => attention.has(paneId),
+      (paneId) => stripCommands.get(paneId) ?? null,
+    )
   }
 
   function publishTitle(): void {
     // Only the visible session owns the bar; a background one would overwrite it.
     if (!active) return
-    options.onTitle(spec.name, focusedPaneTitle(), barSides())
-    loadNeighbourCommands()
+    options.onTitle(spec.name, barStrip())
+    loadStripCommands()
   }
 
   /**
-   * Asked when focus or the untitled neighbours change, not on every publish:
+   * Asked when focus or the untitled strip panes change, not on every publish:
    * a resize drag publishes each frame.
    */
-  function loadNeighbourCommands(): void {
-    const { left, right } = barNeighbours(layout, columnHeight(), () => false)
-    const unnamed = [left, right]
-      .filter((side): side is NeighbourSide => side !== null && isDefaultPaneTitle(side.title))
-      .map((side) => side.paneId)
+  function loadStripCommands(): void {
+    const unnamed = panesToAskCommands(layout, columnHeight())
     const key = `${layout.focusedPaneId}|${unnamed.join(',')}`
-    if (key === neighbourKey) return
-    neighbourKey = key
+    if (key === stripKey) return
+    stripKey = key
     if (unnamed.length === 0) return
     void options.api.foregroundCommands(unnamed).then((commands) => {
-      for (const paneId of unnamed) neighbourCommands.set(paneId, commands[paneId] ?? '')
-      if (active) options.onTitle(spec.name, focusedPaneTitle(), barSides())
+      for (const paneId of unnamed) stripCommands.set(paneId, commands[paneId] ?? '')
+      if (active) options.onTitle(spec.name, barStrip())
     }).catch(() => {
       // The key was taken before the answer; clear it so the next publish asks again.
-      neighbourKey = ''
+      stripKey = ''
     })
   }
 
@@ -1239,8 +1222,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       }
       for (const record of records.values()) record.terminal.applyAppearance(appearance)
     },
-    focusedPaneTitle,
-    barSides,
+    barStrip,
     setActive(next) {
       active = next
       options.onWatchedPaneChanged()

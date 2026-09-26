@@ -82,13 +82,11 @@ const en = {
   appBar: {
     brand: 'Termspace',
     menu: 'Menu',
-    /* The strip: the session, then the focused pane when it has a title. */
-    titleWithPane: (session: string, pane: string) => `${session} · ${pane}`,
     /* The strip's sides: the pane a ←/→ move lands on, and how many columns lie past it. */
     neighbourArrowLeft: '‹',
     neighbourArrowRight: '›',
     neighbourBeyond: (count: string) => `+${count}`,
-    /* A neighbour with no title and no known command. */
+    /* A pane in the strip with no title and no known command. */
     neighbourUnnamed: '·',
     neighbourLeft: (chord: string) => `Focus the pane on the left (${chord})`,
     neighbourRight: (chord: string) => `Focus the pane on the right (${chord})`,
@@ -457,7 +455,6 @@ const ko: Catalog = {
   appBar: {
     brand: 'Termspace',
     menu: '메뉴',
-    titleWithPane: (session: string, pane: string) => `${session} · ${pane}`,
     neighbourArrowLeft: '‹',
     neighbourArrowRight: '›',
     neighbourBeyond: (count: string) => `+${count}`,
