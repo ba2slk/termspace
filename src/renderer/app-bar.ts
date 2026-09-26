@@ -251,12 +251,13 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
         paneId = value?.paneId ?? null
         element.hidden = value === null
         if (value === null) {
-          delete element.dataset['paneId']
+          delete element.dataset['namesPane']
           element.replaceChildren()
           return
         }
-        // The self-check reads which pane a side names from here.
-        element.dataset['paneId'] = value.paneId
+        // For the self-check. Not data-pane-id: `[data-pane-id]` means the pane
+        // itself, and the bar comes first in the document.
+        element.dataset['namesPane'] = value.paneId
         const arrow = part(
           'app-bar__nb-arrow',
           side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
