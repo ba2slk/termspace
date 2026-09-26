@@ -154,8 +154,13 @@ body {
 }
 
 /* The sides give way long before the centre does: the centre is what the bar is for. */
+/*
+ * Both sides take equal room, filled or not, so the centre text stays put as
+ * focus moves between end and inner columns. Basis 0 hands them only what the
+ * centre leaves, so a name ellipsizes before the centre gives way.
+ */
 .app-bar__nb {
-  flex: 0 1000 auto;
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -166,8 +171,19 @@ body {
   transition: color var(--dur) ease-out;
 }
 
+/* Content hugs the centre on both sides. */
+.app-bar__nb--left {
+  justify-content: flex-end;
+}
+
+.app-bar__nb--right {
+  justify-content: flex-start;
+}
+
+/* No neighbour: keep the slot so the centre does not shift; hidden also takes no clicks. */
 .app-bar__nb[hidden] {
-  display: none;
+  display: flex;
+  visibility: hidden;
 }
 
 .app-bar__nb:hover {

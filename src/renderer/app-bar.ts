@@ -84,6 +84,9 @@ function barButton(className: string, label: string, glyph: SVGElement): HTMLBut
   return button
 }
 
+/** Roughly the desktop double-click interval. */
+const SIDE_DBLCLICK_GUARD_MS = 400
+
 export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   const bar = document.createElement('header')
   bar.className = 'app-bar'
@@ -210,19 +213,12 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   title.className = 'app-bar__title'
 
   /*
-   * The strip that slides the canvas.
-   *
-   * It cannot be the whole bar: a -webkit-app-region: drag surface is hit
-   * tested by the window manager as the title bar, so the page never sees a
-   * wheel or a hover there. Only the no-drag islands did, which made the live
-   * area feel like scattered patches. This is one explicit no-drag block around
-   * the title, wide enough to aim at, with the bar either side still dragging
-   * the window.
-   *
-   * Nothing is drawn under it — a line there would push the panes away from the
-   * bar. Hovering brightens the canvas scrollbar instead, which is what ties
-   * the control to the thing it moves.
+   * A side can hide under the pointer between the two clicks of a double click
+   * (the move reaches an end column), and the second then lands on the strip.
+   * A double click this soon after a side click was aimed at the side.
    */
+  let lastSideClick = -Infinity
+
   function part(className: string, text: string): HTMLSpanElement {
     const span = document.createElement('span')
     span.className = className
@@ -240,6 +236,7 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
     element.hidden = true
     let paneId: string | null = null
     element.addEventListener('click', () => {
+      lastSideClick = performance.now()
       if (paneId !== null) hooks.onFocusPane(paneId)
     })
     // The strip maximises on a double click; two quick clicks here are two moves.
@@ -284,9 +281,26 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
     }
   }
 
+  /*
+   * The strip that slides the canvas.
+   *
+   * It cannot be the whole bar: a -webkit-app-region: drag surface is hit
+   * tested by the window manager as the title bar, so the page never sees a
+   * wheel or a hover there. Only the no-drag islands did, which made the live
+   * area feel like scattered patches. This is one explicit no-drag block around
+   * the title, wide enough to aim at, with the bar either side still dragging
+   * the window.
+   *
+   * Nothing is drawn under it — a line there would push the panes away from the
+   * bar. Hovering brightens the canvas scrollbar instead, which is what ties
+   * the control to the thing it moves.
+   */
   const pan = document.createElement('div')
   pan.className = 'app-bar__pan'
-  pan.addEventListener('dblclick', () => void api.window.toggleMaximize())
+  pan.addEventListener('dblclick', () => {
+    if (performance.now() - lastSideClick < SIDE_DBLCLICK_GUARD_MS) return
+    void api.window.toggleMaximize()
+  })
   const here = document.createElement('span')
   here.className = 'app-bar__here'
   here.textContent = t.appBar.brand
