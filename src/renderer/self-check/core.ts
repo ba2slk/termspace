@@ -5,6 +5,8 @@ import { CANVAS_BOTTOM, CANVAS_EDGE, maxColumnWidth } from '../layout-geometry'
 import { DEFAULT_COLUMN_WIDTH, FOLD_BAR_HEIGHT, MIN_COLUMN_WIDTH, PANE_GAP } from '../layout-model'
 import { MIN_OVERVIEW_COLUMN_PX, MIN_OVERVIEW_ROW_PX } from '../overview-model'
 import { MAX_WEBGL_CONTEXTS } from '../renderer-budget'
+import { isDefaultPaneTitle, stripName } from '../pane-title'
+import { t } from '../i18n'
 import {
   animationRuns,
   capture,
@@ -1268,17 +1270,31 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
   report['peekLabelsStayInsideTheirPane'] =
     spilled === '' ? `ok (${String(contained)} measured)` : `FAIL (${spilled})`
 
-  // The strip's centre is the focused pane's title alone; the session is not in it.
-  const focusedLabel = document
-    .querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused .pane__label')
-    ?.textContent
-  const bar = document.querySelector<HTMLElement>('.app-bar__here')?.textContent ?? ''
-  report['barNamesTheFocusedPane'] =
-    focusedLabel === undefined || focusedLabel === null || focusedLabel === ''
-      ? 'skipped: the focused pane has no title of its own'
-      : bar === focusedLabel
-        ? `ok (${bar})`
-        : `FAIL (bar reads "${bar}", pane is "${focusedLabel}")`
+  // The strip's centre names the focused pane alone, the session not in it:
+  // its title, else by the same rule the runtime uses, asked afresh here.
+  const focusedLabel =
+    document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused .pane__label')
+      ?.textContent ?? ''
+  const home = await api.userHome()
+  const expectedHere = async (): Promise<string> => {
+    const id = focusedId()
+    let command: string | null = null
+    let cwd: string | null = null
+    if (isDefaultPaneTitle(focusedLabel) && id !== undefined) {
+      command = (await api.foregroundCommands([id]))[id] ?? null
+      if ((command?.trim() ?? '') === '') cwd = await api.cwdOf(id)
+    }
+    return stripName(focusedLabel, command, cwd, home) ?? t.appBar.neighbourUnnamed
+  }
+  const barHere = (): string => document.querySelector<HTMLElement>('.app-bar__here')?.textContent ?? ''
+  let wanted = ''
+  const hereNamed = await waitForAsync(async () => {
+    wanted = await expectedHere()
+    return barHere() === wanted
+  })
+  report['barNamesTheFocusedPane'] = hereNamed
+    ? `ok (${barHere()})`
+    : `FAIL (bar reads "${barHere()}", expected "${wanted}")`
 
   holdPeek('keyup')
   await waitFor(() => shown().length === 0)
