@@ -41,7 +41,7 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
     return
   }
   report['appBar'] = 'ok'
-  report['appBarTitle'] = bar.querySelector('.app-bar__title')?.textContent ?? 'NONE'
+  report['appBarTitle'] = bar.querySelector('.app-bar__here')?.textContent ?? 'NONE'
   // mac has the native traffic lights instead of a drawn set of its own.
   const wins = bar.querySelectorAll('.app-bar__win').length
   const expectedWins = IS_MAC ? 0 : 3

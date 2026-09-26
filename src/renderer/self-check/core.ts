@@ -1272,7 +1272,7 @@ export async function checkPaneTitlePeek(report: Report): Promise<void> {
   const focusedLabel = document
     .querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused .pane__label')
     ?.textContent
-  const bar = document.querySelector<HTMLElement>('.app-bar__title')?.textContent ?? ''
+  const bar = document.querySelector<HTMLElement>('.app-bar__here')?.textContent ?? ''
   report['barNamesTheFocusedPane'] =
     focusedLabel === undefined || focusedLabel === null || focusedLabel === ''
       ? 'skipped: the focused pane has no title of its own'
