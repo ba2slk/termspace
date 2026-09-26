@@ -321,6 +321,55 @@ export async function checkBarNeighbours(report: Report): Promise<void> {
 }
 
 /**
+ * With the list hidden, the list toggle names the open session inside its own
+ * box; with the list shown, it is an icon again. Measured, since a label that
+ * is in the DOM but clipped to nothing names nothing.
+ */
+export async function checkSessionNameOnToggle(report: Report): Promise<void> {
+  const workspace = document.querySelector<HTMLElement>('.workspace')
+  const label = document.querySelector<HTMLElement>('.app-bar__btn-label')
+  const button = label?.closest<HTMLElement>('button') ?? null
+  const session = document.querySelector('.sidebar__row--current .sidebar__name')?.textContent ?? ''
+  if (workspace === null || label === null || button === null || session === '') {
+    report['sessionNameOnListToggle'] = `FAIL (${
+      label === null ? 'no label on the list toggle' : 'no current session in the list'
+    })`
+    return
+  }
+  const collapsed = (): boolean => workspace.classList.contains('canvas--sidebar-hidden')
+  const shownText = (): string | null => {
+    const box = label.getBoundingClientRect()
+    const within = button.getBoundingClientRect()
+    const inside = box.left >= within.left - 1 && box.right <= within.right + 1
+    return box.width > 0 && inside ? label.textContent : null
+  }
+  const setCollapsed = async (want: boolean): Promise<boolean> => {
+    if (collapsed() !== want) press('KeyS', { altKey: true })
+    return waitFor(() => collapsed() === want)
+  }
+
+  const startedCollapsed = collapsed()
+  let result: string
+  if (!(await setCollapsed(true))) {
+    result = 'FAIL (Alt+S did not hide the list)'
+  } else {
+    await waitFor(() => shownText() === session)
+    const whileHidden = shownText()
+    if (whileHidden !== session) {
+      result = `FAIL (list hidden, toggle reads ${JSON.stringify(whileHidden)}, session is "${session}")`
+    } else if (!(await setCollapsed(false))) {
+      result = 'FAIL (Alt+S did not show the list)'
+    } else {
+      result = (await waitFor(() => shownText() === null))
+        ? `ok (${session})`
+        : `FAIL (list shown, toggle still reads ${JSON.stringify(shownText())})`
+    }
+  }
+  report['sessionNameOnListToggle'] = result
+  await setCollapsed(startedCollapsed)
+}
+
+/**
  * The count beside the current session must be the live one.
  *
  * It used to come from the YAML, which a split never touches, so the number

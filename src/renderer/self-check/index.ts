@@ -9,6 +9,7 @@ import { api } from '../api'
 import {
   checkAppBarMenu,
   checkBarNeighbours,
+  checkSessionNameOnToggle,
   checkKeybindings,
   checkPaneJump,
   checkScrollbackSearch,
@@ -134,6 +135,7 @@ const GROUPS: Readonly<
     await checkBarNeighbours(report)
     await checkSidebar(report)
     await capture(report, 'sidebar-collapsed-then-restored')
+    await checkSessionNameOnToggle(report)
     await checkScrollbackSearch(report)
     await capture(report, 'search-closed')
     await checkSettings(report)
