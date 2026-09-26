@@ -249,7 +249,11 @@ English copy.
 - **Each side of the title names the pane `Alt+←` / `Alt+→` lands on** (the side is read
   from the bar, the key is pressed, and focus has to arrive exactly there; checked as drawn
   inside the strip, not as present in the DOM). Clicking a side focuses that pane, and a
-  closed column never lingers as a side (`barNeighbours*`)
+  closed column never lingers as a side (`barNeighbours*`). The centre is the focused
+  pane's title alone (`barNamesTheFocusedPane`)
+- **With the session list hidden, its toggle names the session** (the label is measured
+  inside the button's box with the open session's name, then gone once the list is back;
+  nothing else on screen names the session while the list is away) (`sessionNameOnListToggle`)
 - **The canvas scrollbar is visible even when not scrolling** (it's the only indication
   that more exists off screen, and an indicator that hides says nothing)
 - The scrollbar does not extend over the sidebar — it belongs to the canvas, not the
@@ -333,7 +337,7 @@ group starts from nothing open. The save half runs first in `sessions`.
   shell starts in `$HOME`, so a root taken from the start would be wrong
 - A taken name disables the button with the "pick another" wording
   (`defaultTerminalRefusesTaken`) — this dialog must never overwrite a session
-- Saving removes the slot and the title bar shows the new name (`defaultTerminalSaved`)
+- Saving removes the slot and the window title shows the new name (`defaultTerminalSaved`)
 - The same xterm, with its earlier output, is on screen after the save
   (`defaultTerminalKeepsPty`) — a save that restarted the shell would kill what ran in it
 
@@ -637,13 +641,19 @@ These can't be replaced by automated judgment. They're matters of impression, no
 
 ### Neighbours in the title bar (by eye)
 
-- [ ] **Neighbours in the title bar.** With a column as wide as the window, the title reads
-      `<left> ‹ <session> · <pane> › <right>`, and each side names the pane `Alt+←` /
+- [ ] **Neighbours in the title bar.** With a column as wide as the window, the strip reads
+      `‹ • +N <left>   <pane>   <right> +N • ›`: the focused pane alone in the centre, no
+      session name, the arrows at the outer ends. Each side names the pane `Alt+←` /
       `Alt+→` (mac `Cmd+←` / `Cmd+→`) would land on. An untitled pane shows what it is
       running. `+N` counts the columns beyond; a gold dot means something on that side
       rang. Narrow the window until the bar is cramped: the side names shorten before the
       centre does. Double-clicking a side name moves focus twice and does not maximise the
       window
+- [ ] **Session name on the list toggle.** Hide the session list (`Alt+S`): the toggle
+      button beside the menu shows the session's name right of its icon, one hover
+      background for both, and clicking the name shows the list again. A long name ends
+      in an ellipsis. With the list shown the button is an icon again. On mac the button
+      still clears the traffic lights (`sessionNameOnListToggle` measures the rest)
 
 ### Fold the other panes (no self-check covers this)
 
@@ -655,7 +665,7 @@ These can't be replaced by automated judgment. They're matters of impression, no
 ### Renaming (no self-check covers these)
 
 - [ ] Right-click a session row › Rename session, type a new name and press Enter. The row
-      and the title bar show it, and in `~/.config/termspace/sessions/` the file itself has
+      and the window title show it, and in `~/.config/termspace/sessions/` the file itself has
       moved to `<new-id>.yaml` — new `name:`, comments intact, the old file gone, and
       `<new-id>.yaml.bak` holding the file as it stood before the rename. The session keeps
       running throughout, and the name survives a restart
