@@ -246,6 +246,10 @@ English copy.
 - **Rolling the wheel over the title bar moves the canvas** (synthetic events only verify
   the wiring. Whether a real mouse reaches the window-drag region is an OS hit test, so a
   human has to look)
+- **Each side of the title names the pane `Alt+←` / `Alt+→` lands on** (the side is read
+  from the bar, the key is pressed, and focus has to arrive exactly there; checked as drawn
+  inside the strip, not as present in the DOM). Clicking a side focuses that pane, and a
+  closed column never lingers as a side (`barNeighbours*`)
 - **The canvas scrollbar is visible even when not scrolling** (it's the only indication
   that more exists off screen, and an indicator that hides says nothing)
 - The scrollbar does not extend over the sidebar — it belongs to the canvas, not the
@@ -630,6 +634,16 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Rename a pane in the default terminal, then save: the saved file carries that name
 - [ ] Korean locale (`locale: ko`, restart): "기본", "저장 안 됨", "세션으로 저장" and
       "새 터미널" read naturally and fit the row
+
+### Neighbours in the title bar (by eye)
+
+- [ ] **Neighbours in the title bar.** With a column as wide as the window, the title reads
+      `<left> ‹ <session> · <pane> › <right>`, and each side names the pane `Alt+←` /
+      `Alt+→` (mac `Cmd+←` / `Cmd+→`) would land on. An untitled pane shows what it is
+      running. `+N` counts the columns beyond; a gold dot means something on that side
+      rang. Narrow the window until the bar is cramped: the side names shorten before the
+      centre does. Double-clicking a side name moves focus twice and does not maximise the
+      window
 
 ### Fold the other panes (no self-check covers this)
 

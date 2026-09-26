@@ -189,6 +189,120 @@ export async function checkSplitControl(report: Report): Promise<void> {
 }
 
 /**
+ * The strip names the panes a ←/→ move lands on. Measured as drawn: a side
+ * that is in the DOM but has no box, or sits outside the strip, is not shown.
+ */
+export async function checkBarNeighbours(report: Report): Promise<void> {
+  const strip = document.querySelector<HTMLElement>('.app-bar__pan')
+  if (strip === null) {
+    report['barNeighboursDrawn'] = 'FAIL (no strip)'
+    return
+  }
+  const side = (which: 'left' | 'right'): HTMLElement | null =>
+    document.querySelector<HTMLElement>(`.app-bar__nb--${which}`)
+  const names = (which: 'left' | 'right'): string | undefined => side(which)?.dataset['namesPane']
+  const drawn = (which: 'left' | 'right'): boolean => {
+    const el = side(which)
+    if (el === null || el.hidden) return false
+    const box = el.getBoundingClientRect()
+    const bounds = strip.getBoundingClientRect()
+    return box.width > 0 && box.left >= bounds.left - 1 && box.right <= bounds.right + 1
+  }
+
+  const before = panes().length
+  const hadSides = drawn('left') || drawn('right')
+
+  /*
+   * A fresh one-pane column each side, so both sides name something known.
+   * The pane to come back to is wherever the move lands, not the one we left:
+   * a move goes to the pane drawn across, which in a split column need not be it.
+   */
+  press('ArrowLeft', { altKey: true, shiftKey: true })
+  await waitFor(() => panes().length === before + 1)
+  const leftId = focusedId()
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() !== leftId)
+  press('ArrowRight', { altKey: true, shiftKey: true })
+  await waitFor(() => panes().length === before + 2)
+  const rightId = focusedId()
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() !== rightId)
+
+  const bothDrawn = await waitFor(
+    () => drawn('left') && drawn('right') && names('left') === leftId && names('right') === rightId,
+  )
+  report['barNeighboursDrawn'] = bothDrawn
+    ? 'ok'
+    : `FAIL (left ${String(drawn('left'))}:${names('left') ?? '-'} want ${leftId ?? '-'}, ` +
+      `right ${String(drawn('right'))}:${names('right') ?? '-'} want ${rightId ?? '-'})`
+
+  // From the right column, the left side must be exactly where ← then lands.
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() === rightId)
+  const named = (await waitFor(() => drawn('left') && names('left') !== rightId))
+    ? names('left')
+    : undefined
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() !== rightId)
+  report['barNeighboursNameFocused'] =
+    named !== undefined && focusedId() === named
+      ? 'ok'
+      : `FAIL (left side named ${named ?? 'nothing'}, ← landed on ${
+          focusedId() ?? 'none'
+        })`
+
+  // Clicking a side moves focus there, unless the setting made the strip a drag region.
+  if (strip.classList.contains('app-bar__pan--off')) {
+    report['barNeighboursClick'] = 'skipped (bar panning is off)'
+  } else {
+    await waitFor(() => drawn('right') && names('right') === rightId)
+    side('right')?.click()
+    report['barNeighboursClick'] = (await waitFor(() => focusedId() === rightId))
+      ? 'ok'
+      : `FAIL (focus ${focusedId() ?? 'none'}, expected ${rightId ?? 'none'})`
+  }
+
+  // Undo. No helper focuses a pane by id, so walk there; each press is one column.
+  const walkTo = async (
+    id: string | undefined,
+    dir: 'ArrowLeft' | 'ArrowRight',
+  ): Promise<boolean> => {
+    for (let i = 0; i < 16 && focusedId() !== id; i++) {
+      const was = focusedId()
+      press(dir, { altKey: true })
+      if (!(await waitFor(() => focusedId() !== was))) break
+    }
+    return focusedId() === id
+  }
+  if (await walkTo(rightId, 'ArrowRight')) {
+    press('KeyW', { altKey: true, shiftKey: true })
+    await waitFor(() => panes().length === before + 1)
+  }
+  if (await walkTo(leftId, 'ArrowLeft')) {
+    press('KeyW', { altKey: true, shiftKey: true })
+    await waitFor(() => panes().length === before)
+  }
+  if (panes().length !== before) {
+    report['barNeighboursCleanup'] =
+      `FAIL (${String(panes().length)} panes, started with ${String(before)})`
+  }
+
+  // A closed column must not live on as a side; with nothing else around, both go.
+  const live = new Set(panes().map((p) => p.dataset['paneId']))
+  const sideIsLive = (which: 'left' | 'right'): boolean => {
+    const id = names(which)
+    return side(which)?.hidden === true ? id === undefined : id !== undefined && live.has(id)
+  }
+  const cleared = await waitFor(() =>
+    hadSides ? sideIsLive('left') && sideIsLive('right') : !drawn('left') && !drawn('right'),
+  )
+  report['barNeighboursClearOnClose'] = cleared
+    ? `ok (${hadSides ? 'sides name live panes' : 'no sides left'})`
+    : `FAIL (left ${names('left') ?? '-'}, right ${names('right') ?? '-'} ` +
+      `after closing ${leftId ?? '-'} and ${rightId ?? '-'})`
+}
+
+/**
  * The count beside the current session must be the live one.
  *
  * It used to come from the YAML, which a split never touches, so the number

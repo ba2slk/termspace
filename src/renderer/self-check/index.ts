@@ -8,6 +8,7 @@
 import { api } from '../api'
 import {
   checkAppBarMenu,
+  checkBarNeighbours,
   checkKeybindings,
   checkPaneJump,
   checkScrollbackSearch,
@@ -130,6 +131,7 @@ const GROUPS: Readonly<
     // keydown at window capture, so close it before anything key-driven runs.
     press('Escape')
     await waitFor(() => document.querySelector<HTMLElement>('.command-menu:not([hidden])') === null)
+    await checkBarNeighbours(report)
     await checkSidebar(report)
     await capture(report, 'sidebar-collapsed-then-restored')
     await checkScrollbackSearch(report)
