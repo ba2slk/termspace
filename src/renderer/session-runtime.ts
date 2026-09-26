@@ -41,7 +41,12 @@ import { layoutSnapshot } from './layout-snapshot'
 import { createOverviewView } from './overview-view'
 import { createPaneJumpView } from './pane-jump-view'
 import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
-import { barStrip as stripOf, panesToAskCommands, type BarStrip } from './bar-neighbours'
+import {
+  barStrip as stripOf,
+  panesToAskCommands,
+  type BarStrip,
+  type PaneFacts,
+} from './bar-neighbours'
 import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
 import { attachResizeDrag } from './resize-drag'
 import { createSearchBar } from './search-bar'
@@ -510,8 +515,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
   // ── State ────────────────────────────────────────────
 
-  /** What untitled strip panes are running. Filled on demand, never polled. */
-  const stripCommands = new Map<string, string>()
+  /** What untitled strip panes run, or where they sit idle. Filled on demand, never polled. */
+  const stripFacts = new Map<string, PaneFacts>()
   let stripKey = ''
 
   function barStrip(): BarStrip {
@@ -519,7 +524,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       layout,
       columnHeight(),
       (paneId) => attention.has(paneId),
-      (paneId) => stripCommands.get(paneId) ?? null,
+      (paneId) => stripFacts.get(paneId) ?? { command: null, cwd: null },
+      options.home,
     )
   }
 
@@ -527,23 +533,33 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     // Only the visible session owns the bar; a background one would overwrite it.
     if (!active) return
     options.onTitle(spec.name, barStrip())
-    loadStripCommands()
+    loadStripFacts()
   }
 
   /**
    * Asked when focus or the untitled strip panes change, not on every publish:
-   * a resize drag publishes each frame.
+   * a resize drag publishes each frame. A pane with no foreground program is
+   * an idle shell, so only those are asked for their folder.
    */
-  function loadStripCommands(): void {
+  function loadStripFacts(): void {
     const unnamed = panesToAskCommands(layout, columnHeight())
     const key = `${layout.focusedPaneId}|${unnamed.join(',')}`
     if (key === stripKey) return
     stripKey = key
     if (unnamed.length === 0) return
-    void options.api.foregroundCommands(unnamed).then((commands) => {
-      for (const paneId of unnamed) stripCommands.set(paneId, commands[paneId] ?? '')
+    void (async () => {
+      const commands = await options.api.foregroundCommands(unnamed)
+      const idle = unnamed.filter((paneId) => (commands[paneId]?.trim() ?? '') === '')
+      const cwds = await Promise.all(idle.map((paneId) => options.api.cwdOf(paneId)))
+      for (const paneId of unnamed) {
+        const at = idle.indexOf(paneId)
+        stripFacts.set(paneId, {
+          command: commands[paneId] ?? null,
+          cwd: at === -1 ? null : cwds[at] ?? null,
+        })
+      }
       if (active) options.onTitle(spec.name, barStrip())
-    }).catch(() => {
+    })().catch(() => {
       // The key was taken before the answer; clear it so the next publish asks again.
       stripKey = ''
     })
