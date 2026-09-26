@@ -1244,10 +1244,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // Arriving is a look too. A pane that rang while this session was off
       // screen is usually the focused one, so nothing is clicked on the way in
       // and a mark waiting on a focus change would never come down.
-      if (next && attention.delete(layout.focusedPaneId)) {
-        options.onAttentionChanged()
-        publishTitle()
-      }
+      if (next && attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      // A neighbour that rang while a dialog silenced this session never reached the bar.
+      if (next) publishTitle()
       if (!next) {
         searchBar.close()
         overview.close()
