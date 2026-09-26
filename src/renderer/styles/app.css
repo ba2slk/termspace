@@ -117,7 +117,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  /* Wide enough that the nearest neighbour name does not read as part of the centre. */
+  gap: 24px;
   height: var(--ctl-h);
   border-radius: var(--radius-sm);
   font-size: var(--fs-ui-sm);

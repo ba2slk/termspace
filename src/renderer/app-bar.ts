@@ -245,7 +245,10 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
     return span
   }
 
-  /** One side of the strip. Reads outward from the centre: arrow, name, count, dot. */
+  /**
+   * One side of the strip. Reads outward from the centre: name, count, dot,
+   * arrow. The arrow sits at the outer end: `A › B` reads as B inside A.
+   */
   function neighbourSlot(side: 'left' | 'right'): {
     element: HTMLElement
     set(value: BarSide | null): void
@@ -274,10 +277,6 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
         // For the self-check. Not data-pane-id: `[data-pane-id]` means the pane
         // itself, and the bar comes first in the document.
         element.dataset['namesPane'] = value.paneId
-        const arrow = part(
-          'app-bar__nb-arrow',
-          side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
-        )
         const outward: HTMLElement[] = [
           part('app-bar__nb-name', value.name ?? t.appBar.neighbourUnnamed),
         ]
@@ -289,9 +288,13 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
           dot.setAttribute('aria-label', t.appBar.neighbourWants)
           outward.push(dot)
         }
-        element.replaceChildren(
-          ...(side === 'left' ? [...outward.reverse(), arrow] : [arrow, ...outward]),
+        outward.push(
+          part(
+            'app-bar__nb-arrow',
+            side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
+          ),
         )
+        element.replaceChildren(...(side === 'left' ? outward.reverse() : outward))
         element.title =
           side === 'left'
             ? t.appBar.neighbourLeft(hooks.hint('focus-left'))
