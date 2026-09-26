@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barTitle, DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
+import { barTitle, DEFAULT_PANE_TITLE, isDefaultPaneTitle, neighbourName } from './pane-title'
 
 const compose = (session: string, pane: string): string => `${session} · ${pane}`
 
@@ -32,5 +32,21 @@ describe('barTitle', () => {
 
   it('trims the pane title it shows', () => {
     expect(barTitle('work', '  server  ', compose)).toBe('work · server')
+  })
+})
+
+describe('neighbourName', () => {
+  it('uses a title someone chose, trimmed', () => {
+    expect(neighbourName('  api  ', 'node')).toBe('api')
+  })
+
+  it('falls back to what the pane is running when the title is the default', () => {
+    expect(neighbourName(DEFAULT_PANE_TITLE, 'nvim')).toBe('nvim')
+    expect(neighbourName('', '  htop ')).toBe('htop')
+  })
+
+  it('is null when there is neither a title nor a command', () => {
+    expect(neighbourName(DEFAULT_PANE_TITLE, null)).toBeNull()
+    expect(neighbourName(DEFAULT_PANE_TITLE, '   ')).toBeNull()
   })
 })
