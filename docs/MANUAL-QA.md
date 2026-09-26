@@ -250,7 +250,10 @@ English copy.
   from the bar, the key is pressed, and focus has to arrive exactly there; checked as drawn
   inside the strip, not as present in the DOM). Clicking a side focuses that pane, and a
   closed column never lingers as a side (`barNeighbours*`). The centre is the focused
-  pane's title alone (`barNamesTheFocusedPane`)
+  pane alone (`barNamesTheFocusedPane`). A pane nobody titled goes by the program in its
+  foreground, name only (`nvim`, not `/usr/bin/nvim -p a b`), or, as an idle shell, by its
+  folder (`termspace/`, `~` at home); a fresh column's side must read its folder, not the
+  placeholder (`barNeighboursNameIdleByFolder`)
 - **With the session list hidden, its toggle names the session** (the label is measured
   inside the button's box with the open session's name, then gone once the list is back;
   nothing else on screen names the session while the list is away) (`sessionNameOnListToggle`)
