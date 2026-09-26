@@ -560,6 +560,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     void options.api.foregroundCommands(unnamed).then((commands) => {
       for (const paneId of unnamed) neighbourCommands.set(paneId, commands[paneId] ?? '')
       if (active) options.onTitle(spec.name, focusedPaneTitle(), barSides())
+    }).catch(() => {
+      // The key was taken before the answer; clear it so the next publish asks again.
+      neighbourKey = ''
     })
   }
 
@@ -1276,6 +1279,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     focusPane(paneId) {
       if (!records.has(paneId)) return false
+      // A caller names the pane, so it lands in one go: behind a zoom or the
+      // map it would take the keys while hidden.
+      overview.close()
+      exitZoom()
       // setLayout is a no-op for the pane that is already focused, but the
       // canvas may have been scrolled away from it since. setLayout closes the
       // jump on the other branch; this one has to do it itself, or the panel
