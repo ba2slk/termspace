@@ -211,6 +211,32 @@ export async function checkBarNeighbours(report: Report): Promise<void> {
 
   const before = panes().length
   const hadSides = drawn('left') || drawn('right')
+  const home = focusedId()
+
+  // No helper focuses a pane by id, so walk there; each press is one column.
+  const walkTo = async (
+    id: string | undefined,
+    dir: 'ArrowLeft' | 'ArrowRight',
+  ): Promise<boolean> => {
+    for (let i = 0; i < 16 && focusedId() !== id; i++) {
+      const was = focusedId()
+      press(dir, { altKey: true })
+      if (!(await waitFor(() => focusedId() !== was))) break
+    }
+    return focusedId() === id
+  }
+  // Close only a column this check added; a failed add leaves focus on one it did not.
+  const closeAdded = async (
+    id: string | undefined,
+    dir: 'ArrowLeft' | 'ArrowRight',
+  ): Promise<void> => {
+    if (id === undefined || id === home) return
+    if (await walkTo(id, dir)) {
+      const count = panes().length
+      press('KeyW', { altKey: true, shiftKey: true })
+      await waitFor(() => panes().length === count - 1)
+    }
+  }
 
   /*
    * A fresh one-pane column each side, so both sides name something known.
@@ -220,11 +246,20 @@ export async function checkBarNeighbours(report: Report): Promise<void> {
   press('ArrowLeft', { altKey: true, shiftKey: true })
   await waitFor(() => panes().length === before + 1)
   const leftId = focusedId()
+  if (leftId === undefined || leftId === home) {
+    report['barNeighboursDrawn'] = 'FAIL (the left column was not added)'
+    return
+  }
   press('ArrowRight', { altKey: true })
   await waitFor(() => focusedId() !== leftId)
   press('ArrowRight', { altKey: true, shiftKey: true })
   await waitFor(() => panes().length === before + 2)
   const rightId = focusedId()
+  if (rightId === undefined || rightId === home || rightId === leftId) {
+    report['barNeighboursDrawn'] = 'FAIL (the right column was not added)'
+    await closeAdded(leftId, 'ArrowLeft')
+    return
+  }
   press('ArrowLeft', { altKey: true })
   await waitFor(() => focusedId() !== rightId)
 
@@ -262,26 +297,9 @@ export async function checkBarNeighbours(report: Report): Promise<void> {
       : `FAIL (focus ${focusedId() ?? 'none'}, expected ${rightId ?? 'none'})`
   }
 
-  // Undo. No helper focuses a pane by id, so walk there; each press is one column.
-  const walkTo = async (
-    id: string | undefined,
-    dir: 'ArrowLeft' | 'ArrowRight',
-  ): Promise<boolean> => {
-    for (let i = 0; i < 16 && focusedId() !== id; i++) {
-      const was = focusedId()
-      press(dir, { altKey: true })
-      if (!(await waitFor(() => focusedId() !== was))) break
-    }
-    return focusedId() === id
-  }
-  if (await walkTo(rightId, 'ArrowRight')) {
-    press('KeyW', { altKey: true, shiftKey: true })
-    await waitFor(() => panes().length === before + 1)
-  }
-  if (await walkTo(leftId, 'ArrowLeft')) {
-    press('KeyW', { altKey: true, shiftKey: true })
-    await waitFor(() => panes().length === before)
-  }
+  // Undo.
+  await closeAdded(rightId, 'ArrowRight')
+  await closeAdded(leftId, 'ArrowLeft')
   if (panes().length !== before) {
     report['barNeighboursCleanup'] =
       `FAIL (${String(panes().length)} panes, started with ${String(before)})`
