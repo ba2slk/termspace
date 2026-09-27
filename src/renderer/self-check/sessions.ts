@@ -1514,13 +1514,19 @@ export async function checkHerdrKeys(report: Report): Promise<void> {
   }
   report['herdrStopRefusesIdle'] = !probe.ok && probe.reason === 'not-herdr' ? 'ok' : `FAIL (${JSON.stringify(probe)})`
 
+  const inHerdr = async (): Promise<boolean> => (await foreground())?.includes('herdr') === true
   press('KeyH', { altKey: true })
-  const attached = await waitForAsync(async () => (await foreground())?.includes('herdr') === true, 8000)
+  const attached = await waitForAsync(inHerdr, 8000)
   report['herdrWrapAttaches'] = attached ? 'ok' : `FAIL (foreground: ${String(await foreground())})`
-  if (!attached) return
 
+  // Stop whatever the verdict: a late attach would leave herdr in the pane the next check types into.
+  const seen = attached || (await waitForAsync(inHerdr, 4000))
   press('KeyH', { altKey: true, shiftKey: true })
   const idle = await waitForAsync(async () => (await foreground()) === null, 8000)
+  if (!seen && idle) {
+    report['herdrStopReturnsToShell'] = 'skipped (nothing attached to stop)'
+    return
+  }
   report['herdrStopReturnsToShell'] = idle ? 'ok' : `FAIL (foreground: ${String(await foreground())})`
   report['herdrKeysNote'] = 'a stopped herdr session named after this session remains in herdr session list'
 }
