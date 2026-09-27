@@ -113,17 +113,17 @@ body {
  */
 .app-bar__pan {
   -webkit-app-region: no-drag;
-  flex: 0 1 360px;
+  flex: 0 1 520px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   height: var(--ctl-h);
   border-radius: var(--radius-sm);
   font-size: var(--fs-ui-sm);
   color: var(--fg-dim);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   transition:
     background var(--dur) ease-out,
     color var(--dur) ease-out;
@@ -144,6 +144,82 @@ body {
   background: none;
   color: var(--fg-dim);
   cursor: default;
+}
+
+.app-bar__here {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The sides give way long before the centre does: the centre is what the bar is for. */
+/*
+ * Both sides take equal room, filled or not, so the centre text stays put as
+ * focus moves between end and inner columns. Basis 0 hands them only what the
+ * centre leaves, so a name ellipsizes before the centre gives way.
+ */
+.app-bar__nb {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-faint);
+  cursor: pointer;
+  overflow: hidden;
+  transition: color var(--dur) ease-out;
+}
+
+/* Content hugs the centre on both sides. */
+.app-bar__nb--left {
+  justify-content: flex-end;
+}
+
+.app-bar__nb--right {
+  justify-content: flex-start;
+}
+
+/* No neighbour: keep the slot so the centre does not shift; hidden also takes no clicks. */
+.app-bar__nb[hidden] {
+  display: flex;
+  visibility: hidden;
+}
+
+.app-bar__nb:hover {
+  color: var(--fg);
+}
+
+.app-bar__nb-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-bar__nb-arrow,
+.app-bar__nb-count,
+.app-bar__nb-dot {
+  flex: none;
+}
+
+.app-bar__nb-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.app-bar__nb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wants);
+}
+
+/* A drag region takes no clicks, so nothing here should promise one. */
+.app-bar__pan--off .app-bar__nb {
+  cursor: default;
+}
+
+.app-bar__pan--off .app-bar__nb:hover {
+  color: var(--fg-faint);
 }
 
 .app-bar__btn,

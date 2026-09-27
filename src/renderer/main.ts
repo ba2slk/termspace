@@ -11,6 +11,7 @@ import { createAppBar } from './app-bar'
 import { createEmptyCanvas } from './empty-canvas'
 import { resolveFocusBorder } from './focus-border'
 import { barTitle } from './pane-title'
+import { NO_SIDES, type BarSides } from './bar-neighbours'
 import { nextPeek, type PeekEvent } from './peek-state'
 import { createCommandMenu, type CommandItem } from './command-menu'
 import {
@@ -231,6 +232,7 @@ const appBar = createAppBar(shell, {
   hasSession: () => current() !== undefined,
   onSave: () => void saveCurrentLayout(),
   onPan: (delta, deltaMode) => current()?.panCanvas(delta, deltaMode),
+  onFocusPane: (paneId) => void current()?.focusPane(paneId),
   barPans: () => settings.barPanning === 1,
   hint: hintFor,
 })
@@ -394,7 +396,8 @@ async function renameSession(id: string, newName: string): Promise<void> {
   moveRuntime(id, newId)
   sessions.get(newId)?.runtime.rename(newName)
   if (newId === currentName) {
-    setTitle(newName, sessions.get(newId)?.runtime.focusedPaneTitle() ?? null)
+    const runtime = sessions.get(newId)?.runtime
+    setTitle(newName, runtime?.focusedPaneTitle() ?? null, runtime?.barSides())
   }
   await refreshSidebar()
 }
@@ -694,7 +697,7 @@ async function adoptSavedTerminal(file: string): Promise<void> {
     runtime.rename(loaded.spec.name)
     runtime.rebase(loaded.spec.cwd)
   }
-  if (currentName === id) setTitle(runtime.spec.name, runtime.focusedPaneTitle())
+  if (currentName === id) setTitle(runtime.spec.name, runtime.focusedPaneTitle(), runtime.barSides())
   await refreshSidebar()
   toast.show(t.firstRun.saved(file.split('/').pop() ?? file))
 }
@@ -954,11 +957,16 @@ function stepToSession(delta: 1 | -1): void {
  * nothing you don't already know. It stays in the window title, which is what
  * the taskbar reads.
  */
-function setTitle(session: string | null, paneTitle: string | null = null): void {
+function setTitle(
+  session: string | null,
+  paneTitle: string | null = null,
+  sides: BarSides = NO_SIDES,
+): void {
   // The taskbar keeps naming the session alone: a pane title changes with every
   // focus move, and a window entry that renames itself that often is noise.
   document.title = session === null ? t.firstRun.appName : t.firstRun.windowTitle(session)
-  appBar.setTitle(session === null ? '' : barTitle(session, paneTitle, t.appBar.titleWithPane))
+  const text = session === null ? '' : barTitle(session, paneTitle, t.appBar.titleWithPane)
+  appBar.setTitle({ text, ...(session === null ? NO_SIDES : sides) })
 }
 
 function showOnly(name: string | null): void {

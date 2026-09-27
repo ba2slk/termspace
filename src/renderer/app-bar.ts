@@ -13,6 +13,7 @@ import { createCommandMenu, type CommandItem } from './command-menu'
 import { createUpdateChip } from './update-chip'
 import type { UpdateState } from '../shared/protocol'
 import type { ActionId } from '../shared/keybindings'
+import type { BarSide, BarTitle } from './bar-neighbours'
 
 export interface AppBarHooks {
   /** Commands for ☰; asked each time since they depend on session state. */
@@ -35,13 +36,16 @@ export interface AppBarHooks {
   readonly onPan: (delta: number, deltaMode: number) => void
   /** Whether panning from the bar is enabled at all. */
   readonly barPans: () => boolean
+  /** Focus a pane of the open session, as a ←/→ press would. */
+  readonly onFocusPane: (paneId: string) => void
   /** The chord for an action, as the user has it bound right now. */
   readonly hint: (id: ActionId) => string
 }
 
 export interface AppBar {
   readonly element: HTMLElement
-  setTitle(title: string): void
+  /** The centre text and the panes either side of the focused one. */
+  setTitle(title: BarTitle): void
   setSidebarVisible(visible: boolean): void
   /** Re-evaluate whether the split controls are enabled. */
   syncControls(): void
@@ -79,6 +83,9 @@ function barButton(className: string, label: string, glyph: SVGElement): HTMLBut
   button.append(glyph)
   return button
 }
+
+/** Roughly the desktop double-click interval. */
+const SIDE_DBLCLICK_GUARD_MS = 400
 
 export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   const bar = document.createElement('header')
@@ -206,6 +213,75 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   title.className = 'app-bar__title'
 
   /*
+   * A side can hide under the pointer between the two clicks of a double click
+   * (the move reaches an end column), and the second then lands on the strip.
+   * A double click this soon after a side click was aimed at the side.
+   */
+  let lastSideClick = -Infinity
+
+  function part(className: string, text: string): HTMLSpanElement {
+    const span = document.createElement('span')
+    span.className = className
+    span.textContent = text
+    return span
+  }
+
+  /** One side of the strip. Reads outward from the centre: arrow, name, count, dot. */
+  function neighbourSlot(side: 'left' | 'right'): {
+    element: HTMLElement
+    set(value: BarSide | null): void
+  } {
+    const element = document.createElement('span')
+    element.className = `app-bar__nb app-bar__nb--${side}`
+    element.hidden = true
+    let paneId: string | null = null
+    element.addEventListener('click', () => {
+      lastSideClick = performance.now()
+      if (paneId !== null) hooks.onFocusPane(paneId)
+    })
+    // The strip maximises on a double click; two quick clicks here are two moves.
+    element.addEventListener('dblclick', (event) => event.stopPropagation())
+
+    return {
+      element,
+      set(value) {
+        paneId = value?.paneId ?? null
+        element.hidden = value === null
+        if (value === null) {
+          delete element.dataset['namesPane']
+          element.replaceChildren()
+          return
+        }
+        // For the self-check. Not data-pane-id: `[data-pane-id]` means the pane
+        // itself, and the bar comes first in the document.
+        element.dataset['namesPane'] = value.paneId
+        const arrow = part(
+          'app-bar__nb-arrow',
+          side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
+        )
+        const outward: HTMLElement[] = [
+          part('app-bar__nb-name', value.name ?? t.appBar.neighbourUnnamed),
+        ]
+        if (value.beyond > 0) {
+          outward.push(part('app-bar__nb-count', t.appBar.neighbourBeyond(String(value.beyond))))
+        }
+        if (value.wants) {
+          const dot = part('app-bar__nb-dot', '')
+          dot.setAttribute('aria-label', t.appBar.neighbourWants)
+          outward.push(dot)
+        }
+        element.replaceChildren(
+          ...(side === 'left' ? [...outward.reverse(), arrow] : [arrow, ...outward]),
+        )
+        element.title =
+          side === 'left'
+            ? t.appBar.neighbourLeft(hooks.hint('focus-left'))
+            : t.appBar.neighbourRight(hooks.hint('focus-right'))
+      },
+    }
+  }
+
+  /*
    * The strip that slides the canvas.
    *
    * It cannot be the whole bar: a -webkit-app-region: drag surface is hit
@@ -221,8 +297,16 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
    */
   const pan = document.createElement('div')
   pan.className = 'app-bar__pan'
-  pan.textContent = t.appBar.brand
-  pan.addEventListener('dblclick', () => void api.window.toggleMaximize())
+  pan.addEventListener('dblclick', () => {
+    if (performance.now() - lastSideClick < SIDE_DBLCLICK_GUARD_MS) return
+    void api.window.toggleMaximize()
+  })
+  const here = document.createElement('span')
+  here.className = 'app-bar__here'
+  here.textContent = t.appBar.brand
+  const leftSide = neighbourSlot('left')
+  const rightSide = neighbourSlot('right')
+  pan.append(leftSide.element, here, rightSide.element)
   title.append(pan)
 
   pan.addEventListener(
@@ -280,7 +364,9 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   return {
     element: bar,
     setTitle(value) {
-      pan.textContent = value
+      here.textContent = value.text
+      leftSide.set(value.left)
+      rightSide.set(value.right)
     },
     setSidebarVisible(value) {
       panelButton.classList.toggle('app-bar__btn--on', value)

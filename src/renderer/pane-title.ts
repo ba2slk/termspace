@@ -26,3 +26,13 @@ export function barTitle(
   if (paneTitle === null || isDefaultPaneTitle(paneTitle)) return session
   return compose(session, paneTitle.trim())
 }
+
+/**
+ * What the bar calls a pane beside the focused one: the title someone chose,
+ * else what it is running, else nothing (the view draws a placeholder).
+ */
+export function neighbourName(title: string, command: string | null): string | null {
+  if (!isDefaultPaneTitle(title)) return title.trim()
+  const running = command?.trim() ?? ''
+  return running === '' ? null : running
+}

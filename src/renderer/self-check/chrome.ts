@@ -41,7 +41,7 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
     return
   }
   report['appBar'] = 'ok'
-  report['appBarTitle'] = bar.querySelector('.app-bar__title')?.textContent ?? 'NONE'
+  report['appBarTitle'] = bar.querySelector('.app-bar__here')?.textContent ?? 'NONE'
   // mac has the native traffic lights instead of a drawn set of its own.
   const wins = bar.querySelectorAll('.app-bar__win').length
   const expectedWins = IS_MAC ? 0 : 3
@@ -186,6 +186,138 @@ export async function checkSplitControl(report: Report): Promise<void> {
   // Capture the open dropdown — spacing and tone need eyes.
   chevron.click()
   await waitFor(() => menuItems().length > 0)
+}
+
+/**
+ * The strip names the panes a ←/→ move lands on. Measured as drawn: a side
+ * that is in the DOM but has no box, or sits outside the strip, is not shown.
+ */
+export async function checkBarNeighbours(report: Report): Promise<void> {
+  const strip = document.querySelector<HTMLElement>('.app-bar__pan')
+  if (strip === null) {
+    report['barNeighboursDrawn'] = 'FAIL (no strip)'
+    return
+  }
+  const side = (which: 'left' | 'right'): HTMLElement | null =>
+    document.querySelector<HTMLElement>(`.app-bar__nb--${which}`)
+  const names = (which: 'left' | 'right'): string | undefined => side(which)?.dataset['namesPane']
+  const drawn = (which: 'left' | 'right'): boolean => {
+    const el = side(which)
+    if (el === null || el.hidden) return false
+    const box = el.getBoundingClientRect()
+    const bounds = strip.getBoundingClientRect()
+    return box.width > 0 && box.left >= bounds.left - 1 && box.right <= bounds.right + 1
+  }
+
+  const before = panes().length
+  const hadSides = drawn('left') || drawn('right')
+  const home = focusedId()
+
+  // No helper focuses a pane by id, so walk there; each press is one column.
+  const walkTo = async (
+    id: string | undefined,
+    dir: 'ArrowLeft' | 'ArrowRight',
+  ): Promise<boolean> => {
+    for (let i = 0; i < 16 && focusedId() !== id; i++) {
+      const was = focusedId()
+      press(dir, { altKey: true })
+      if (!(await waitFor(() => focusedId() !== was))) break
+    }
+    return focusedId() === id
+  }
+  // Close only a column this check added; a failed add leaves focus on one it did not.
+  const closeAdded = async (
+    id: string | undefined,
+    dir: 'ArrowLeft' | 'ArrowRight',
+  ): Promise<void> => {
+    if (id === undefined || id === home) return
+    if (await walkTo(id, dir)) {
+      const count = panes().length
+      press('KeyW', { altKey: true, shiftKey: true })
+      await waitFor(() => panes().length === count - 1)
+    }
+  }
+
+  /*
+   * A fresh one-pane column each side, so both sides name something known.
+   * The pane to come back to is wherever the move lands, not the one we left:
+   * a move goes to the pane drawn across, which in a split column need not be it.
+   */
+  press('ArrowLeft', { altKey: true, shiftKey: true })
+  await waitFor(() => panes().length === before + 1)
+  const leftId = focusedId()
+  if (leftId === undefined || leftId === home) {
+    report['barNeighboursDrawn'] = 'FAIL (the left column was not added)'
+    return
+  }
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() !== leftId)
+  press('ArrowRight', { altKey: true, shiftKey: true })
+  await waitFor(() => panes().length === before + 2)
+  const rightId = focusedId()
+  if (rightId === undefined || rightId === home || rightId === leftId) {
+    report['barNeighboursDrawn'] = 'FAIL (the right column was not added)'
+    await closeAdded(leftId, 'ArrowLeft')
+    return
+  }
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() !== rightId)
+
+  const bothDrawn = await waitFor(
+    () => drawn('left') && drawn('right') && names('left') === leftId && names('right') === rightId,
+  )
+  report['barNeighboursDrawn'] = bothDrawn
+    ? 'ok'
+    : `FAIL (left ${String(drawn('left'))}:${names('left') ?? '-'} want ${leftId ?? '-'}, ` +
+      `right ${String(drawn('right'))}:${names('right') ?? '-'} want ${rightId ?? '-'})`
+
+  // From the right column, the left side must be exactly where ← then lands.
+  press('ArrowRight', { altKey: true })
+  await waitFor(() => focusedId() === rightId)
+  const named = (await waitFor(() => drawn('left') && names('left') !== rightId))
+    ? names('left')
+    : undefined
+  press('ArrowLeft', { altKey: true })
+  await waitFor(() => focusedId() !== rightId)
+  report['barNeighboursNameFocused'] =
+    named !== undefined && focusedId() === named
+      ? 'ok'
+      : `FAIL (left side named ${named ?? 'nothing'}, ← landed on ${
+          focusedId() ?? 'none'
+        })`
+
+  // Clicking a side moves focus there, unless the setting made the strip a drag region.
+  if (strip.classList.contains('app-bar__pan--off')) {
+    report['barNeighboursClick'] = 'skipped (bar panning is off)'
+  } else {
+    await waitFor(() => drawn('right') && names('right') === rightId)
+    side('right')?.click()
+    report['barNeighboursClick'] = (await waitFor(() => focusedId() === rightId))
+      ? 'ok'
+      : `FAIL (focus ${focusedId() ?? 'none'}, expected ${rightId ?? 'none'})`
+  }
+
+  // Undo.
+  await closeAdded(rightId, 'ArrowRight')
+  await closeAdded(leftId, 'ArrowLeft')
+  if (panes().length !== before) {
+    report['barNeighboursCleanup'] =
+      `FAIL (${String(panes().length)} panes, started with ${String(before)})`
+  }
+
+  // A closed column must not live on as a side; with nothing else around, both go.
+  const live = new Set(panes().map((p) => p.dataset['paneId']))
+  const sideIsLive = (which: 'left' | 'right'): boolean => {
+    const id = names(which)
+    return side(which)?.hidden === true ? id === undefined : id !== undefined && live.has(id)
+  }
+  const cleared = await waitFor(() =>
+    hadSides ? sideIsLive('left') && sideIsLive('right') : !drawn('left') && !drawn('right'),
+  )
+  report['barNeighboursClearOnClose'] = cleared
+    ? `ok (${hadSides ? 'sides name live panes' : 'no sides left'})`
+    : `FAIL (left ${names('left') ?? '-'}, right ${names('right') ?? '-'} ` +
+      `after closing ${leftId ?? '-'} and ${rightId ?? '-'})`
 }
 
 /**

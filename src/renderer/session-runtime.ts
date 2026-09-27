@@ -40,7 +40,8 @@ import {
 import { layoutSnapshot } from './layout-snapshot'
 import { createOverviewView } from './overview-view'
 import { createPaneJumpView } from './pane-jump-view'
-import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
+import { DEFAULT_PANE_TITLE, isDefaultPaneTitle, neighbourName } from './pane-title'
+import { barNeighbours, type BarSide, type BarSides, type NeighbourSide } from './bar-neighbours'
 import { decideBudget, MAX_WEBGL_CONTEXTS, type BudgetDecision } from './renderer-budget'
 import { attachResizeDrag } from './resize-drag'
 import { createSearchBar } from './search-bar'
@@ -125,6 +126,8 @@ export interface SessionRuntime {
   setActive(active: boolean): void
   /** The focused pane's title, for the title bar. Null with nothing focused. */
   focusedPaneTitle(): string | null
+  /** The panes a ←/→ move would land on, named as the title bar shows them. */
+  barSides(): BarSides
   /** Reapply settings to every live terminal. */
   applySettings(settings: AppSettings): void
   /**
@@ -214,7 +217,7 @@ export interface StartSessionOptions {
    * Title changed; the app bar draws it. The pane title is the focused pane's,
    * or null when nothing is focused.
    */
-  readonly onTitle: (title: string, paneTitle: string | null) => void
+  readonly onTitle: (title: string, paneTitle: string | null, sides: BarSides) => void
   /** Something reached the clipboard — invisible, so it needs announcing. */
   readonly onCopied: (chars: number) => void
   /** A pane was added or removed; the session list shows the count. */
@@ -516,10 +519,51 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     return findPane(layout, layout.focusedPaneId)?.pane.title ?? null
   }
 
+  /** What untitled neighbours are running. Filled on demand, never polled. */
+  const neighbourCommands = new Map<string, string>()
+  let neighbourKey = ''
+
+  function barSides(): BarSides {
+    const raw = barNeighbours(layout, columnHeight(), (paneId) => attention.has(paneId))
+    const named = (side: NeighbourSide | null): BarSide | null =>
+      side === null
+        ? null
+        : {
+            paneId: side.paneId,
+            name: neighbourName(side.title, neighbourCommands.get(side.paneId) ?? null),
+            beyond: side.beyond,
+            wants: side.wants,
+          }
+    return { left: named(raw.left), right: named(raw.right) }
+  }
+
   function publishTitle(): void {
     // Only the visible session owns the bar; a background one would overwrite it.
     if (!active) return
-    options.onTitle(spec.name, focusedPaneTitle())
+    options.onTitle(spec.name, focusedPaneTitle(), barSides())
+    loadNeighbourCommands()
+  }
+
+  /**
+   * Asked when focus or the untitled neighbours change, not on every publish:
+   * a resize drag publishes each frame.
+   */
+  function loadNeighbourCommands(): void {
+    const { left, right } = barNeighbours(layout, columnHeight(), () => false)
+    const unnamed = [left, right]
+      .filter((side): side is NeighbourSide => side !== null && isDefaultPaneTitle(side.title))
+      .map((side) => side.paneId)
+    const key = `${layout.focusedPaneId}|${unnamed.join(',')}`
+    if (key === neighbourKey) return
+    neighbourKey = key
+    if (unnamed.length === 0) return
+    void options.api.foregroundCommands(unnamed).then((commands) => {
+      for (const paneId of unnamed) neighbourCommands.set(paneId, commands[paneId] ?? '')
+      if (active) options.onTitle(spec.name, focusedPaneTitle(), barSides())
+    }).catch(() => {
+      // The key was taken before the answer; clear it so the next publish asks again.
+      neighbourKey = ''
+    })
   }
 
   function columnHeight(): number {
@@ -681,8 +725,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       record?.terminal.setFocused(!folded)
       if (!folded) record?.terminal.focus()
       canvas.scrollToPane(layout.focusedPaneId, layout)
-      publishTitle()
     }
+    publishTitle()
     updateBudget()
     if (allPanes(layout).length !== paneCountBefore) options.onPanesChanged()
   }
@@ -1196,6 +1240,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       for (const record of records.values()) record.terminal.applyAppearance(appearance)
     },
     focusedPaneTitle,
+    barSides,
     setActive(next) {
       active = next
       options.onWatchedPaneChanged()
@@ -1203,6 +1248,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       // screen is usually the focused one, so nothing is clicked on the way in
       // and a mark waiting on a focus change would never come down.
       if (next && attention.delete(layout.focusedPaneId)) options.onAttentionChanged()
+      // A neighbour that rang while a dialog silenced this session never reached the bar.
+      if (next) publishTitle()
       if (!next) {
         searchBar.close()
         overview.close()
@@ -1232,6 +1279,10 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     focusPane(paneId) {
       if (!records.has(paneId)) return false
+      // A caller names the pane, so it lands in one go: behind a zoom or the
+      // map it would take the keys while hidden.
+      overview.close()
+      exitZoom()
       // setLayout is a no-op for the pane that is already focused, but the
       // canvas may have been scrolled away from it since. setLayout closes the
       // jump on the other branch; this one has to do it itself, or the panel
@@ -1262,6 +1313,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       refreshFoldDetail(paneId)
       overview.refreshIfOpen()
       options.onAttentionChanged()
+      publishTitle()
       return true
     },
 
