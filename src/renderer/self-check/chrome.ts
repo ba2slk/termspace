@@ -1,5 +1,7 @@
 import { ACTION_IDS, defaultBindingsFor, formatChord } from '../../shared/keybindings'
+import { api } from '../api'
 import { t } from '../i18n'
+import { stripName } from '../pane-title'
 import { IS_MAC } from '../platform'
 import {
   animationRuns,
@@ -18,6 +20,7 @@ import {
   trackSettles,
   visiblePanes,
   waitFor,
+  waitForAsync,
   wheel,
 } from './harness'
 
@@ -270,6 +273,24 @@ export async function checkBarNeighbours(report: Report): Promise<void> {
     ? 'ok'
     : `FAIL (left ${String(drawn('left'))}:${names('left') ?? '-'} want ${leftId ?? '-'}, ` +
       `right ${String(drawn('right'))}:${names('right') ?? '-'} want ${rightId ?? '-'})`
+
+  // A fresh column is an idle shell: its side goes by its folder, not the placeholder.
+  const userHome = await api.userHome()
+  const sideName = (): string =>
+    side('left')?.querySelector<HTMLElement>('.app-bar__nb-name')?.textContent ?? ''
+  const idleId = leftId
+  let folder: string | null = null
+  const byFolder = await waitForAsync(async () => {
+    const command = (await api.foregroundCommands([idleId]))[idleId] ?? null
+    const cwd = (command?.trim() ?? '') === '' ? await api.cwdOf(idleId) : null
+    folder = stripName('', command, cwd, userHome)
+    return folder !== null && sideName() === folder
+  })
+  report['barNeighboursNameIdleByFolder'] = byFolder
+    ? `ok (${sideName()})`
+    : folder === null
+      ? 'skipped (the new pane reports neither a program nor a folder)'
+      : `FAIL (left side reads "${sideName()}", expected "${folder}")`
 
   // From the right column, the left side must be exactly where ← then lands.
   press('ArrowRight', { altKey: true })

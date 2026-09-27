@@ -6,11 +6,11 @@
  * copied, so the two cannot drift apart.
  */
 import { findPane, focusDir, type Layout } from './layout-model'
-import { isDefaultPaneTitle, neighbourName } from './pane-title'
+import { isDefaultPaneTitle, stripName } from './pane-title'
 
 export interface NeighbourSide {
   readonly paneId: string
-  /** The layout title. A default one is resolved to a command by the caller. */
+  /** The layout title. A default one is resolved by barStrip from the pane's facts. */
   readonly title: string
   /** Columns past the neighbour's, further out on that side. */
   readonly beyond: number
@@ -76,32 +76,43 @@ function sideOf(
   }
 }
 
-/** The strip, every name resolved: a chosen title, else the running command. */
+/** What is known about an untitled pane, as last asked. Null: not known. */
+export interface PaneFacts {
+  readonly command: string | null
+  readonly cwd: string | null
+}
+
+/** The strip, every name resolved by stripName. */
 export function barStrip(
   layout: Layout,
   columnHeight: number,
   wants: (paneId: string) => boolean,
-  commandOf: (paneId: string) => string | null,
+  factsOf: (paneId: string) => PaneFacts,
+  home: string,
 ): BarStrip {
+  const nameOf = (paneId: string, title: string): string | null => {
+    const { command, cwd } = factsOf(paneId)
+    return stripName(title, command, cwd, home)
+  }
   const raw = barNeighbours(layout, columnHeight, wants)
   const named = (side: NeighbourSide | null): BarSide | null =>
     side === null
       ? null
       : {
           paneId: side.paneId,
-          name: neighbourName(side.title, commandOf(side.paneId)),
+          name: nameOf(side.paneId, side.title),
           beyond: side.beyond,
           wants: side.wants,
         }
   const focused = findPane(layout, layout.focusedPaneId)?.pane ?? null
   return {
-    here: focused === null ? null : neighbourName(focused.title, commandOf(focused.id)),
+    here: focused === null ? null : nameOf(focused.id, focused.title),
     left: named(raw.left),
     right: named(raw.right),
   }
 }
 
-/** The strip's panes that go by their command, since nobody titled them. Focused first. */
+/** The strip's panes named by what they run or where they sit, since nobody titled them. Focused first. */
 export function panesToAskCommands(layout: Layout, columnHeight: number): string[] {
   const { left, right } = barNeighbours(layout, columnHeight, () => false)
   const focused = findPane(layout, layout.focusedPaneId)?.pane ?? null

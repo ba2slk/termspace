@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barNeighbours, barStrip, panesToAskCommands } from './bar-neighbours'
+import { barNeighbours, barStrip, panesToAskCommands, type PaneFacts } from './bar-neighbours'
 import { createLayout, focusDir, type ColumnSeed, type Layout } from './layout-model'
 
 const HEIGHT = 600
@@ -89,30 +89,50 @@ describe('barNeighbours', () => {
 })
 
 describe('barStrip', () => {
-  const noCommand = (): string | null => null
+  const HOME = '/home/u'
+  const nothing = (): PaneFacts => ({ command: null, cwd: null })
 
   it('names the focused pane by its own title, without the session', () => {
     const layout = layoutOf([single('a'), single('b', 'server'), single('c')], 'b')
-    expect(barStrip(layout, HEIGHT, none, noCommand).here).toBe('server')
+    expect(barStrip(layout, HEIGHT, none, nothing, HOME).here).toBe('server')
   })
 
-  it('names an untitled focused pane by what it runs, as the sides do', () => {
+  it('names an untitled pane by its program, as the sides do', () => {
     const layout = layoutOf([single('a', 'shell'), single('b', 'shell')], 'b')
-    const commands: Record<string, string> = { a: 'htop', b: 'nvim' }
-    const strip = barStrip(layout, HEIGHT, none, (id) => commands[id] ?? null)
+    const commands: Record<string, string> = { a: 'htop -d 5', b: '/usr/bin/nvim notes' }
+    const strip = barStrip(
+      layout,
+      HEIGHT,
+      none,
+      (id) => ({ command: commands[id] ?? null, cwd: '/srv' }),
+      HOME,
+    )
     expect(strip.here).toBe('nvim')
     expect(strip.left?.name).toBe('htop')
     expect(strip.right).toBeNull()
   })
 
-  it('leaves the centre unnamed when there is neither a title nor a command', () => {
+  it('names an idle untitled shell by its folder', () => {
+    const layout = layoutOf([single('a', 'shell'), single('b', 'shell')], 'b')
+    const cwds: Record<string, string> = { a: `${HOME}/dev/termspace`, b: HOME }
+    const factsOf = (id: string): PaneFacts => ({ command: null, cwd: cwds[id] ?? null })
+    const strip = barStrip(layout, HEIGHT, none, factsOf, HOME)
+    expect(strip.here).toBe('~')
+    expect(strip.left?.name).toBe('termspace/')
+  })
+
+  it('leaves the centre unnamed when nothing is known', () => {
     const layout = layoutOf([single('a', 'shell')], 'a')
-    expect(barStrip(layout, HEIGHT, none, noCommand)).toEqual({ here: null, left: null, right: null })
+    expect(barStrip(layout, HEIGHT, none, nothing, HOME)).toEqual({
+      here: null,
+      left: null,
+      right: null,
+    })
   })
 
   it('carries the side counts and marks through', () => {
     const layout = layoutOf([single('a'), single('b'), single('c'), single('d')], 'b')
-    const { right } = barStrip(layout, HEIGHT, (id) => id === 'd', noCommand)
+    const { right } = barStrip(layout, HEIGHT, (id) => id === 'd', nothing, HOME)
     expect(right).toEqual({ paneId: 'c', name: 'c', beyond: 1, wants: true })
   })
 })
