@@ -4,6 +4,7 @@
 import { writeFile } from 'node:fs/promises'
 import { app, clipboard, dialog, ipcMain, Notification, shell, type BrowserWindow } from 'electron'
 import type {
+  HerdrActionResult,
   LayoutSnapshot,
   PaneAttention,
   LoadSessionResult,
@@ -24,8 +25,8 @@ import { listMonoFonts } from './font-list'
 import { ensureThemesDir, listUserThemes } from './theme-config'
 import { OutputBatcher } from './output-batcher'
 import { attachedHerdr, resolveSavedPane } from './pane-command'
-import { herdrAttachCommand } from './herdr-command'
-import { herdrCli } from './herdr-cli'
+import { herdrAttachCommand, nextHerdrName, sessionNamesFrom, sessionStem } from './herdr-command'
+import { herdrAvailable, herdrCli } from './herdr-cli'
 import { insideHerdr, startInsideHerdr } from './herdr-attach'
 import type { PtyHost } from './pty-host'
 import {
@@ -381,6 +382,39 @@ export function registerIpcHandlers(
         ),
       ),
   )
+
+  registerHandler('herdr:wrap', async (_e, paneId: string, sessionId: string | null): Promise<HerdrActionResult> => {
+    if (!host.has(paneId)) return { ok: false, reason: 'failed', message: 'no such pane' }
+    if ((await host.foregroundCommandOf(paneId)) !== null) return { ok: false, reason: 'busy', message: '' }
+    if (!(await herdrAvailable())) return { ok: false, reason: 'no-herdr', message: '' }
+    const listed = await herdrCli(null, ['session', 'list', '--json'])
+    if (!listed.ok) return { ok: false, reason: 'failed', message: listed.message }
+    const name = nextHerdrName(sessionStem(sessionId), sessionNamesFrom(listed.json))
+    // Typed, not exec'd: the shell survives the client, as with every command.
+    host.write(paneId, `${herdrAttachCommand(name)}\n`)
+    return { ok: true, name }
+  })
+
+  registerHandler('herdr:stop', async (_e, paneId: string): Promise<HerdrActionResult> => {
+    if (!host.has(paneId)) return { ok: false, reason: 'failed', message: 'no such pane' }
+    if (!(await herdrAvailable())) return { ok: false, reason: 'no-herdr', message: '' }
+    const foregroundCommand = await host.foregroundCommandOf(paneId)
+    // The shell hook still reports the attach line after the client has exited;
+    // /proc saying idle means there is no herdr here to stop.
+    if (foregroundCommand === null) return { ok: false, reason: 'not-herdr', message: '' }
+    const name = attachedHerdr({
+      prefill: null,
+      declaredCommand: null,
+      submittedCommand: host.submittedCommandOf(paneId),
+      foregroundCommand,
+      declaredCwd: '',
+      liveCwd: null,
+      home: '',
+    })
+    if (name === null) return { ok: false, reason: 'not-herdr', message: '' }
+    const stopped = await herdrCli(null, ['session', 'stop', '--json', name])
+    return stopped.ok ? { ok: true, name } : { ok: false, reason: 'failed', message: stopped.message }
+  })
 
   // Window titles per pane (OSC 0/2), for the overview.
   registerHandler(
