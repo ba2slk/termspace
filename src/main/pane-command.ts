@@ -8,6 +8,8 @@
  * substituted away.
  */
 import { resolveCwd } from './session-schema'
+import type { HerdrInside } from './herdr-attach'
+import { herdrSessionFromCommand } from './herdr-command'
 
 export interface PaneCommandInputs {
   /** Set in the YAML: a decision to type a command but not run it. */
@@ -43,4 +45,36 @@ export function resolvePaneCommand(inputs: PaneCommandInputs): string | null {
     return movedAway(inputs) ? null : declaredCommand
   }
   return submittedCommand ?? foregroundCommand
+}
+
+export interface SavedPaneInputs extends PaneCommandInputs {
+  /** Set in the YAML: the herdr session this pane was opened as. */
+  readonly declaredHerdr: string | null
+  /**
+   * What runs inside the herdr session the pane is attached to; null when the
+   * pane is not attached, or the server does not answer.
+   */
+  readonly inside: HerdrInside | null
+}
+
+/** The herdr session a pane is attached to right now, from its shell line. */
+export function attachedHerdr(inputs: PaneCommandInputs): string | null {
+  const line = inputs.submittedCommand ?? inputs.foregroundCommand
+  return line === null ? null : herdrSessionFromCommand(line)
+}
+
+export function resolveSavedPane(inputs: SavedPaneInputs): { readonly command: string | null; readonly herdr: string | null } {
+  if (inputs.prefill !== null) return { command: inputs.declaredCommand, herdr: inputs.declaredHerdr }
+  const name = attachedHerdr(inputs)
+  if (name === null) {
+    const command = resolvePaneCommand(inputs)
+    // The idle rule covers herdr too: detached or stopped, the pane still is that session.
+    const idle = inputs.foregroundCommand === null
+    return { command, herdr: idle && !movedAway(inputs) ? inputs.declaredHerdr : null }
+  }
+  const { inside } = inputs
+  // No answer, no pane yet, or several: nothing single to read. The declaration is
+  // the user's intent and restore leaves a many-pane session alone, so keep it.
+  if (inside === null || inside.panes !== 1) return { command: inputs.declaredCommand, herdr: name }
+  return { command: inside.foreground ?? inputs.declaredCommand, herdr: name }
 }

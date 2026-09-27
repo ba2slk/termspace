@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePaneCommand } from './pane-command'
+import { attachedHerdr, resolvePaneCommand, resolveSavedPane } from './pane-command'
 
 const IDLE = {
   prefill: null,
@@ -103,5 +103,73 @@ describe('resolvePaneCommand', () => {
         liveCwd: '/home/u/elsewhere',
       }),
     ).toBe('htop')
+  })
+})
+
+const SAVED = { ...IDLE, declaredHerdr: null, inside: null }
+
+describe('attachedHerdr', () => {
+  it('reads the shell line first', () => {
+    expect(attachedHerdr({ ...IDLE, submittedCommand: 'herdr --session a', foregroundCommand: '/home/u/.local/bin/herdr --session a' })).toBe('a')
+  })
+  it('falls back to /proc', () => {
+    expect(attachedHerdr({ ...IDLE, foregroundCommand: '/home/u/.local/bin/herdr --session b' })).toBe('b')
+  })
+  it('is null for an idle shell or another program', () => {
+    expect(attachedHerdr(IDLE)).toBeNull()
+    expect(attachedHerdr({ ...IDLE, foregroundCommand: 'htop' })).toBeNull()
+  })
+})
+
+describe('resolveSavedPane', () => {
+  const attached = { ...SAVED, submittedCommand: 'herdr --session a', foregroundCommand: 'herdr --session a' }
+
+  it('writes the inner program as the command', () => {
+    expect(resolveSavedPane({ ...attached, inside: { panes: 1, foreground: 'claude --resume' } })).toEqual({
+      command: 'claude --resume',
+      herdr: 'a',
+    })
+  })
+  it('keeps the declared command when the inner shell is idle', () => {
+    expect(resolveSavedPane({ ...attached, declaredCommand: 'claude', inside: { panes: 1, foreground: null } })).toEqual({
+      command: 'claude',
+      herdr: 'a',
+    })
+  })
+  it('keeps the declared command while the server is still starting', () => {
+    expect(resolveSavedPane({ ...attached, declaredCommand: 'claude', inside: { panes: 0, foreground: null } })).toEqual({
+      command: 'claude',
+      herdr: 'a',
+    })
+  })
+  it('keeps the declared command when herdr holds several panes', () => {
+    expect(resolveSavedPane({ ...attached, declaredCommand: 'claude', inside: { panes: 2, foreground: null } })).toEqual({
+      command: 'claude',
+      herdr: 'a',
+    })
+  })
+  it('keeps the declared command when the server does not answer', () => {
+    expect(resolveSavedPane({ ...attached, declaredCommand: 'claude', inside: null })).toEqual({ command: 'claude', herdr: 'a' })
+  })
+  it('a hand-typed attach saves like a declared one', () => {
+    expect(resolveSavedPane({ ...attached, declaredHerdr: null, inside: { panes: 1, foreground: 'claude' } })).toEqual({
+      command: 'claude',
+      herdr: 'a',
+    })
+  })
+  it('an idle outer shell keeps both declared fields', () => {
+    expect(resolveSavedPane({ ...SAVED, declaredCommand: 'claude', declaredHerdr: 'a' })).toEqual({ command: 'claude', herdr: 'a' })
+  })
+  it('an idle outer shell that moved away drops both', () => {
+    expect(resolveSavedPane({ ...SAVED, declaredCommand: 'claude', declaredHerdr: 'a', liveCwd: '/tmp' })).toEqual({
+      command: null,
+      herdr: null,
+    })
+  })
+  it('another program in the outer shell drops herdr', () => {
+    expect(resolveSavedPane({ ...SAVED, declaredHerdr: 'a', foregroundCommand: 'htop' })).toEqual({ command: 'htop', herdr: null })
+  })
+  it('a prefill still wins', () => {
+    expect(resolveSavedPane({ ...SAVED, prefill: 'x', declaredCommand: 'y', foregroundCommand: 'z' })).toEqual({ command: 'y', herdr: null })
   })
 })

@@ -23,10 +23,10 @@ import { createUpdater } from './updater'
 import { listMonoFonts } from './font-list'
 import { ensureThemesDir, listUserThemes } from './theme-config'
 import { OutputBatcher } from './output-batcher'
-import { resolvePaneCommand } from './pane-command'
+import { attachedHerdr, resolveSavedPane } from './pane-command'
 import { herdrAttachCommand } from './herdr-command'
 import { herdrCli } from './herdr-cli'
-import { startInsideHerdr } from './herdr-attach'
+import { insideHerdr, startInsideHerdr } from './herdr-attach'
 import type { PtyHost } from './pty-host'
 import {
   archiveSession,
@@ -307,19 +307,26 @@ export function registerIpcHandlers(
             panes: await Promise.all(
               column.panes.map(async (pane) => {
                 const liveCwd = host.cwdOf(pane.paneId)
+                const inputs = {
+                  prefill: pane.prefill,
+                  declaredCommand: pane.command,
+                  submittedCommand: host.submittedCommandOf(pane.paneId),
+                  foregroundCommand: await host.foregroundCommandOf(pane.paneId),
+                  declaredCwd: pane.fallbackCwd,
+                  liveCwd,
+                  home,
+                }
+                const attached = attachedHerdr(inputs)
+                const saved = resolveSavedPane({
+                  ...inputs,
+                  declaredHerdr: pane.herdr,
+                  inside: attached === null ? null : await insideHerdr(herdrCli, attached),
+                })
                 return {
                   title: pane.title,
-                  command: resolvePaneCommand({
-                    prefill: pane.prefill,
-                    declaredCommand: pane.command,
-                    submittedCommand: host.submittedCommandOf(pane.paneId),
-                    foregroundCommand: await host.foregroundCommandOf(pane.paneId),
-                    declaredCwd: pane.fallbackCwd,
-                    liveCwd,
-                    home,
-                  }),
+                  command: saved.command,
                   prefill: pane.prefill,
-                  herdr: pane.herdr,
+                  herdr: saved.herdr,
                   cwd: liveCwd ?? pane.fallbackCwd,
                   heightRatio: pane.heightRatio,
                   minimized: pane.minimized,
