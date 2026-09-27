@@ -324,11 +324,12 @@ describe('meta chords', () => {
 })
 
 describe('mac defaults', () => {
-  it('has no plain Cmd+Q/W/H/M — reserved by the system', () => {
+  it('leaves the app menu role accelerators to the menu', () => {
+    // Quit, Close, Hide, Minimize and Hide Others (Option+Cmd+H): the menu takes
+    // these before the page sees them.
+    const roles = ['Meta+KeyQ', 'Meta+KeyW', 'Meta+KeyH', 'Meta+KeyM', 'Alt+Meta+KeyH']
     for (const chords of Object.values(DEFAULT_BINDINGS_MAC)) {
-      for (const chord of chords) {
-        expect(['Meta+KeyQ', 'Meta+KeyW', 'Meta+KeyH', 'Meta+KeyM']).not.toContain(chord)
-      }
+      for (const chord of chords) expect(roles).not.toContain(chord)
     }
   })
 

@@ -33,6 +33,8 @@ export type ActionId =
   | 'fit-column'
   | 'minimize-pane'
   | 'fold-others'
+  | 'herdr-wrap'
+  | 'herdr-stop'
   | 'reveal-focus'
   | 'overview'
   | 'pane-jump'
@@ -85,6 +87,9 @@ export const DEFAULT_BINDINGS: Bindings = {
   // Next to the zoom: the two opposite ends of how much room a pane gets.
   'minimize-pane': ['Alt+KeyD'],
   'fold-others': ['Alt+Shift+KeyD'],
+  // Like fold and fold-others: one key enters the state, Shift undoes it more broadly.
+  'herdr-wrap': ['Alt+KeyH'],
+  'herdr-stop': ['Alt+Shift+KeyH'],
   'reveal-focus': ['Alt+KeyG'],
   overview: ['Alt+KeyM'],
   'pane-jump': ['Alt+KeyK'],
@@ -136,6 +141,10 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   'fit-column': ['Alt+Meta+Enter'],
   'minimize-pane': ['Meta+KeyD'],
   'fold-others': ['Shift+Meta+KeyD'],
+  // Cmd+H hides the app and Option+Cmd+H hides the others; both keys move
+  // behind another modifier.
+  'herdr-wrap': ['Shift+Meta+KeyH'],
+  'herdr-stop': ['Ctrl+Meta+KeyH'],
   'reveal-focus': ['Meta+KeyG'],
   // Cmd+M minimizes; the overview moves behind Shift.
   overview: ['Shift+Meta+KeyM'],
@@ -177,6 +186,8 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'zoom-pane',
       'minimize-pane',
       'fold-others',
+      'herdr-wrap',
+      'herdr-stop',
       'reveal-focus',
       'overview',
       'pane-jump',

@@ -39,6 +39,10 @@ export type Action =
   | { readonly t: 'fold' }
   /** Fold everything in the focused pane's column but itself, and back again. */
   | { readonly t: 'fold-others' }
+  /** Type the herdr attach line into the focused pane's idle shell. */
+  | { readonly t: 'herdr-wrap' }
+  /** Stop the herdr session the focused pane is attached to. */
+  | { readonly t: 'herdr-stop' }
   | { readonly t: 'toggle-sidebar' }
   /** Show the default terminal, or go back from it. */
   | { readonly t: 'default-terminal' }
@@ -109,6 +113,8 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   'fit-column': { t: 'fit-column' },
   'minimize-pane': { t: 'fold' },
   'fold-others': { t: 'fold-others' },
+  'herdr-wrap': { t: 'herdr-wrap' },
+  'herdr-stop': { t: 'herdr-stop' },
   'reveal-focus': { t: 'reveal-focus' },
   overview: { t: 'overview' },
   'pane-jump': { t: 'pane-jump' },
