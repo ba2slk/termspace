@@ -119,6 +119,12 @@ describe('attachedHerdr', () => {
     expect(attachedHerdr(IDLE)).toBeNull()
     expect(attachedHerdr({ ...IDLE, foregroundCommand: 'htop' })).toBeNull()
   })
+  it('is null once the shell is idle, whatever it last submitted', () => {
+    expect(attachedHerdr({ ...IDLE, submittedCommand: 'herdr --session a' })).toBeNull()
+  })
+  it('sees through an alias by falling back to /proc', () => {
+    expect(attachedHerdr({ ...IDLE, submittedCommand: 'h', foregroundCommand: '/home/u/.local/bin/herdr --session a' })).toBe('a')
+  })
 })
 
 describe('resolveSavedPane', () => {
@@ -159,6 +165,15 @@ describe('resolveSavedPane', () => {
   })
   it('an idle outer shell keeps both declared fields', () => {
     expect(resolveSavedPane({ ...SAVED, declaredCommand: 'claude', declaredHerdr: 'a' })).toEqual({ command: 'claude', herdr: 'a' })
+  })
+  it('an idle shell after leaving herdr keeps the declared fields', () => {
+    expect(
+      resolveSavedPane({ ...SAVED, declaredCommand: 'claude', declaredHerdr: 'a', submittedCommand: 'herdr --session a' }),
+    ).toEqual({ command: 'claude', herdr: 'a' })
+    expect(resolveSavedPane({ ...SAVED, declaredCommand: 'claude', submittedCommand: 'herdr --session a' })).toEqual({
+      command: 'claude',
+      herdr: null,
+    })
   })
   it('an idle outer shell that moved away drops both', () => {
     expect(resolveSavedPane({ ...SAVED, declaredCommand: 'claude', declaredHerdr: 'a', liveCwd: '/tmp' })).toEqual({

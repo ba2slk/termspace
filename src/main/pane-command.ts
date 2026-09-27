@@ -59,8 +59,11 @@ export interface SavedPaneInputs extends PaneCommandInputs {
 
 /** The herdr session a pane is attached to right now, from its shell line. */
 export function attachedHerdr(inputs: PaneCommandInputs): string | null {
-  const line = inputs.submittedCommand ?? inputs.foregroundCommand
-  return line === null ? null : herdrSessionFromCommand(line)
+  const { submittedCommand, foregroundCommand } = inputs
+  // The hook's last line outlives the program; an idle shell is attached to nothing.
+  if (foregroundCommand === null) return null
+  // Each line in turn: an alias in the typed line hides herdr, /proc does not.
+  return (submittedCommand === null ? null : herdrSessionFromCommand(submittedCommand)) ?? herdrSessionFromCommand(foregroundCommand)
 }
 
 export function resolveSavedPane(inputs: SavedPaneInputs): { readonly command: string | null; readonly herdr: string | null } {
