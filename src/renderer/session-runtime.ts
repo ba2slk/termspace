@@ -147,6 +147,8 @@ export interface SessionRuntime {
   toggleFold(): void
   /** Fold every other pane in the focused pane's column, or open them all. */
   toggleFoldOthers(): void
+  /** Wrap the focused pane in herdr, or stop its herdr session; main does the work. */
+  herdrAction(kind: 'wrap' | 'stop'): void
   /**
    * The clipboard actions for callers that are not the keymap: on mac the
    * application menu owns Cmd+C/V, so the keydown never reaches the page.
@@ -220,6 +222,8 @@ export interface StartSessionOptions {
   readonly onTitle: (session: string, strip: BarStrip) => void
   /** Something reached the clipboard — invisible, so it needs announcing. */
   readonly onCopied: (chars: number) => void
+  /** A herdr key or menu row was used on the focused pane; main runs it and reports. */
+  readonly onHerdrAction: (kind: 'wrap' | 'stop', paneId: string) => void
   /** A pane was added or removed; the session list shows the count. */
   readonly onPanesChanged: () => void
   /** A pane title was edited; a title alone is not worth losing on a restart. */
@@ -1158,6 +1162,12 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       case 'fold-others':
         toggleFoldOthers()
         break
+      case 'herdr-wrap':
+        options.onHerdrAction('wrap', layout.focusedPaneId)
+        break
+      case 'herdr-stop':
+        options.onHerdrAction('stop', layout.focusedPaneId)
+        break
     }
   }
 
@@ -1269,6 +1279,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     toggleZoom,
     toggleFold,
     toggleFoldOthers,
+    herdrAction: (kind) => options.onHerdrAction(kind, layout.focusedPaneId),
     copySelection,
     pasteIntoFocused,
     canSplit,

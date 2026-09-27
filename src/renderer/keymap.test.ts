@@ -148,6 +148,16 @@ describe('resolveAction — other bindings', () => {
     expect(isAppAction({ t: 'fold' })).toBe(false)
   })
 
+  it('Alt+H wraps the pane in herdr, Alt+Shift+H stops it', () => {
+    expect(resolveAction(chord('KeyH', { altKey: true }))).toEqual({ t: 'herdr-wrap' })
+    expect(resolveAction(chord('KeyH', { altKey: true, shiftKey: true }))).toEqual({ t: 'herdr-stop' })
+  })
+
+  it('the herdr actions act on the focused pane, so they are not app actions', () => {
+    expect(isAppAction({ t: 'herdr-wrap' })).toBe(false)
+    expect(isAppAction({ t: 'herdr-stop' })).toBe(false)
+  })
+
   it('reveal-focus needs a session, so it is not an app action', () => {
     expect(isAppAction({ t: 'reveal-focus' })).toBe(false)
   })

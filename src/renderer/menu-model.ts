@@ -31,6 +31,8 @@ export interface CommandActions {
   readonly foldPane: () => void
   readonly foldOthers: () => void
   readonly closePane: () => void
+  readonly herdrWrap: () => void
+  readonly herdrStop: () => void
   readonly newSession: () => void
   readonly saveLayout: () => void
   readonly saveLayoutAs: () => void
@@ -77,6 +79,18 @@ export function commandItems(
       hint: state.hint('close-pane'),
       disabled: !state.hasSession,
       run: actions.closePane,
+    },
+    {
+      label: t.firstRun.herdrWrap,
+      hint: state.hint('herdr-wrap'),
+      disabled: !state.hasSession,
+      run: actions.herdrWrap,
+    },
+    {
+      label: t.firstRun.herdrStop,
+      hint: state.hint('herdr-stop'),
+      disabled: !state.hasSession,
+      run: actions.herdrStop,
     },
     {
       label: t.firstRun.saveLayout,

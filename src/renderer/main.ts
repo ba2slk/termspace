@@ -199,6 +199,8 @@ function commandItems(): readonly CommandItem[] {
       foldPane: () => session?.toggleFold(),
       foldOthers: () => session?.toggleFoldOthers(),
       closePane: () => session?.closeFocusedPane(),
+      herdrWrap: () => session?.herdrAction('wrap'),
+      herdrStop: () => session?.herdrAction('stop'),
       newSession: openNewSession,
       saveLayout: () => void saveCurrentLayout(),
       saveLayoutAs: () => void openSaveSession(),
@@ -742,6 +744,30 @@ async function saveCurrentLayout(): Promise<void> {
   toast.show(t.firstRun.savedLayout(result.file.split('/').pop() ?? result.file))
 }
 
+/** The herdr keys: main does the work, the toast says what happened. */
+async function runHerdrAction(kind: 'wrap' | 'stop', paneId: string): Promise<void> {
+  const stem = currentName !== null && !isDefaultTerminal(currentName) ? currentName : null
+  const result = kind === 'wrap' ? await api.herdrWrap(paneId, stem) : await api.herdrStop(paneId)
+  if (result.ok) {
+    toast.show(kind === 'wrap' ? t.firstRun.herdrWrapped(result.name) : t.firstRun.herdrStopped(result.name))
+    return
+  }
+  switch (result.reason) {
+    case 'busy':
+      toast.show(t.firstRun.herdrBusy)
+      break
+    case 'not-herdr':
+      toast.show(t.firstRun.herdrNotAttached)
+      break
+    case 'no-herdr':
+      toast.show(t.firstRun.herdrMissing)
+      break
+    case 'failed':
+      toast.show(t.firstRun.herdrFailed(result.message))
+      break
+  }
+}
+
 /** The session the save dialog was opened from; the default terminal moves on success. */
 let savingFrom: string | null = null
 
@@ -1060,6 +1086,7 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
     theme: currentTheme,
     onTitle: setTitle,
     onCopied: (chars) => toast.show(t.firstRun.copied(String(chars))),
+    onHerdrAction: (kind, paneId) => void runHerdrAction(kind, paneId),
     onPanesChanged: renderSidebar,
     // The same write as Alt+Shift+S, except for the default terminal, which
     // has no file yet; the title waits in the layout for its first save.
