@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_BINDINGS, DEFAULT_BINDINGS_MAC, formatChord } from '../shared/keybindings'
 import { stringsFor } from '../shared/ui-strings'
 import {
@@ -18,6 +18,13 @@ import {
   welcomeSession,
 } from './session-config'
 import type { SessionDraft } from './session-writer'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof fsPromises>()
+  return { ...fs, unlink: vi.fn(fs.unlink), writeFile: vi.fn(fs.writeFile) }
+})
+
+const { mkdir, mkdtemp, readFile, unlink, writeFile } = fsPromises
 
 let dir: string
 const env = { HOME: '/home/u', SHELL: '/bin/bash' } as NodeJS.ProcessEnv
@@ -45,6 +52,22 @@ describe('sessionsDir', () => {
 describe('listSessions', () => {
   it('returns an empty list with no directory; a first run is not an error', async () => {
     expect(await listSessions(join(dir, 'nope'), orderPath(), archivePath())).toEqual([])
+  })
+
+  it('does not treat a directory IO error as a missing first-run directory', async () => {
+    const notDirectory = join(dir, 'not-a-directory')
+    await writeFile(notDirectory, 'file')
+
+    await expect(listSessions(notDirectory, orderPath(), archivePath())).rejects.toThrow()
+  })
+
+  it('reports session file read failures separately from YAML syntax errors', async () => {
+    await mkdir(join(dir, 'unreadable.yaml'))
+
+    const list = await listSessions(dir, orderPath(), archivePath())
+
+    expect(list[0]!.error).toContain('Could not read session file')
+    expect(list[0]!.error).not.toContain('YAML syntax error')
   })
 
   it('reads yaml files and counts panes', async () => {
@@ -153,6 +176,26 @@ describe('loadSession', () => {
     expect(result.issues[0]!.message).toContain('not found')
   })
 
+  it('loads .yml files when .yaml is absent', async () => {
+    await writeFile(join(dir, 'legacy.yml'), 'name: legacy\ncolumns:\n  - panes:\n      - {}\n')
+
+    const result = await loadSession(dir, 'legacy', env)
+
+    expect(result.ok).toBe(true)
+    expect(result.file).toBe(join(dir, 'legacy.yml'))
+  })
+
+  it('does not hide a .yaml read failure by falling back to .yml', async () => {
+    await mkdir(join(dir, 'broken.yaml'))
+    await writeFile(join(dir, 'broken.yml'), 'name: fallback\ncolumns:\n  - panes:\n      - {}\n')
+
+    const result = await loadSession(dir, 'broken', env)
+
+    expect(result.ok).toBe(false)
+    expect(result.file).toBe(join(dir, 'broken.yaml'))
+    expect(result.issues[0]!.message).toContain('Could not read session file')
+  })
+
   it('rejects path separators in a session name', async () => {
     const result = await loadSession(dir, '../../etc/passwd', env)
     expect(result.ok).toBe(false)
@@ -206,6 +249,13 @@ describe('seedFirstRun', () => {
   it('does nothing when the directory already exists, even empty', async () => {
     expect(await seedFirstRun(dir, 'en', false)).toBe(false)
     await expect(readFile(join(dir, 'Welcome.yaml'), 'utf8')).rejects.toThrow()
+  })
+
+  it('propagates directory IO errors instead of treating them as a first run', async () => {
+    const notDirectory = join(dir, 'not-a-directory')
+    await writeFile(notDirectory, 'file')
+
+    await expect(seedFirstRun(join(notDirectory, 'sessions'), 'en', false)).rejects.toThrow()
   })
 
   it('the session it writes opens without error', async () => {
@@ -266,6 +316,29 @@ describe('saveSession', () => {
     expect(await readFile(join(dir, 'demo.yaml.bak'), 'utf8')).toContain('first')
   })
 
+  it('overwrites an existing .yml in place and backs up that file', async () => {
+    const file = join(dir, 'demo.yml')
+    await writeFile(file, 'name: original\n')
+
+    const result = await saveSession(dir, 'demo', draft('second'), true, '/home/u')
+
+    expect(result).toEqual({ ok: true, file, error: null })
+    expect(await readFile(file, 'utf8')).toContain('second')
+    expect(await readFile(`${file}.bak`, 'utf8')).toBe('name: original\n')
+    expect((await listSessions(dir, orderPath(), archivePath())).map((s) => s.id)).toEqual(['demo'])
+  })
+
+  it('does not overwrite when the previous generation cannot be backed up', async () => {
+    const file = join(dir, 'demo.yaml')
+    await writeFile(file, 'name: original\n')
+    await mkdir(`${file}.bak`)
+
+    const result = await saveSession(dir, 'demo', draft('second'), true, '/home/u')
+
+    expect(result.ok).toBe(false)
+    expect(await readFile(file, 'utf8')).toBe('name: original\n')
+  })
+
   it('leaves no backup behind on a first save', async () => {
     await saveSession(dir, 'fresh', draft('only'), false, '/home/u')
     await expect(readFile(join(dir, 'fresh.yaml.bak'), 'utf8')).rejects.toThrow()
@@ -295,6 +368,112 @@ describe('renameSessionName', () => {
     expect(text).toContain('title: shell')
     expect(await readFile(`${moved}.bak`, 'utf8')).toContain('name: old')
     expect(file).toBe(join(dir, 'proj.yaml'))
+  })
+
+  it('removes the new file and backup when removing the old file fails', async () => {
+    const oldFile = join(dir, 'proj.yaml')
+    const newFile = join(dir, 'new-name.yaml')
+    const mockedUnlink = vi.mocked(unlink)
+    const originalUnlink = mockedUnlink.getMockImplementation()
+    await writeFile(oldFile, 'name: old\ncolumns:\n  - panes:\n      - {}\n')
+    mockedUnlink.mockRejectedValueOnce(Object.assign(new Error('simulated unlink failure'), { code: 'EACCES' }))
+
+    try {
+      const result = await renameSessionName(dir, 'proj', 'new name', orderPath())
+
+      expect(result.ok).toBe(false)
+      expect(result.error).toContain('Could not remove the old session file')
+      expect(await readFile(oldFile, 'utf8')).toContain('name: old')
+      await expect(readFile(newFile, 'utf8')).rejects.toThrow()
+      await expect(readFile(`${newFile}.bak`, 'utf8')).rejects.toThrow()
+    } finally {
+      mockedUnlink.mockReset()
+      if (originalUnlink !== undefined) mockedUnlink.mockImplementation(originalUnlink)
+    }
+  })
+
+  it('restores the old file when the order update fails', async () => {
+    const oldFile = join(dir, 'proj.yaml')
+    const newFile = join(dir, 'new-name.yaml')
+    const invalidOrderPath = join(dir, 'order-is-a-directory')
+    await writeFile(oldFile, 'name: old\ncolumns:\n  - panes:\n      - {}\n')
+    await mkdir(invalidOrderPath)
+
+    const result = await renameSessionName(dir, 'proj', 'new name', invalidOrderPath)
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Could not update session order')
+    expect(await readFile(oldFile, 'utf8')).toContain('name: old')
+    await expect(readFile(newFile, 'utf8')).rejects.toThrow()
+    await expect(readFile(`${newFile}.bak`, 'utf8')).rejects.toThrow()
+  })
+
+  it('keeps the renamed file if restoring the original after an order failure also fails', async () => {
+    const oldFile = join(dir, 'proj.yaml')
+    const newFile = join(dir, 'new-name.yaml')
+    const invalidOrderPath = join(dir, 'order-is-a-directory')
+    await writeFile(oldFile, 'name: old\ncolumns:\n  - panes:\n      - {}\n')
+    await mkdir(invalidOrderPath)
+    const mockedWriteFile = vi.mocked(writeFile)
+    const originalWriteFile = mockedWriteFile.getMockImplementation()
+    mockedWriteFile.mockImplementation((...args) => {
+      if (args[0] === oldFile) {
+        return Promise.reject(Object.assign(new Error('simulated restore failure'), { code: 'EACCES' }))
+      }
+      return originalWriteFile!(...args)
+    })
+
+    try {
+      const result = await renameSessionName(dir, 'proj', 'new name', invalidOrderPath)
+      expect(result.ok).toBe(false)
+      expect(result.file).toBe(newFile)
+      expect(result.error).toContain('recovery incomplete')
+      expect(await readFile(newFile, 'utf8')).toContain('name: new name')
+      expect(await readFile(`${newFile}.bak`, 'utf8')).toContain('name: old')
+    } finally {
+      mockedWriteFile.mockReset()
+      if (originalWriteFile !== undefined) mockedWriteFile.mockImplementation(originalWriteFile)
+    }
+  })
+
+  it('preserves an existing destination backup when rename cannot reserve it', async () => {
+    const oldFile = join(dir, 'proj.yaml')
+    const backup = join(dir, 'new-name.yaml.bak')
+    await writeFile(oldFile, 'name: old\n')
+    await writeFile(backup, 'previous backup\n')
+
+    const result = await renameSessionName(dir, 'proj', 'new name', orderPath())
+
+    expect(result.ok).toBe(false)
+    expect(await readFile(oldFile, 'utf8')).toBe('name: old\n')
+    expect(await readFile(backup, 'utf8')).toBe('previous backup\n')
+  })
+
+  it('does not delete a destination created after the existence check', async () => {
+    const oldFile = join(dir, 'proj.yaml')
+    const moved = join(dir, 'new-name.yaml')
+    const backup = `${moved}.bak`
+    await writeFile(oldFile, 'name: old\n')
+    const mockedWriteFile = vi.mocked(writeFile)
+    const originalWriteFile = mockedWriteFile.getMockImplementation()!
+    mockedWriteFile.mockImplementation(async (...args) => {
+      if (args[0] === moved) {
+        await originalWriteFile(moved, 'another writer\n', 'utf8')
+        throw Object.assign(new Error('destination taken'), { code: 'EEXIST' })
+      }
+      return originalWriteFile(...args)
+    })
+
+    try {
+      const result = await renameSessionName(dir, 'proj', 'new name', orderPath())
+      expect(result.ok).toBe(false)
+      expect(await readFile(oldFile, 'utf8')).toBe('name: old\n')
+      expect(await readFile(moved, 'utf8')).toBe('another writer\n')
+      await expect(readFile(backup, 'utf8')).rejects.toThrow()
+    } finally {
+      mockedWriteFile.mockReset()
+      mockedWriteFile.mockImplementation(originalWriteFile)
+    }
   })
 
   it('moves the file to the name the user typed', async () => {

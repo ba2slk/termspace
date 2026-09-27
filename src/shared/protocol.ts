@@ -194,7 +194,7 @@ export interface LayoutSnapshot {
 
 export interface SaveSessionResult {
   readonly ok: boolean
-  /** Absolute path written, on success. */
+  /** Absolute session path involved in the operation, including failures; empty when none was selected. */
   readonly file: string
   /** Failure reason, or null. */
   readonly error: string | null
@@ -322,7 +322,7 @@ export interface TermspaceApi {
   shellIntegrationStatus(): Promise<ShellIntegrationStatus>
   /** Move the session file to the trash, so the delete stays reversible. */
   deleteSession(id: string): Promise<SaveSessionResult>
-  /** Rewrite the session's display name in place. The file name (id) never changes. */
+  /** Rewrite the display name; the file name/id may change to match the new name. */
   renameSession(id: string, newName: string): Promise<SaveSessionResult>
   /** Move a session to an index in the list; returns the list as it now stands. */
   reorderSession(id: string, toIndex: number): Promise<readonly SessionSummary[]>
