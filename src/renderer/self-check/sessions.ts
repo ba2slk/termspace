@@ -1489,3 +1489,38 @@ export async function checkSidebarNarrowName(report: Report): Promise<void> {
       ? 'ok'
       : 'FAIL (chord still dropped at full width)'
 }
+
+/**
+ * The herdr keys, end to end: Alt+H types the attach line, Alt+Shift+H stops
+ * the session. Needs the binary; a machine without it reports skipped.
+ */
+export async function checkHerdrKeys(report: Report): Promise<void> {
+  // The session on screen: a hidden host earlier in the document keeps its own focused pane.
+  const id = document.querySelector<HTMLElement>('.session-host:not([hidden]) .pane--focused')?.dataset['paneId']
+  if (id === undefined) {
+    report['herdrKeys'] = 'skipped: no focused pane'
+    return
+  }
+  const foreground = async (): Promise<string | null> => (await api.foregroundCommands([id]))[id] ?? null
+  if ((await foreground()) !== null) {
+    report['herdrKeys'] = 'skipped: the focused pane is busy'
+    return
+  }
+  // A stop on a pane that runs nothing tells us whether the binary is there at all.
+  const probe = await api.herdrStop(id)
+  if (!probe.ok && probe.reason === 'no-herdr') {
+    report['herdrKeys'] = 'skipped (herdr is not installed here)'
+    return
+  }
+  report['herdrStopRefusesIdle'] = !probe.ok && probe.reason === 'not-herdr' ? 'ok' : `FAIL (${JSON.stringify(probe)})`
+
+  press('KeyH', { altKey: true })
+  const attached = await waitForAsync(async () => (await foreground())?.includes('herdr') === true, 8000)
+  report['herdrWrapAttaches'] = attached ? 'ok' : `FAIL (foreground: ${String(await foreground())})`
+  if (!attached) return
+
+  press('KeyH', { altKey: true, shiftKey: true })
+  const idle = await waitForAsync(async () => (await foreground()) === null, 8000)
+  report['herdrStopReturnsToShell'] = idle ? 'ok' : `FAIL (foreground: ${String(await foreground())})`
+  report['herdrKeysNote'] = 'a stopped herdr session named after this session remains in herdr session list'
+}
