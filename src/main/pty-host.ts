@@ -33,7 +33,8 @@ const PROMPT_SETTLE_MS = 80
 function ptyEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value
+    // A pane is a fresh terminal, not a herdr client: inherited HERDR_* make herdr refuse as nested.
+    if (value !== undefined && !key.startsWith('HERDR_')) env[key] = value
   }
   env['TERM'] = 'xterm-256color'
   env['COLORTERM'] = 'truecolor'
