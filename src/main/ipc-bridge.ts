@@ -316,6 +316,7 @@ export function registerIpcHandlers(
                     home,
                   }),
                   prefill: pane.prefill,
+                  herdr: pane.herdr,
                   cwd: liveCwd ?? pane.fallbackCwd,
                   heightRatio: pane.heightRatio,
                   minimized: pane.minimized,

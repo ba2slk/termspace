@@ -4,6 +4,7 @@ import {
   deepestCommonAncestor,
   deriveSessionId,
   isValidSessionId,
+  SESSION_HEADER,
   toSessionYaml,
   type SessionDraft,
 } from './session-writer'
@@ -17,7 +18,7 @@ const draft = (overrides: Partial<SessionDraft> = {}): SessionDraft => ({
   columns: [
     {
       width: 640,
-      panes: [{ title: 'shell', command: null, prefill: null, cwd: HOME, heightRatio: 1 }],
+      panes: [{ title: 'shell', command: null, prefill: null, herdr: null, cwd: HOME, heightRatio: 1 }],
     },
   ],
   ...overrides,
@@ -88,11 +89,11 @@ describe('toSessionYaml', () => {
           {
             width: 720,
             panes: [
-              { title: 'shell', command: null, prefill: null, cwd: HOME, heightRatio: 0.6 },
-              { title: '로그', command: 'journalctl -f', prefill: null, cwd: `${HOME}/log`, heightRatio: 0.4 },
+              { title: 'shell', command: null, prefill: null, herdr: null, cwd: HOME, heightRatio: 0.6 },
+              { title: '로그', command: 'journalctl -f', prefill: null, herdr: null, cwd: `${HOME}/log`, heightRatio: 0.4 },
             ],
           },
-          { width: 640, panes: [{ title: '홈', command: null, prefill: null, cwd: '/etc', heightRatio: 1 }] },
+          { width: 640, panes: [{ title: '홈', command: null, prefill: null, herdr: null, cwd: '/etc', heightRatio: 1 }] },
         ],
       }),
     )
@@ -124,7 +125,7 @@ describe('toSessionYaml', () => {
         columns: [
           {
             width: 640,
-            panes: [{ title: 'shell', command: null, prefill: null, cwd: `${HOME}/dev/proj`, heightRatio: 1 }],
+            panes: [{ title: 'shell', command: null, prefill: null, herdr: null, cwd: `${HOME}/dev/proj`, heightRatio: 1 }],
           },
         ],
       }),
@@ -141,9 +142,9 @@ describe('toSessionYaml', () => {
           {
             width: 640,
             panes: [
-              { title: 'api', command: null, prefill: null, cwd: `${HOME}/dev/proj/api`, heightRatio: 0.4 },
-              { title: 'notes', command: null, prefill: null, cwd: `${HOME}/notes`, heightRatio: 0.3 },
-              { title: 'etc', command: null, prefill: null, cwd: '/etc', heightRatio: 0.3 },
+              { title: 'api', command: null, prefill: null, herdr: null, cwd: `${HOME}/dev/proj/api`, heightRatio: 0.4 },
+              { title: 'notes', command: null, prefill: null, herdr: null, cwd: `${HOME}/notes`, heightRatio: 0.3 },
+              { title: 'etc', command: null, prefill: null, herdr: null, cwd: '/etc', heightRatio: 0.3 },
             ],
           },
         ],
@@ -163,7 +164,7 @@ describe('toSessionYaml', () => {
         columns: [
           {
             width: 640,
-            panes: [{ title: 'old', command: null, prefill: null, cwd: `${HOME}/dev/proj-old`, heightRatio: 1 }],
+            panes: [{ title: 'old', command: null, prefill: null, herdr: null, cwd: `${HOME}/dev/proj-old`, heightRatio: 1 }],
           },
         ],
       }),
@@ -178,7 +179,7 @@ describe('toSessionYaml', () => {
         columns: [
           {
             width: 640,
-            panes: [{ title: 'shell', command: null, prefill: 'npm run dev', cwd: HOME, heightRatio: 1 }],
+            panes: [{ title: 'shell', command: null, prefill: 'npm run dev', herdr: null, cwd: HOME, heightRatio: 1 }],
           },
         ],
       }),
@@ -190,6 +191,34 @@ describe('toSessionYaml', () => {
   it('omits empty prefill', () => {
     const panes = (parsed(draft())['columns'] as { panes: Record<string, unknown>[] }[])[0]!.panes
     expect(panes[0]).not.toHaveProperty('prefill')
+  })
+
+  it('writes herdr after command', () => {
+    const text = toSessionYaml(
+      draft({
+        columns: [
+          {
+            width: 640,
+            panes: [{ title: 'Features', command: 'claude', prefill: null, herdr: 'termspace-1', cwd: HOME, heightRatio: 1 }],
+          },
+        ],
+      }),
+      HOME,
+    )
+    expect(text.indexOf('command: claude')).toBeLessThan(text.indexOf('herdr: termspace-1'))
+    const panes = (parsed(draft({
+      columns: [{ width: 640, panes: [{ title: 'Features', command: 'claude', prefill: null, herdr: 'termspace-1', cwd: HOME, heightRatio: 1 }] }],
+    }))['columns'] as { panes: Record<string, unknown>[] }[])[0]!.panes
+    expect(panes[0]!['herdr']).toBe('termspace-1')
+  })
+
+  it('omits herdr when null', () => {
+    const panes = (parsed(draft())['columns'] as { panes: Record<string, unknown>[] }[])[0]!.panes
+    expect(panes[0]).not.toHaveProperty('herdr')
+  })
+
+  it('names the field in the header', () => {
+    expect(SESSION_HEADER).toContain('# herdr')
   })
 
   it('omits height for a lone pane', () => {
@@ -204,8 +233,8 @@ describe('toSessionYaml', () => {
           {
             width: 640,
             panes: [
-              { title: 'a', command: null, prefill: null, cwd: HOME, heightRatio: 1 / 3 },
-              { title: 'b', command: null, prefill: null, cwd: HOME, heightRatio: 2 / 3 },
+              { title: 'a', command: null, prefill: null, herdr: null, cwd: HOME, heightRatio: 1 / 3 },
+              { title: 'b', command: null, prefill: null, herdr: null, cwd: HOME, heightRatio: 2 / 3 },
             ],
           },
         ],
@@ -227,7 +256,7 @@ describe('toSessionYaml', () => {
       draft({
         name: nasty,
         columns: [
-          { width: 640, panes: [{ title: nasty, command: nasty, prefill: null, cwd: HOME, heightRatio: 1 }] },
+          { width: 640, panes: [{ title: nasty, command: nasty, prefill: null, herdr: null, cwd: HOME, heightRatio: 1 }] },
         ],
       }),
     )
@@ -249,11 +278,12 @@ describe('toSessionYaml', () => {
           {
             width: 640,
             panes: [
-              { title: 'edit', command: null, prefill: null, cwd: HOME, heightRatio: 0.7 },
+              { title: 'edit', command: null, prefill: null, herdr: null, cwd: HOME, heightRatio: 0.7 },
               {
                 title: 'logs',
                 command: null,
                 prefill: null,
+                herdr: null,
                 cwd: HOME,
                 heightRatio: 0.3,
                 minimized: true,

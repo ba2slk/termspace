@@ -302,7 +302,7 @@ describe('saveSession', () => {
     columns: [
       {
         width: 640,
-        panes: [{ title: 'p', command, prefill: null, cwd: '/home/u', heightRatio: 1 }],
+        panes: [{ title: 'p', command, prefill: null, herdr: null, cwd: '/home/u', heightRatio: 1 }],
       },
     ],
   })

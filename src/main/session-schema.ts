@@ -11,6 +11,7 @@ import type {
   PaneSpec,
   SessionSpec,
 } from '../shared/protocol'
+import { isHerdrName } from './herdr-command'
 
 export type { ColumnSpec, ConfigIssue, ErrorSpec, PaneEntry, PaneSpec, SessionSpec } from '../shared/protocol'
 
@@ -44,6 +45,7 @@ const paneShape = z.strictObject({
   title: z.string().min(1).optional(),
   command: z.string().min(1).optional(),
   prefill: z.string().min(1).optional(),
+  herdr: z.string().min(1).optional(),
   cwd: z.string().min(1).optional(),
   height: z.number().gt(0).lt(1).optional(),
   minimized: z.boolean().optional(),
@@ -148,13 +150,20 @@ function parsePane(
   const parsed = paneShape.safeParse(raw)
   if (!parsed.success) return toIssues(path, parsed.error)[0]!
 
-  const { title, command, prefill, cwd, height, minimized } = parsed.data
+  const { title, command, prefill, cwd, height, minimized, herdr } = parsed.data
+  if (herdr !== undefined && prefill !== undefined) {
+    return { path: `${path}.herdr`, message: 'cannot be combined with prefill: there is no prompt inside herdr to place it at' }
+  }
+  if (herdr !== undefined && !isHerdrName(herdr)) {
+    return { path: `${path}.herdr`, message: "may only contain ASCII letters, numbers, '.', '_' and '-'" }
+  }
   return {
     pane: {
       kind: 'pane',
       title: title ?? command?.trim().split(/\s+/)[0] ?? 'shell',
       command: command ?? null,
       prefill: prefill ?? null,
+      herdr: herdr ?? null,
       cwd: cwd === undefined ? sessionCwd : resolveCwd(sessionCwd, cwd, home),
       minimized: minimized ?? false,
     },
@@ -195,6 +204,31 @@ function parseColumn(raw: unknown, path: string, sessionCwd: string, home: strin
   }
 }
 
+/**
+ * Two panes attaching to one herdr session would share one screen, so only the
+ * first pane (in file order) keeps the name; later ones become error cards.
+ */
+function markDuplicateHerdr(columns: ColumnSpec[]): ColumnSpec[] {
+  const firstAt = new Map<string, string>()
+  return columns.map((column, i) => ({
+    ...column,
+    panes: column.panes.map((pane, j) => {
+      if (pane.kind !== 'pane' || pane.herdr === null) return pane
+      const path = `columns[${i}].panes[${j}]`
+      const first = firstAt.get(pane.herdr)
+      if (first === undefined) {
+        firstAt.set(pane.herdr, path)
+        return pane
+      }
+      return {
+        kind: 'error' as const,
+        issue: { path: `${path}.herdr`, message: `already used by ${first}: one pane is one herdr session` },
+        heightRatio: pane.heightRatio,
+      }
+    }),
+  }))
+}
+
 export function parseSession(raw: unknown, env: ParseEnv): ParseResult {
   const parsed = sessionShape.safeParse(raw)
   if (!parsed.success) return { ok: false, issues: toIssues('', parsed.error) }
@@ -208,8 +242,8 @@ export function parseSession(raw: unknown, env: ParseEnv): ParseResult {
       name,
       cwd: sessionCwd,
       shell: shell ?? env.shell ?? FALLBACK_SHELL,
-      columns: columns.map((column, i) =>
-        parseColumn(column, `columns[${i}]`, sessionCwd, env.home),
+      columns: markDuplicateHerdr(
+        columns.map((column, i) => parseColumn(column, `columns[${i}]`, sessionCwd, env.home)),
       ),
     },
   }
@@ -244,6 +278,7 @@ export function defaultTerminalSpec(options: {
             title: 'shell',
             command: null,
             prefill: null,
+            herdr: null,
             cwd: home,
             heightRatio: 1,
             minimized: false,

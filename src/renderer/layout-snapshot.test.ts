@@ -8,6 +8,7 @@ const paneSpec = (over: Partial<PaneSpec> = {}): PaneSpec => ({
   title: 'shell',
   command: null,
   prefill: null,
+  herdr: null,
   cwd: '/home/me/work',
   heightRatio: 1,
   minimized: false,
@@ -57,6 +58,12 @@ describe('the layout a save writes', () => {
     expect(snapshot.columns[0]?.panes[0]?.prefill).toBeNull()
     expect(snapshot.columns[0]?.panes[1]?.prefill).toBe('npm test')
     expect(snapshot.columns[0]?.panes[1]?.command).toBeNull()
+  })
+
+  it('carries herdr through untouched', () => {
+    const specs = new Map([['p1', paneSpec({ herdr: 'termspace-1' })]])
+    const out = layoutSnapshot(twoColumns, specs, '/home/u')
+    expect(out.columns[0]!.panes[0]!.herdr).toBe('termspace-1')
   })
 
   it('falls back to the path the pane itself started in', () => {

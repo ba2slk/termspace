@@ -394,7 +394,7 @@ export async function createBlankSession(
     name: displayName,
     cwd,
     columns: [
-      { width, panes: [{ title: 'shell', command: null, prefill: null, cwd, heightRatio: 1 }] },
+      { width, panes: [{ title: 'shell', command: null, prefill: null, herdr: null, cwd, heightRatio: 1 }] },
     ],
   }
   // Never overwrite — creating a blank session must not destroy another.

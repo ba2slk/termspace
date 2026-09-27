@@ -742,6 +742,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
         shell: spec.shell,
         command: paneSpec.command,
         prefill: paneSpec.prefill,
+        herdr: paneSpec.herdr,
         cols: terminal.cols,
         rows: terminal.rows,
       })
@@ -923,6 +924,7 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       title: command?.trim().split(/\s+/)[0] ?? 'shell',
       command,
       prefill: null,
+      herdr: null,
       cwd: spec.cwd,
       heightRatio: 0,
       minimized: false,

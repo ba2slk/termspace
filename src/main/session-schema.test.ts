@@ -98,6 +98,21 @@ describe('parseSession — valid input', () => {
     expect(pane.kind === 'pane' && pane.prefill).toBeNull()
   })
 
+  it('herdr names the session the pane attaches to', () => {
+    const spec = ok({
+      name: 'x',
+      columns: [{ panes: [{ title: 'Features', command: 'claude', herdr: 'termspace-1' }] }],
+    })
+    const pane = spec.columns[0]!.panes[0]!
+    expect(pane.kind === 'pane' && pane.herdr).toBe('termspace-1')
+    expect(pane.kind === 'pane' && pane.command).toBe('claude')
+  })
+
+  it('herdr is null when absent', () => {
+    const pane = ok(valid).columns[0]!.panes[0]!
+    expect(pane.kind === 'pane' && pane.herdr).toBeNull()
+  })
+
   it('command is null when absent', () => {
     const pane = ok(valid).columns[0]!.panes[1]!
     expect(pane.kind === 'pane' && pane.command).toBeNull()
@@ -178,6 +193,41 @@ describe('parseSession — error isolation', () => {
     expect(entry.kind === 'error' && entry.issue.message).toContain('commnad')
   })
 
+  it('herdr with prefill is a config issue on that pane', () => {
+    const spec = ok({
+      name: 'x',
+      columns: [{ panes: [{ prefill: 'claude', herdr: 'a' }, { command: 'htop' }] }],
+    })
+    const [bad, good] = spec.columns[0]!.panes
+    expect(bad!.kind).toBe('error')
+    expect(bad!.kind === 'error' && bad!.issue.path).toBe('columns[0].panes[0].herdr')
+    expect(bad!.kind === 'error' && bad!.issue.message).toContain('prefill')
+    expect(good!.kind).toBe('pane')
+  })
+
+  it('herdr must be a name herdr accepts', () => {
+    const spec = ok({ name: 'x', columns: [{ panes: [{ herdr: 'no such' }] }] })
+    expect(spec.columns[0]!.panes[0]!.kind).toBe('error')
+  })
+
+  it('a herdr name used twice keeps the first pane and marks the second', () => {
+    const spec = ok({
+      name: 'x',
+      columns: [
+        { panes: [{ herdr: 'a' }, { command: 'htop' }] },
+        { panes: [{ herdr: 'a', height: 0.3 }, {}] },
+      ],
+    })
+    const first = spec.columns[0]!.panes[0]!
+    const second = spec.columns[1]!.panes[0]!
+    expect(first.kind === 'pane' && first.herdr).toBe('a')
+    expect(second.kind).toBe('error')
+    expect(second.kind === 'error' && second.issue.path).toBe('columns[1].panes[0].herdr')
+    expect(second.kind === 'error' && second.issue.message).toContain('columns[0].panes[0]')
+    expect(second.heightRatio).toBeCloseTo(0.3, 9)
+    expect(spec.columns[0]!.panes[1]!.kind).toBe('pane')
+  })
+
   it('a wholly invalid column becomes a single error card', () => {
     const spec = ok({ name: 'x', columns: [{ panes: [{}] }, { panes: [] }] })
     expect(spec.columns).toHaveLength(2)
@@ -217,6 +267,7 @@ describe('defaultTerminalSpec', () => {
               title: 'shell',
               command: null,
               prefill: null,
+              herdr: null,
               cwd: '/home/u',
               heightRatio: 1,
               minimized: false,

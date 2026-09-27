@@ -32,6 +32,7 @@ export function layoutSnapshot(
           title: pane.title,
           command: spec?.command ?? null,
           prefill: spec?.prefill ?? null,
+          herdr: spec?.herdr ?? null,
           fallbackCwd: spec?.cwd ?? sessionCwd,
           heightRatio: pane.heightRatio,
           minimized: pane.minimized === true,
