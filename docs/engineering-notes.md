@@ -911,3 +911,64 @@ pinned by `update-check.test.ts`.
 **The self-check has no group for this.** The one path is a network request, and a
 check that fails when GitHub is unreachable would be reporting the network, not the
 app.
+
+---
+
+## herdr
+
+**herdr integration (2026-09-27).** A pane's processes die with the window, and the
+way to keep them is a multiplexer inside the pane. The steps to set one up by hand
+were: pick a name, type `herdr --session <name>`, type the program inside, save;
+stopping it later was `herdr session stop` behind a picker. `Alt+H` and
+`Alt+Shift+H` now do the start and the stop, and the session file restores the rest.
+Every action shells out to the `herdr` CLI; herdr keeps owning its server and
+panes.
+
+**Termspace re-runs the inner command itself, not a herdr plugin.** herdr restores a
+session's tab shape, not the processes that ran in it, so something has to put the
+program back. A herdr plugin did this per tab before, but it read a second config
+file of its own, in herdr's plugin directory, and a declaration kept there went
+unused. The command now lives on the pane in the session file (`herdr:` next to
+`command`), and `startInsideHerdr` (`src/main/herdr-attach.ts`) runs it with
+`pane run` once the server answers. It acts only on a session whose single pane is a bare shell: more
+panes means the user shaped the session, a busy pane means herdr or the user already
+put something there. The command is passed to `pane run` as one argument, so a
+program with flags arrives as the line the user would have typed.
+
+**One pane is one herdr session.** A herdr session has one focused tab for every
+client attached to it, so two panes attached to one session mirror each other.
+Side by side has to be two sessions. Termspace never creates, lists or names herdr
+tabs; the canvas takes their place.
+
+**herdr reports failure on stderr with exit code 1, and some successes print
+nothing.** herdr 0.9.1 writes its error JSON (`server_not_running`,
+`session_stop_failed`, …) to stderr and exits 1, while `pane run` succeeds with no
+output at all. `herdr-cli.ts` parses stdout when it is non-empty and stderr
+otherwise, and judges the reply by the top-level `error` key rather than the exit
+code. Empty stdout and stderr with exit 0 is a success; read as unparseable, it made
+a restore log `pane run` as failed although the program had started.
+
+**An idle shell is not attached to herdr, whatever its last line says.** The shell
+hook reports the last line submitted, and that line outlives the program: after
+the herdr client exits, the hook still says `herdr --session x`. `herdr:stop` and
+the save both check `/proc` first and treat a pane with no foreground program as not
+attached (`attachedHerdr` in `src/main/pane-command.ts`). Reading the line alone, a
+save wrote `herdr:` for a pane that had already left the session, and `Alt+Shift+H`
+would stop a session the pane no longer shows. When a program is running, the
+submitted line is read before the `/proc` line, and `/proc` still names herdr when
+the typed line was an alias for it.
+
+**Pane shells do not inherit `HERDR_*`.** Running the app from inside a herdr pane
+(the dev server, or a launch from such a terminal) put herdr's variables in
+`process.env`, and every pane shell inherited them. herdr then refused to start as
+nested, or targeted the outer session's socket. A pane is a fresh terminal, so
+`ptyEnv` in `src/main/pty-host.ts` drops every `HERDR_*` key, and `herdr-cli.ts`
+does the same for its own calls. `scripts/verify-app.mjs` strips them from the app's
+environment and deletes each group's `<config>/herdr` before the run, since the
+self-check leaves one stopped session per run.
+
+**The self-check reads the focused pane of the session on screen.** The
+document-wide focused pane is the wrong one: a hidden session's host comes first in
+the DOM and keeps its own focused pane. `checkHerdrKeys` reads
+`.session-host:not([hidden]) .pane--focused`. It presses the stop key even when the
+attach was late, so no herdr client is left in the pane the next check types into.

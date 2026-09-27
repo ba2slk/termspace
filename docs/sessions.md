@@ -43,6 +43,23 @@ prompt but Enter is never pressed — tmux `send-keys` without the `C-m`.
         prefill: cu down full && cu start full && cu logs be
 ```
 
+A pane can be a herdr session. `herdr` names it; `command` is then what runs
+**inside** herdr, not in the pane's own shell:
+
+```yaml
+      - title: Features
+        command: claude
+        herdr: termspace-1
+```
+
+Opening the pane types `herdr --session termspace-1`. Once the server answers
+and its only pane is a bare shell, `claude` is run there; Termspace waits up to
+ten seconds for that. A session that holds more than one pane, or whose pane is
+already busy, is left alone. `herdr` cannot be combined with `prefill`, and the
+name may only contain ASCII letters, numbers, `.`, `_` and `-`. A name belongs
+to one pane per file: a later pane with the same `herdr` becomes an error card
+that names the first one.
+
 A typo in the config doesn't kill the session. The broken pane becomes a card
 saying what is wrong and which file to fix; everything else runs normally.
 
@@ -124,7 +141,7 @@ Panes folded on screen (`Alt` + `D`) are written as `minimized: true`, next to
 the `height` they still hold. Reopening the session brings the pane back folded,
 and unfolding it lands on exactly that height.
 
-Commands running at save time are captured too, with two rules:
+Commands running at save time are captured too, by these rules:
 
 - Panes with a `prefill` are not captured. Prefill means "don't auto-run", and
   overwriting it with whatever is running would reverse that decision.
@@ -134,6 +151,18 @@ Commands running at save time are captured too, with two rules:
   where it started is saved with no `command`. Its old command belongs to the
   old directory, and pairing it with the new one would describe something that
   never ran.
+- A pane running herdr is saved with `herdr: <name>`. When herdr holds
+  exactly one pane and it is running a program, that program is saved as
+  `command`. Otherwise the pane's declared `command` is kept: when the inner
+  pane is an idle shell (a shell with only flags, like `bash -l`;
+  `bash deploy.sh` is a program), when herdr holds several panes, and while
+  the server is starting or not answering. A pane attached by hand and one
+  attached with `Alt+H` save the same.
+- A pane counts as running herdr only while `/proc` shows a program in its
+  foreground. The shell hook keeps reporting the attach line after the herdr
+  client has exited, so that line alone is not enough. A pane opened with
+  `herdr:` that has dropped back to its shell keeps the field, by the idle
+  rule above.
 
 ## Shell integration
 
