@@ -13,22 +13,7 @@ export function isDefaultPaneTitle(title: string): boolean {
 }
 
 /**
- * The title bar strip: the session, plus the focused pane when it has a title.
- *
- * The separator belongs to the locale, so the composition arrives as the
- * catalog's own function rather than being spelled here.
- */
-export function barTitle(
-  session: string,
-  paneTitle: string | null,
-  compose: (session: string, pane: string) => string,
-): string {
-  if (paneTitle === null || isDefaultPaneTitle(paneTitle)) return session
-  return compose(session, paneTitle.trim())
-}
-
-/**
- * What the bar calls a pane beside the focused one: the title someone chose,
+ * What the bar calls a pane, focused or beside it: the title someone chose,
  * else what it is running, else nothing (the view draws a placeholder).
  */
 export function neighbourName(title: string, command: string | null): string | null {

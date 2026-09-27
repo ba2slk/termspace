@@ -13,7 +13,7 @@ import { createCommandMenu, type CommandItem } from './command-menu'
 import { createUpdateChip } from './update-chip'
 import type { UpdateState } from '../shared/protocol'
 import type { ActionId } from '../shared/keybindings'
-import type { BarSide, BarTitle } from './bar-neighbours'
+import type { BarSide, BarStrip } from './bar-neighbours'
 
 export interface AppBarHooks {
   /** Commands for ☰; asked each time since they depend on session state. */
@@ -44,8 +44,10 @@ export interface AppBarHooks {
 
 export interface AppBar {
   readonly element: HTMLElement
-  /** The centre text and the panes either side of the focused one. */
-  setTitle(title: BarTitle): void
+  /** The open session's name, shown on the list toggle while the list is hidden. */
+  setSession(name: string | null): void
+  /** The focused pane and its neighbours. Null empties the strip. */
+  setStrip(strip: BarStrip | null): void
   setSidebarVisible(visible: boolean): void
   /** Re-evaluate whether the split controls are enabled. */
   syncControls(): void
@@ -118,6 +120,23 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
     icon(['M2.5 3.5h11v9h-11z', 'M6.5 3.5v9']),
   )
   panelButton.addEventListener('click', () => hooks.onToggleSidebar())
+  /*
+   * With the list hidden nothing else on screen names the session. Inside the
+   * button rather than beside it, so the name is one more place to click.
+   * aria-label stays the action; the name is what the button is showing.
+   */
+  const sessionLabel = document.createElement('span')
+  sessionLabel.className = 'app-bar__btn-label'
+  sessionLabel.hidden = true
+  panelButton.append(sessionLabel)
+  let sessionName: string | null = null
+  let sidebarShown = true
+  function syncSessionLabel(): void {
+    const show = sessionName !== null && !sidebarShown
+    sessionLabel.textContent = show ? sessionName : ''
+    sessionLabel.hidden = !show
+    panelButton.classList.toggle('app-bar__btn--labelled', show)
+  }
 
   /*
    * Split control. One button for all four directions.
@@ -226,7 +245,10 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
     return span
   }
 
-  /** One side of the strip. Reads outward from the centre: arrow, name, count, dot. */
+  /**
+   * One side of the strip. Reads outward from the centre: name, count, dot,
+   * arrow. The arrow sits at the outer end: `A › B` reads as B inside A.
+   */
   function neighbourSlot(side: 'left' | 'right'): {
     element: HTMLElement
     set(value: BarSide | null): void
@@ -255,10 +277,6 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
         // For the self-check. Not data-pane-id: `[data-pane-id]` means the pane
         // itself, and the bar comes first in the document.
         element.dataset['namesPane'] = value.paneId
-        const arrow = part(
-          'app-bar__nb-arrow',
-          side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
-        )
         const outward: HTMLElement[] = [
           part('app-bar__nb-name', value.name ?? t.appBar.neighbourUnnamed),
         ]
@@ -270,9 +288,13 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
           dot.setAttribute('aria-label', t.appBar.neighbourWants)
           outward.push(dot)
         }
-        element.replaceChildren(
-          ...(side === 'left' ? [...outward.reverse(), arrow] : [arrow, ...outward]),
+        outward.push(
+          part(
+            'app-bar__nb-arrow',
+            side === 'left' ? t.appBar.neighbourArrowLeft : t.appBar.neighbourArrowRight,
+          ),
         )
+        element.replaceChildren(...(side === 'left' ? outward.reverse() : outward))
         element.title =
           side === 'left'
             ? t.appBar.neighbourLeft(hooks.hint('focus-left'))
@@ -363,14 +385,20 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
 
   return {
     element: bar,
-    setTitle(value) {
-      here.textContent = value.text
-      leftSide.set(value.left)
-      rightSide.set(value.right)
+    setSession(name) {
+      sessionName = name
+      syncSessionLabel()
+    },
+    setStrip(strip) {
+      here.textContent = strip === null ? '' : (strip.here ?? t.appBar.neighbourUnnamed)
+      leftSide.set(strip?.left ?? null)
+      rightSide.set(strip?.right ?? null)
     },
     setSidebarVisible(value) {
       panelButton.classList.toggle('app-bar__btn--on', value)
       panelButton.setAttribute('aria-pressed', String(value))
+      sidebarShown = value
+      syncSessionLabel()
     },
     syncControls() {
       // Enabled while a session is open: adding a column works where splitting
