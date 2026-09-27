@@ -694,6 +694,7 @@ export async function checkSaveCurrentLayout(report: Report): Promise<void> {
               title: 'shell',
               command: null,
               prefill: null,
+              herdr: null,
               minimized: false,
               fallbackCwd: '~',
               heightRatio: 1,

@@ -20,6 +20,8 @@ export interface PaneSpec {
   readonly command: string | null
   /** Typed into the shell but not submitted, for commands you want to review first. */
   readonly prefill: string | null
+  /** The herdr session this pane attaches to; `command` then runs inside it. */
+  readonly herdr: string | null
   /** Already resolved to an absolute path. */
   readonly cwd: string
   readonly heightRatio: number
@@ -183,6 +185,7 @@ export interface LayoutSnapshot {
       readonly command: string | null
       /** Kept as-is on save; a pane with a prefill never has its command captured. */
       readonly prefill: string | null
+      readonly herdr: string | null
       /** Used when the pty is already gone: the path this pane started in. */
       readonly fallbackCwd: string
       readonly heightRatio: number
@@ -231,6 +234,8 @@ export interface SpawnRequest {
   readonly command: string | null
   /** Typed without submitting. */
   readonly prefill: string | null
+  /** Attach to this herdr session instead of running `command` in the shell. */
+  readonly herdr: string | null
   readonly cols: number
   readonly rows: number
 }

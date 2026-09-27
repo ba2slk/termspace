@@ -14,6 +14,8 @@ export interface DraftPane {
   readonly command: string | null
   /** Typed but not submitted; wins over capture when saving. */
   readonly prefill: string | null
+  /** Written after command; the command then runs inside this herdr session. */
+  readonly herdr: string | null
   /** Absolute path — where the shell actually stands, for a live pane. */
   readonly cwd: string
   readonly heightRatio: number
@@ -100,6 +102,7 @@ export const SESSION_HEADER = `# Termspace session
 # title     pane label, shown above the terminal
 # command   run once the shell is up
 # prefill   typed into the shell, but Enter is left to you
+# herdr     the herdr session this pane attaches to; command runs inside it
 # height    vertical share within the column. Omit for an even split
 # minimized true starts the pane folded to a bar; it still runs
 `
@@ -125,6 +128,7 @@ export function toSessionYaml(draft: SessionDraft, home: string): string {
           ...(cwd === null ? {} : { cwd }),
           ...(pane.command === null || pane.command === '' ? {} : { command: pane.command }),
           ...(pane.prefill === null || pane.prefill === '' ? {} : { prefill: pane.prefill }),
+          ...(pane.herdr === null || pane.herdr === '' ? {} : { herdr: pane.herdr }),
           // A lone pane in a column is always 1.
           ...(column.panes.length === 1 ? {} : { height: round3(pane.heightRatio) }),
           ...(pane.minimized === true ? { minimized: true } : {}),
