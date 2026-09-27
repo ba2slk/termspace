@@ -13,6 +13,7 @@
  *   npm run verify:app -- --serial      one window, everything in order
  */
 import { execFileSync, spawn } from 'node:child_process'
+import { rmSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -175,6 +176,8 @@ columns: []
 async function ensureSession(group) {
   const dir = sessionDir(group)
   await rm(join(configHome(group), 'termspace'), { recursive: true, force: true })
+  // The herdr check leaves a stopped session behind each run; they would pile up as verify-N.
+  rmSync(join(configHome(group), 'herdr'), { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
   // Creation order is list order (see SPARE_SESSION above): spare first, so
   // verify lands on the second row.
@@ -221,7 +224,8 @@ function run(group, tile, total) {
       cwd: root,
       detached: true, // so the whole process group can be killed together
       env: {
-        ...process.env,
+        // Run from a herdr pane like a desktop launch: its HERDR_* would reach the panes' herdr.
+        ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('HERDR_'))),
         VITE_SELFCHECK: '1',
         SELFCHECK_SCOPE: group,
         // Only tile when there is something to tile against.

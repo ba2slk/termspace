@@ -58,6 +58,7 @@ import {
   checkErrorRowStaysDraggable,
   checkFileDrop,
   checkHeldSessionJump,
+  checkHerdrKeys,
   checkImeInput,
   checkNewSession,
   checkResizeSync,
@@ -167,6 +168,7 @@ const GROUPS: Readonly<
     await checkSaveCurrentLayout(report)
     await checkWheelSessionSwitch(report)
     await checkSessionStepShortcut(report)
+    await checkHerdrKeys(report)
     await checkAttentionClearsOnReturn(report)
     await checkSidebarReorder(report)
     await checkSidebarNarrowName(report)
