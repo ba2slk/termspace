@@ -48,59 +48,6 @@ import { deepestCommonAncestor, shorten, type SessionDraft } from './session-wri
 const FLUSH_INTERVAL_MS = 16
 const HIGH_WATER_MARK_CHARS = 64 * 1024
 
-const INVOKE_CHANNELS = [
-  'session:list',
-  'session:load',
-  'session:exists',
-  'session:save-as',
-  'session:create-blank',
-  'session:default-terminal',
-  'session:delete',
-  'session:rename',
-  'session:reorder',
-  'session:archive',
-  'session:restore',
-  'session:editor-command',
-  'fonts:list',
-  'themes:list',
-  'pty:spawn',
-  'clipboard:read',
-  'window:toggle-maximize',
-  'window:toggle-fullscreen',
-  'window:settled',
-  'settings:get',
-  'settings:save',
-  'keybindings:get',
-  'keybindings:save',
-  'debug:capture',
-  'debug:focus',
-  'app:home',
-  'session:suggest-root',
-  'session:pick-directory',
-  'shell-integration:status',
-  'pty:foreground-commands',
-  'pty:titles',
-  'pty:cwd',
-  'update:check',
-]
-const ON_CHANNELS = [
-  'pty:write',
-  'pty:resize',
-  'pty:kill',
-  'clipboard:write',
-  'session:reveal-dir',
-  'session:open-external',
-  'app:open-external',
-  'window:minimize',
-  'window:close',
-  'window:confirm-close',
-  'window:toggle-devtools',
-  'settings:reveal',
-  'themes:reveal',
-  'app:visible-pane',
-  'update:open-release',
-]
-
 /**
  * The window counts as sized once it has gone this long without a resize after
  * show. A floating window manager never resizes, so this is the whole wait there;
@@ -115,6 +62,21 @@ export function registerIpcHandlers(
   host: PtyHost,
   env: NodeJS.ProcessEnv,
 ): () => void {
+  const registeredHandlers: string[] = []
+  const registeredListeners: Array<{
+    channel: string
+    listener: Parameters<typeof ipcMain.on>[1]
+  }> = []
+  const registerHandler: typeof ipcMain.handle = (channel, listener) => {
+    ipcMain.handle(channel, listener)
+    registeredHandlers.push(channel)
+  }
+  const registerListener: typeof ipcMain.on = (channel, listener) => {
+    ipcMain.on(channel, listener)
+    registeredListeners.push({ channel, listener })
+    return ipcMain
+  }
+
   const dir = sessionsDir(env)
   const orderPath = orderFile(env)
   const archivePath = archiveFile(env)
@@ -134,7 +96,7 @@ export function registerIpcHandlers(
 
   /** The pane the renderer says is being watched right now. */
   let visiblePaneId: string | null = null
-  ipcMain.on('app:visible-pane', (_e, paneId: string | null) => {
+  registerListener('app:visible-pane', (_e, paneId: string | null) => {
     visiblePaneId = paneId
   })
 
@@ -182,18 +144,18 @@ export function registerIpcHandlers(
     onResume: (paneId) => host.resume(paneId),
   })
 
-  ipcMain.handle(
+  registerHandler(
     'session:list',
     (): Promise<SessionSummary[]> => listSessions(dir, orderPath, archivePath),
   )
-  ipcMain.handle(
+  registerHandler(
     'session:load',
     (_e, name: string): Promise<LoadSessionResult> => loadSession(dir, name, env),
   )
-  ipcMain.handle('session:exists', (_e, id: string): Promise<boolean> => sessionExists(dir, id))
+  registerHandler('session:exists', (_e, id: string): Promise<boolean> => sessionExists(dir, id))
 
   // Move to the trash rather than unlink, so the delete stays reversible.
-  ipcMain.handle('session:delete', async (_e, id: string): Promise<SaveSessionResult> => {
+  registerHandler('session:delete', async (_e, id: string): Promise<SaveSessionResult> => {
     const path = await sessionFilePath(dir, id)
     if (path === null) return { ok: false, file: '', error: 'Session file not found' }
     try {
@@ -204,31 +166,31 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
+  registerHandler(
     'session:rename',
     (_e, id: string, newName: string): Promise<SaveSessionResult> =>
       renameSessionName(dir, id, newName, orderPath),
   )
 
-  ipcMain.handle(
+  registerHandler(
     'session:reorder',
     (_e, id: string, toIndex: number): Promise<SessionSummary[]> =>
       reorderSession(dir, orderPath, archivePath, id, toIndex),
   )
 
-  ipcMain.handle(
+  registerHandler(
     'session:archive',
     (_e, id: string): Promise<SessionSummary[]> =>
       archiveSession(dir, orderPath, archivePath, id),
   )
 
-  ipcMain.handle(
+  registerHandler(
     'session:restore',
     (_e, id: string): Promise<SessionSummary[]> =>
       restoreSession(dir, orderPath, archivePath, id),
   )
 
-  ipcMain.handle('session:editor-command', async (_e, id: string): Promise<string | null> => {
+  registerHandler('session:editor-command', async (_e, id: string): Promise<string | null> => {
     const path = await sessionFilePath(dir, id)
     if (path === null) return null
     // The shell decides what $EDITOR means; we only quote the path.
@@ -237,7 +199,7 @@ export function registerIpcHandlers(
     return `${editor} ${shellQuote(path)}`
   })
 
-  ipcMain.on('session:open-external', (_e, id: string) => {
+  registerListener('session:open-external', (_e, id: string) => {
     void sessionFilePath(dir, id).then((path) => {
       if (path !== null) void shell.openPath(path)
     })
@@ -248,19 +210,19 @@ export function registerIpcHandlers(
    * open handler enforces, so a URL cannot reach the desktop by either path
    * without passing it.
    */
-  ipcMain.on('app:open-external', (_e, url: unknown) => {
+  registerListener('app:open-external', (_e, url: unknown) => {
     if (isOpenableUrl(url)) void shell.openExternal(url as string)
   })
 
-  ipcMain.handle('fonts:list', (): Promise<string[]> => listMonoFonts())
+  registerHandler('fonts:list', (): Promise<string[]> => listMonoFonts())
 
-  ipcMain.handle('themes:list', () => listUserThemes(env))
-  ipcMain.on('themes:reveal', () => {
+  registerHandler('themes:list', () => listUserThemes(env))
+  registerListener('themes:reveal', () => {
     // Create the folder with an example, so it is never opened empty.
     void ensureThemesDir(env).then((dir) => shell.openPath(dir))
   })
 
-  ipcMain.handle(
+  registerHandler(
     'session:create-blank',
     async (_e, id: string, displayName: string, rootCwd: string, width: unknown): Promise<SaveSessionResult> => {
       const { defaultColumnWidth } = await loadSettings(env)
@@ -269,7 +231,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle('session:default-terminal', async (_e, name: string, width: unknown): Promise<SessionSpec> => {
+  registerHandler('session:default-terminal', async (_e, name: string, width: unknown): Promise<SessionSpec> => {
     const { defaultColumnWidth } = await loadSettings(env)
     return defaultTerminalSpec({
       name,
@@ -279,9 +241,9 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('app:home', () => env['HOME'] ?? '')
+  registerHandler('app:home', () => env['HOME'] ?? '')
 
-  ipcMain.handle(
+  registerHandler(
     'shell-integration:status',
     (): ShellIntegrationStatus => ({
       rcLine: RC_LINE,
@@ -290,7 +252,7 @@ export function registerIpcHandlers(
     }),
   )
 
-  ipcMain.handle('session:suggest-root', (_e, paneIds: readonly string[]): string => {
+  registerHandler('session:suggest-root', (_e, paneIds: readonly string[]): string => {
     const home = env['HOME'] ?? ''
     // Dead panes drop out; with nothing live left, home is the only safe guess.
     const cwds = paneIds.map((id) => host.cwdOf(id)).filter((cwd): cwd is string => cwd !== null)
@@ -305,7 +267,7 @@ export function registerIpcHandlers(
    * none. The pick comes back `~`-shortened to match what the field already
    * holds, so a chosen path and a typed one are stored the same way.
    */
-  ipcMain.handle('session:pick-directory', async (_e, current: string): Promise<string | null> => {
+  registerHandler('session:pick-directory', async (_e, current: string): Promise<string | null> => {
     const home = env['HOME'] ?? ''
     const start = current.trim() === '' ? '~' : current.trim()
     const result = await dialog.showOpenDialog(win, {
@@ -322,7 +284,7 @@ export function registerIpcHandlers(
    * cwd is filled in here, not by the renderer: only this side holds the pty
    * and can see where the shell moved to.
    */
-  ipcMain.handle(
+  registerHandler(
     'session:save-as',
     async (
       _e,
@@ -367,7 +329,7 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle(
+  registerHandler(
     'pty:spawn',
     (_e, request: SpawnRequest): SpawnResult =>
       host.spawn(request, {
@@ -383,7 +345,7 @@ export function registerIpcHandlers(
   )
 
   // A snapshot for the overview: what runs in each pane's foreground right now.
-  ipcMain.handle(
+  registerHandler(
     'pty:foreground-commands',
     async (_e, paneIds: readonly string[]): Promise<Record<string, string | null>> =>
       Object.fromEntries(
@@ -394,20 +356,20 @@ export function registerIpcHandlers(
   )
 
   // Window titles per pane (OSC 0/2), for the overview.
-  ipcMain.handle(
+  registerHandler(
     'pty:titles',
     (_e, paneIds: readonly string[]): Record<string, string | null> =>
       Object.fromEntries(paneIds.map((id) => [id, host.titleOf(id)])),
   )
 
-  ipcMain.handle('pty:cwd', (_e, paneId: string): string | null => host.cwdOf(paneId))
+  registerHandler('pty:cwd', (_e, paneId: string): string | null => host.cwdOf(paneId))
 
-  ipcMain.on('pty:write', (_e, paneId: string, data: string) => host.write(paneId, data))
-  ipcMain.on('pty:resize', (_e, paneId: string, cols: number, rows: number) =>
+  registerListener('pty:write', (_e, paneId: string, data: string) => host.write(paneId, data))
+  registerListener('pty:resize', (_e, paneId: string, cols: number, rows: number) =>
     host.resize(paneId, cols, rows),
   )
   // The app draws its own title bar, so the renderer drives window controls.
-  ipcMain.on('window:minimize', () => win.minimize())
+  registerListener('window:minimize', () => win.minimize())
   /*
    * Every close path — window button, menu, Alt+F4 — reaches win.close(), so
    * intercepting it here is enough to ask the renderer first.
@@ -420,18 +382,18 @@ export function registerIpcHandlers(
   }
   win.on('close', onClose)
 
-  ipcMain.on('window:close', () => win.close())
-  ipcMain.on('window:confirm-close', () => {
+  registerListener('window:close', () => win.close())
+  registerListener('window:confirm-close', () => {
     allowClose = true
     win.close()
   })
-  ipcMain.on('window:toggle-devtools', () => win.webContents.toggleDevTools())
-  ipcMain.handle('window:toggle-maximize', (): boolean => {
+  registerListener('window:toggle-devtools', () => win.webContents.toggleDevTools())
+  registerHandler('window:toggle-maximize', (): boolean => {
     if (win.isMaximized()) win.unmaximize()
     else win.maximize()
     return win.isMaximized()
   })
-  ipcMain.handle('window:toggle-fullscreen', (): boolean => {
+  registerHandler('window:toggle-fullscreen', (): boolean => {
     win.setFullScreen(!win.isFullScreen())
     return win.isFullScreen()
   })
@@ -461,22 +423,22 @@ export function registerIpcHandlers(
       win.on('resize', onResize)
     })
   })
-  ipcMain.handle('window:settled', () => settled)
+  registerHandler('window:settled', () => settled)
   const notifyMaximize = (): void => send('window:maximize-changed', win.isMaximized())
   win.on('maximize', notifyMaximize)
   win.on('unmaximize', notifyMaximize)
 
-  ipcMain.on('session:reveal-dir', () => void shell.openPath(dir))
+  registerListener('session:reveal-dir', () => void shell.openPath(dir))
 
-  ipcMain.handle('settings:get', () => loadSettings(env))
-  ipcMain.handle('settings:save', async (_e, next: unknown) => {
+  registerHandler('settings:get', () => loadSettings(env))
+  registerHandler('settings:save', async (_e, next: unknown) => {
     const saved = await saveSettings(env, next)
     notificationsOn = saved.notifications === 1
     return saved
   })
-  ipcMain.handle('keybindings:get', () => loadKeybindings(env))
-  ipcMain.handle('keybindings:save', (_e, next: unknown) => saveKeybindings(env, next))
-  ipcMain.on('settings:reveal', () => {
+  registerHandler('keybindings:get', () => loadKeybindings(env))
+  registerHandler('keybindings:save', (_e, next: unknown) => saveKeybindings(env, next))
+  registerListener('settings:reveal', () => {
     // Create it with defaults first, so "open" always opens something.
     void (async () => {
       await saveSettings(env, await loadSettings(env))
@@ -494,8 +456,8 @@ export function registerIpcHandlers(
     automatic: async () => (await loadSettings(env)).updateCheck === 1,
     onState: (state) => send('update:state', state),
   })
-  ipcMain.handle('update:check', () => updater.checkNow())
-  ipcMain.on('update:open-release', () => void shell.openExternal(updater.releaseUrl()))
+  registerHandler('update:check', () => updater.checkNow())
+  registerListener('update:open-release', () => void shell.openExternal(updater.releaseUrl()))
   // Not under the self-check: four instances asking GitHub at once is noise.
   if (env['VITE_SELFCHECK'] !== '1') updater.start()
 
@@ -504,14 +466,14 @@ export function registerIpcHandlers(
    * present and correctly classed but visually wrong.
    */
   if (env['VITE_SELFCHECK'] === '1') {
-    ipcMain.handle('debug:capture', async (_e, path: string): Promise<string> => {
+    registerHandler('debug:capture', async (_e, path: string): Promise<string> => {
       const image = await win.webContents.capturePage()
       await writeFile(path, image.toPNG())
       return path
     })
 
     /* Raise the check window: wheel and clipboard can't be measured otherwise. */
-    ipcMain.handle('debug:focus', (): boolean => {
+    registerHandler('debug:focus', (): boolean => {
       // Also pin on top: an occluded window stops compositing, so rAF stalls.
       win.setAlwaysOnTop(true)
       win.show()
@@ -521,10 +483,10 @@ export function registerIpcHandlers(
     })
   }
 
-  ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
-  ipcMain.handle('clipboard:read', (): string => clipboard.readText())
+  registerListener('clipboard:write', (_e, text: string) => clipboard.writeText(text))
+  registerHandler('clipboard:read', (): string => clipboard.readText())
 
-  ipcMain.on('pty:kill', (_e, paneId: string) => {
+  registerListener('pty:kill', (_e, paneId: string) => {
     batcher.drop(paneId)
     host.kill(paneId)
   })
@@ -535,7 +497,9 @@ export function registerIpcHandlers(
     win.off('unmaximize', notifyMaximize)
     batcher.dispose()
     updater.stop()
-    for (const channel of INVOKE_CHANNELS) ipcMain.removeHandler(channel)
-    for (const channel of ON_CHANNELS) ipcMain.removeAllListeners(channel)
+    for (const channel of registeredHandlers) ipcMain.removeHandler(channel)
+    for (const { channel, listener } of registeredListeners) {
+      ipcMain.removeListener(channel, listener)
+    }
   }
 }

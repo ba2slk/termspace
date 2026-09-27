@@ -187,6 +187,82 @@ describe('createCanvasView', () => {
     expect(JSON.stringify(view.getRects())).toBe(before)
   })
 
+  it('unsubscribes retained host and thumb-drag listeners when replaced', () => {
+    const foldedLayout = createLayout([
+      {
+        id: 'c1',
+        width: 700,
+        panes: [
+          { id: 'a1', title: 'editor' },
+          { id: 'a2', title: 'shell', minimized: true },
+        ],
+      },
+      { id: 'c2', width: 500, panes: [{ id: 'b1', title: 'server' }] },
+    ])
+    const oldOnPaneMouseDown = vi.fn()
+    const oldOnPaneClick = vi.fn()
+    const oldOnFoldDoubleClick = vi.fn()
+    const oldShiftPans = vi.fn(() => true)
+    const oldView = createCanvasView(host, {
+      onPaneMouseDown: oldOnPaneMouseDown,
+      onPaneClick: oldOnPaneClick,
+      onFoldDoubleClick: oldOnFoldDoubleClick,
+      shiftPans: oldShiftPans,
+    })
+    oldView.render(foldedLayout)
+    const oldIndicator = host.querySelector<HTMLElement>('.scroll-indicator')!
+    const pointerDown = new Event('pointerdown', { bubbles: true, cancelable: true })
+    Object.defineProperties(pointerDown, {
+      pointerId: { value: 1 },
+      clientX: { value: 20 },
+    })
+    oldIndicator.dispatchEvent(pointerDown)
+    expect(host.classList.contains('canvas--thumb-dragging')).toBe(true)
+
+    oldView.destroy()
+    expect(host.classList.contains('canvas--thumb-dragging')).toBe(false)
+    oldView.destroy()
+
+    const onPaneMouseDown = vi.fn()
+    const onPaneClick = vi.fn()
+    const onFoldDoubleClick = vi.fn()
+    const shiftPans = vi.fn(() => true)
+    const newView = createCanvasView(host, {
+      onPaneMouseDown,
+      onPaneClick,
+      onFoldDoubleClick,
+      shiftPans,
+    })
+    newView.render(foldedLayout)
+    const pane = host.querySelector('[data-pane-id="a1"]')!
+    pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 10, clientY: 10 }))
+    pane.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 11, clientY: 10 }))
+    host
+      .querySelector('[data-pane-id="a2"] .pane__fold-title')!
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+
+    const stalePointerDown = new Event('pointerdown', { bubbles: true, cancelable: true })
+    Object.defineProperties(stalePointerDown, {
+      pointerId: { value: 2 },
+      clientX: { value: 30 },
+    })
+    oldIndicator.dispatchEvent(stalePointerDown)
+    const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    host.dispatchEvent(wheel)
+
+    expect(oldOnPaneMouseDown).not.toHaveBeenCalled()
+    expect(oldOnPaneClick).not.toHaveBeenCalled()
+    expect(oldOnFoldDoubleClick).not.toHaveBeenCalled()
+    expect(oldShiftPans).not.toHaveBeenCalled()
+    expect(host.classList.contains('canvas--thumb-dragging')).toBe(false)
+    expect(onPaneMouseDown).toHaveBeenCalledWith('a1')
+    expect(onPaneClick).toHaveBeenCalledWith('a1')
+    expect(onFoldDoubleClick).toHaveBeenCalledWith('a2')
+    expect(shiftPans).toHaveBeenCalled()
+    expect(wheel.defaultPrevented).toBe(true)
+    newView.destroy()
+  })
+
   it('calls the hook with the pane id on mousedown', () => {
     const onPaneMouseDown = vi.fn()
     const view = createCanvasView(host, { onPaneMouseDown })

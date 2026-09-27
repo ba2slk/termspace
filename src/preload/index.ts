@@ -12,6 +12,8 @@ import type {
  * The only path from renderer to main. No logic here — it would run on the same
  * page as arbitrary program output.
  */
+const isSelfCheck = process.env['VITE_SELFCHECK'] === '1'
+
 const api: TermspaceApi = {
   platform: process.platform,
   listSessions: () => ipcRenderer.invoke('session:list'),
@@ -53,8 +55,15 @@ const api: TermspaceApi = {
   pathForFile: (file) => webUtils.getPathForFile(file),
   readClipboard: () => ipcRenderer.invoke('clipboard:read'),
   openSessionsDir: () => ipcRenderer.send('session:reveal-dir'),
-  captureWindow: (path) => ipcRenderer.invoke('debug:capture', path),
-  focusWindow: () => ipcRenderer.invoke('debug:focus'),
+  // Keep the typed surface stable while withholding these IPC capabilities in production.
+  captureWindow: (path) =>
+    isSelfCheck
+      ? ipcRenderer.invoke('debug:capture', path)
+      : Promise.reject(new Error('Self-check only')),
+  focusWindow: () =>
+    isSelfCheck
+      ? ipcRenderer.invoke('debug:focus')
+      : Promise.reject(new Error('Self-check only')),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   openSettingsFile: () => ipcRenderer.send('settings:reveal'),
