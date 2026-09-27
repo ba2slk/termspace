@@ -246,6 +246,10 @@ export interface SpawnResult {
   readonly message: string | null
 }
 
+export type HerdrActionResult =
+  | { readonly ok: true; readonly name: string }
+  | { readonly ok: false; readonly reason: 'busy' | 'not-herdr' | 'no-herdr' | 'failed'; readonly message: string }
+
 export interface PtyExit {
   readonly paneId: string
   readonly exitCode: number
@@ -354,6 +358,10 @@ export interface TermspaceApi {
    * only main holds the ptys and can read /proc.
    */
   foregroundCommands(paneIds: readonly string[]): Promise<Record<string, string | null>>
+  /** Type `herdr --session <stem>-<n>` into an idle pane. stem: the session id, or null. */
+  herdrWrap(paneId: string, sessionId: string | null): Promise<HerdrActionResult>
+  /** Stop the herdr session the pane is attached to. */
+  herdrStop(paneId: string): Promise<HerdrActionResult>
   write(paneId: string, data: string): void
   resize(paneId: string, cols: number, rows: number): void
   kill(paneId: string): void
