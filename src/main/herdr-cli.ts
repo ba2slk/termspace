@@ -2,9 +2,10 @@
  * The one place that runs the herdr binary.
  *
  * herdr answers as JSON: on stdout, or on stderr with exit 1 when it fails,
- * so a reply is judged by its `error` key. The dev server's shell may itself
- * sit inside herdr; its HERDR_* variables are dropped so every call targets
- * the session it names and nothing else.
+ * so a reply is judged by its `error` key. Some commands (`pane run`) print
+ * nothing when they succeed. The dev server's shell may itself sit inside
+ * herdr; its HERDR_* variables are dropped so every call targets the session
+ * it names and nothing else.
  */
 import { execFile } from 'node:child_process'
 import { herdrError } from './herdr-command'
@@ -37,6 +38,11 @@ export const herdrCli: HerdrCli = (session, args) =>
       const failure = herdrError(json)
       if (failure !== null) {
         resolve({ ok: false, ...failure })
+        return
+      }
+      if (err === null && stdout.trim() === '' && stderr.trim() === '') {
+        // `pane run` succeeds silently; empty is a success, not a parse failure.
+        resolve({ ok: true, json: null })
         return
       }
       if (err !== null && json === null) {
