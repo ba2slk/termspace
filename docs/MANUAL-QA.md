@@ -800,6 +800,9 @@ The self-check covers the two keys on an idle pane. These need a real session:
       shows `command: claude` and `herdr: y`
 - [ ] In a herdr pane, `Alt+Shift+H`: the pane drops to its shell, the toast names the
       session, `herdr session list` shows it stopped
+- [ ] Right-click a session whose file declares a running herdr session and whose
+      open pane is attached to another, "Stop all herdr sessions": the dialog names
+      both, and after Stop `herdr session list` shows both stopped
 
 ## macOS (real hardware)
 

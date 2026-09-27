@@ -148,6 +148,7 @@ export interface SidebarMenuState {
 export interface SidebarMenuActions {
   readonly open: () => void
   readonly endSession: () => void
+  readonly stopHerdr: () => void
   readonly saveLayout: () => void
   readonly editSessionFile: () => void
   readonly renameSession: () => void
@@ -205,6 +206,8 @@ export function sidebarMenuItems(
       disabled: !state.running,
       run: actions.endSession,
     },
+    // Not tied to the runtime: a herdr session outlives the pane that attached to it.
+    { label: t.firstRun.stopHerdrSessions, run: actions.stopHerdr },
     /*
      * Only over the row that is actually on screen. Anywhere else it would read
      * as "write my layout into that session", which is a different command and

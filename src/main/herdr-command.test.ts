@@ -7,6 +7,7 @@ import {
   isHerdrName,
   nextHerdrName,
   paneIdsFrom,
+  runningSessionNamesFrom,
   sessionNamesFrom,
   sessionStem,
 } from './herdr-command'
@@ -127,6 +128,16 @@ describe('sessionNamesFrom', () => {
   it('is empty for anything else', () => {
     expect(sessionNamesFrom(null)).toEqual([])
     expect(sessionNamesFrom({ error: { code: 'x', message: 'y' } })).toEqual([])
+  })
+})
+
+describe('runningSessionNamesFrom', () => {
+  it('keeps only the running ones', () => {
+    expect(runningSessionNamesFrom(LIST)).toEqual(['termspace-1'])
+  })
+  it('is empty for anything else', () => {
+    expect(runningSessionNamesFrom(null)).toEqual([])
+    expect(runningSessionNamesFrom({ sessions: [{ name: 'x', running: 'yes' }] })).toEqual([])
   })
 })
 

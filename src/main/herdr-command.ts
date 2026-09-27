@@ -76,6 +76,14 @@ export function sessionNamesFrom(json: unknown): readonly string[] {
     .filter((n): n is string => typeof n === 'string')
 }
 
+/** The names `herdr session list --json` reports as running: the ones a stop can reach. */
+export function runningSessionNamesFrom(json: unknown): readonly string[] {
+  return list(record(json)?.['sessions'])
+    .filter((s) => s['running'] === true)
+    .map((s) => s['name'])
+    .filter((n): n is string => typeof n === 'string')
+}
+
 /** Pane ids from `herdr api snapshot`; an empty list is a server still starting. */
 export function paneIdsFrom(snapshotJson: unknown): readonly string[] {
   const snapshot = record(record(record(snapshotJson)?.['result'])?.['snapshot'])

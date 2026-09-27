@@ -297,6 +297,9 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
       endSession: () => {
         if (sessionId !== null) endSession(sessionId)
       },
+      stopHerdr: () => {
+        if (sessionId !== null) void stopHerdrSessions(sessionId)
+      },
       saveLayout: () => void saveCurrentLayout(),
       editSessionFile: () => {
         if (sessionId !== null) void editSessionFile(sessionId)
@@ -421,6 +424,40 @@ function confirmDelete(sessionId: string): void {
       void api.deleteSession(sessionId).then((result) => {
         toast.show(result.ok ? t.firstRun.deletedToast : (result.error ?? t.firstRun.deleteFailedToast))
         void refreshSidebar()
+      })
+    },
+  )
+}
+
+/** Stop every running herdr session this session holds, after asking. */
+async function stopHerdrSessions(id: string): Promise<void> {
+  const runtime = sessions.get(id)?.runtime
+  const paneIds = runtime?.snapshot().columns.flatMap((c) => c.panes.map((p) => p.paneId)) ?? []
+  const names = await api.herdrSessionsOf(id, paneIds)
+  if (names === null) {
+    toast.show(t.firstRun.herdrMissing)
+    return
+  }
+  if (names.length === 0) {
+    toast.show(t.firstRun.stopHerdrNone)
+    return
+  }
+  askConfirm(
+    {
+      title: t.firstRun.stopHerdrTitle(String(names.length)),
+      items: [],
+      lead: t.firstRun.stopHerdrLead(names.join(', ')),
+      confirmLabel: t.firstRun.stopHerdrConfirm,
+    },
+    () => {
+      confirmView.close()
+      restoreCanvas()
+      void api.herdrStopSessions(names).then(({ stopped, failed }) => {
+        toast.show(
+          failed.length === 0
+            ? t.firstRun.herdrStopped(stopped.join(', '))
+            : t.firstRun.stopHerdrFailed(failed.map((f) => `${f.name} (${f.message})`).join(', ')),
+        )
       })
     },
   )
