@@ -520,6 +520,29 @@ group starts from nothing open. The save half runs first in `sessions`.
   and the rows rolled past stay cold — a step that opened every session it passed would
   spawn a shell per notch
 
+**herdr keys (`Alt+H` / `Alt+Shift+H`)**
+
+Run in `sessions` on the focused pane of the session on screen, found as
+`.session-host:not([hidden]) .pane--focused`. The document-wide focused pane is the
+wrong one: a hidden session's pane comes first in the DOM.
+
+- `Alt+Shift+H` on an idle pane is refused as not attached (`herdrStopRefusesIdle`) — the
+  shell hook keeps reporting the attach line after the herdr client exits, so only `/proc`
+  can say that nothing runs there
+- `Alt+H` puts herdr in the pane's foreground within 8s (`herdrWrapAttaches`)
+- `Alt+Shift+H` brings the pane back to an idle shell (`herdrStopReturnsToShell`). The
+  stop key is pressed even when the attach was late, or herdr would stay in the pane the
+  next check types into. Nothing attached within a further 4s, with the pane idle after
+  the stop, is `skipped (nothing attached to stop)`
+- `herdrKeys` is `skipped` when there is no focused pane, when the focused pane is busy,
+  or when herdr is not installed (`skipped (herdr is not installed here)`, from the
+  first stop answering `no-herdr`). None of the lines above are reported then
+- `herdrKeysNote` records that the stopped session, named after the session on screen
+  (`<id>-<n>`), stays in `herdr session list`. `verify:app` deletes each group's
+  `<config>/herdr` before the run so these do not pile up, and starts the app without
+  `HERDR_*` in its environment, so a run launched from inside herdr does not reach the
+  panes' herdr
+
 **Screenshots**
 - While the check runs, the window is saved as PNGs (`/tmp/termspace-*.png`; the
   directory can be overridden with `VITE_SHOT_DIR`)
@@ -764,6 +787,19 @@ check will never edit — `~/.bashrc` for bash, `~/.zshrc` for zsh.
       reading the same `~/.bashrc`
 - [ ] The `DEBUG` trap items above are bash's. For zsh, run the alias and the recall
       cases against the `~/.zshrc` line and confirm the same two records
+
+### herdr (by eye)
+
+The self-check covers the two keys on an idle pane. These need a real session:
+
+- [ ] A saved session with `herdr: x` and `command: claude`, x stopped: open it. herdr
+      attaches and claude starts inside within a couple of seconds
+- [ ] The same session, x still running with claude inside: open it. Nothing is typed
+      into claude
+- [ ] Split a pane, type `herdr --session y`, type `claude`, `Alt+Shift+S`. The file
+      shows `command: claude` and `herdr: y`
+- [ ] In a herdr pane, `Alt+Shift+H`: the pane drops to its shell, the toast names the
+      session, `herdr session list` shows it stopped
 
 ## macOS (real hardware)
 

@@ -149,8 +149,10 @@ saving captures running commands: **[docs/sessions.md](docs/sessions.md)**.
 
 There is no detach/attach: closing the window ends the processes inside it, and
 Termspace shows you what will die and asks first. For work that must outlive
-the window, run tmux inside a pane — Termspace replaces tmux's *windows*, not
-tmux itself.
+the window, run a multiplexer inside a pane. herdr gets two keys for it:
+`Alt+H` attaches the focused pane to a new herdr session, `Alt+Shift+H` stops
+that session. A saved session remembers the attachment (`herdr:` in the pane)
+and what ran inside it, and starts both again next time.
 
 ## Keys
 
@@ -163,6 +165,8 @@ tmux itself.
 | `Alt` + `Z` | `Cmd+Shift` + `Enter` | Maximize the focused pane over the canvas, and back |
 | `Alt` + `D` | `Cmd` + `D` | Fold the focused pane to a bar; `Enter` on the bar opens it |
 | `Alt+Shift` + `D` | `Cmd+Shift` + `D` | Fold the other panes in the column |
+| `Alt` + `H` | `Cmd+Shift` + `H` | Attach the focused pane to a new herdr session |
+| `Alt+Shift` + `H` | `Ctrl+Cmd` + `H` | Stop the focused pane's herdr session |
 | `Alt` + `U` `I` `O` `P` | `Cmd` + `U` `I` `O` `P` | Resize — four keys on one row, in vim order |
 | `Alt+Shift` + `Z` | `Cmd+Option` + `Enter` | Cycle the column's width: full view, half view, its own |
 | `Alt+Shift` + `U` `I` `O` `P` | `Cmd+Shift` + `U` `I` `O` `P` | Move the pane itself |
