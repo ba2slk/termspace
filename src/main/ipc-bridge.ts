@@ -24,6 +24,9 @@ import { listMonoFonts } from './font-list'
 import { ensureThemesDir, listUserThemes } from './theme-config'
 import { OutputBatcher } from './output-batcher'
 import { resolvePaneCommand } from './pane-command'
+import { herdrAttachCommand } from './herdr-command'
+import { herdrCli } from './herdr-cli'
+import { startInsideHerdr } from './herdr-attach'
 import type { PtyHost } from './pty-host'
 import {
   archiveSession,
@@ -330,20 +333,36 @@ export function registerIpcHandlers(
     },
   )
 
-  registerHandler(
-    'pty:spawn',
-    (_e, request: SpawnRequest): SpawnResult =>
-      host.spawn(request, {
-        onData: (paneId, data) => batcher.push(paneId, data),
-        onAttention: announce,
-        onExit: (exit) => {
-          // Flush before announcing the exit, or the dying process's last
-          // error message never reaches the screen.
-          batcher.flushPane(exit.paneId)
-          send('pty:exit', exit)
-        },
-      }),
-  )
+  registerHandler('pty:spawn', (_e, request: SpawnRequest): SpawnResult => {
+    // A herdr pane's shell runs the attach; its command belongs inside herdr.
+    const outer: SpawnRequest =
+      request.herdr === null ? request : { ...request, command: herdrAttachCommand(request.herdr) }
+    const result = host.spawn(outer, {
+      onData: (paneId, data) => batcher.push(paneId, data),
+      onAttention: announce,
+      onExit: (exit) => {
+        // Flush before announcing the exit, or the dying process's last
+        // error message never reaches the screen.
+        batcher.flushPane(exit.paneId)
+        send('pty:exit', exit)
+      },
+    })
+    if (result.ok && request.herdr !== null && request.command !== null) {
+      // Off the reply path: the server takes a moment to come up, and no other
+      // pane should wait on it. The pane shows whatever herdr shows meanwhile.
+      const { herdr, command } = request
+      // A pane closed during the wait must not get a program started for it.
+      const alive = () => host.has(request.paneId)
+      void startInsideHerdr(herdrCli, herdr, command, { alive }).then((outcome) => {
+        // Only a server that never answered or answered wrong is worth a line;
+        // a busy or many-pane session is one the user shaped.
+        if (outcome === 'timeout' || outcome === 'failed') {
+          console.warn(`herdr: did not start "${command}" in session ${herdr}: ${outcome}`)
+        }
+      })
+    }
+    return result
+  })
 
   // A snapshot for the overview: what runs in each pane's foreground right now.
   registerHandler(
