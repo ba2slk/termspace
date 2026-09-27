@@ -24,7 +24,7 @@ const COMMAND_ACTIONS: readonly (keyof CommandActions)[] = [
 ]
 
 const SIDEBAR_ACTIONS: readonly (keyof SidebarMenuActions)[] = [
-  'open', 'endSession', 'saveLayout', 'editSessionFile', 'renameSession',
+  'open', 'endSession', 'stopHerdr', 'saveLayout', 'editSessionFile', 'renameSession',
   'newSession', 'refreshList', 'openSessionsDir', 'deleteSession',
   'archiveSession', 'restoreSession',
 ]
@@ -147,7 +147,7 @@ function sidebar(state: Partial<SidebarMenuState> = {}): {
 describe('the sidebar menu', () => {
   it('is grouped: run the session, its file, then delete', () => {
     expect(groups(sidebar({}).items)).toEqual([
-      [t.firstRun.viewing, t.firstRun.endSession],
+      [t.firstRun.viewing, t.firstRun.endSession, t.firstRun.stopHerdrSessions],
       [t.firstRun.renameSession, t.firstRun.saveLayout, t.firstRun.editSessionFile],
       [t.firstRun.archiveSession, t.firstRun.deleteSession],
     ])
@@ -215,6 +215,17 @@ describe('the sidebar menu', () => {
     expect(actions.archiveSession).toHaveBeenCalledTimes(1)
   })
 
+  /* herdr sessions outlive the runtime, so a closed session can still hold some. */
+  it('offers to stop its herdr sessions whether or not it is running', () => {
+    for (const running of [true, false]) {
+      const { items, actions } = sidebar({ running, isCurrent: false })
+      const stop = items.find((item) => item.label === t.firstRun.stopHerdrSessions)
+      expect(stop?.disabled).not.toBe(true)
+      stop?.run()
+      expect(actions.stopHerdr).toHaveBeenCalledTimes(1)
+    }
+  })
+
   /* An archived row is a shelf, not a session: only getting it back, or losing it. */
   it('offers restore and delete, and nothing else, on an archived row', () => {
     const { items, actions } = sidebar({ archived: true, running: false, isCurrent: false })
@@ -224,6 +235,10 @@ describe('the sidebar menu', () => {
     ])
     items[0]?.run()
     expect(actions.restoreSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not offer to stop herdr sessions on an archived row', () => {
+    expect(labels(sidebar({ archived: true }).items)).not.toContain(t.firstRun.stopHerdrSessions)
   })
 
   it('still marks only the delete as dangerous on an archived row', () => {

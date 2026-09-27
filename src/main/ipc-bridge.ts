@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { app, clipboard, dialog, ipcMain, Notification, shell, type BrowserWindow } from 'electron'
 import type {
   HerdrActionResult,
+  HerdrStopSessionsResult,
   LayoutSnapshot,
   PaneAttention,
   LoadSessionResult,
@@ -25,7 +26,14 @@ import { listMonoFonts } from './font-list'
 import { ensureThemesDir, listUserThemes } from './theme-config'
 import { OutputBatcher } from './output-batcher'
 import { attachedHerdr, resolveSavedPane } from './pane-command'
-import { herdrAttachCommand, nextHerdrName, sessionNamesFrom, sessionStem } from './herdr-command'
+import {
+  herdrAttachCommand,
+  isHerdrName,
+  nextHerdrName,
+  runningSessionNamesFrom,
+  sessionNamesFrom,
+  sessionStem,
+} from './herdr-command'
 import { herdrAvailable, herdrCli } from './herdr-cli'
 import { insideHerdr, startInsideHerdr } from './herdr-attach'
 import type { PtyHost } from './pty-host'
@@ -415,6 +423,60 @@ export function registerIpcHandlers(
     const stopped = await herdrCli(null, ['session', 'stop', '--json', name])
     return stopped.ok ? { ok: true, name } : { ok: false, reason: 'failed', message: stopped.message }
   })
+
+  /*
+   * The file's declarations cover panes the session has not opened this run;
+   * the live panes cover a herdr typed by hand. Only running ones can be stopped.
+   */
+  registerHandler(
+    'herdr:sessions-of',
+    async (_e, sessionId: string, paneIds: readonly string[]): Promise<readonly string[] | null> => {
+      if (!(await herdrAvailable())) return null
+      const listed = await herdrCli(null, ['session', 'list', '--json'])
+      if (!listed.ok) return []
+      const loaded = await loadSession(dir, sessionId, env)
+      const declared = (loaded.spec?.columns ?? []).flatMap((c) =>
+        c.panes.map((p) => (p.kind === 'pane' ? p.herdr : null)),
+      )
+      const attached = await Promise.all(
+        paneIds.filter((id) => host.has(id)).map(async (id) =>
+          attachedHerdr({
+            prefill: null,
+            declaredCommand: null,
+            submittedCommand: host.submittedCommandOf(id),
+            foregroundCommand: await host.foregroundCommandOf(id),
+            declaredCwd: '',
+            liveCwd: null,
+            home: '',
+          }),
+        ),
+      )
+      const running = new Set(runningSessionNamesFrom(listed.json))
+      return [...new Set([...declared, ...attached])]
+        .filter((name): name is string => name !== null && running.has(name))
+        .sort()
+    },
+  )
+
+  // One at a time: each stop waits on its server, and a failure names its session.
+  registerHandler(
+    'herdr:stop-sessions',
+    async (_e, names: readonly string[]): Promise<HerdrStopSessionsResult> => {
+      const stopped: string[] = []
+      const failed: { name: string; message: string }[] = []
+      for (const name of names) {
+        // A leading dash would reach herdr as a flag, not a name.
+        if (!isHerdrName(name) || name.startsWith('-')) {
+          failed.push({ name, message: 'invalid name' })
+          continue
+        }
+        const reply = await herdrCli(null, ['session', 'stop', '--json', name])
+        if (reply.ok) stopped.push(name)
+        else failed.push({ name, message: reply.message })
+      }
+      return { stopped, failed }
+    },
+  )
 
   // Window titles per pane (OSC 0/2), for the overview.
   registerHandler(

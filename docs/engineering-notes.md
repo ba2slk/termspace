@@ -972,3 +972,11 @@ document-wide focused pane is the wrong one: a hidden session's host comes first
 the DOM and keeps its own focused pane. `checkHerdrKeys` reads
 `.session-host:not([hidden]) .pane--focused`. It presses the stop key even when the
 attach was late, so no herdr client is left in the pane the next check types into.
+
+**"Stop all herdr sessions" collects from the file and from the panes.** The
+session file names the herdr sessions its panes restore into, including panes not
+open this run; a live pane may be attached to one typed by hand, which the file
+does not know yet. `herdr:sessions-of` takes the union and keeps only the names
+`herdr session list` reports as running, so the dialog lists nothing it cannot
+stop. The self-check does not cover it: a run on a real machine would stop the
+user's own sessions.

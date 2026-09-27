@@ -250,6 +250,11 @@ export type HerdrActionResult =
   | { readonly ok: true; readonly name: string }
   | { readonly ok: false; readonly reason: 'busy' | 'not-herdr' | 'no-herdr' | 'failed'; readonly message: string }
 
+export interface HerdrStopSessionsResult {
+  readonly stopped: readonly string[]
+  readonly failed: readonly { readonly name: string; readonly message: string }[]
+}
+
 export interface PtyExit {
   readonly paneId: string
   readonly exitCode: number
@@ -362,6 +367,13 @@ export interface TermspaceApi {
   herdrWrap(paneId: string, sessionId: string | null): Promise<HerdrActionResult>
   /** Stop the herdr session the pane is attached to. */
   herdrStop(paneId: string): Promise<HerdrActionResult>
+  /**
+   * Running herdr sessions a Termspace session holds: those its file declares
+   * and those its live panes are attached to. Null when herdr is not installed.
+   */
+  herdrSessionsOf(sessionId: string, paneIds: readonly string[]): Promise<readonly string[] | null>
+  /** Stop each named herdr session, one after another. */
+  herdrStopSessions(names: readonly string[]): Promise<HerdrStopSessionsResult>
   write(paneId: string, data: string): void
   resize(paneId: string, cols: number, rows: number): void
   kill(paneId: string): void

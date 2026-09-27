@@ -47,6 +47,7 @@ const en = {
     viewing: 'Viewing',
     open: 'Open',
     endSession: 'End session',
+    stopHerdrSessions: 'Stop all herdr sessions',
     deleteSession: 'Delete session',
     renameSession: 'Rename session',
     archiveSession: 'Archive session',
@@ -65,6 +66,13 @@ const en = {
     deleteConfirm: 'Move to trash',
     deletedToast: 'Moved to the trash',
     deleteFailedToast: 'Could not delete',
+
+    // Stopping every herdr session a session holds
+    stopHerdrTitle: (count: string) => (count === '1' ? 'Stop 1 herdr session?' : `Stop ${count} herdr sessions?`),
+    stopHerdrLead: (names: string) => `Everything running inside ${names} stops too.`,
+    stopHerdrConfirm: 'Stop',
+    stopHerdrNone: 'No herdr session is running for this session',
+    stopHerdrFailed: (failures: string) => `Could not stop · ${failures}`,
 
     // Toasts
     sessionFileMissing: 'Session file not found',
@@ -435,6 +443,7 @@ const ko: Catalog = {
     viewing: '열려 있음',
     open: '열기',
     endSession: '세션 끝내기',
+    stopHerdrSessions: 'herdr 세션 모두 끄기',
     deleteSession: '세션 지우기',
     renameSession: '세션 이름 바꾸기',
     archiveSession: '아카이브로 보내기',
@@ -451,6 +460,12 @@ const ko: Catalog = {
     deleteConfirm: '휴지통으로 보내기',
     deletedToast: '휴지통으로 보냈습니다',
     deleteFailedToast: '지우지 못했습니다',
+
+    stopHerdrTitle: (count: string) => `herdr 세션 ${count}개를 끌까요?`,
+    stopHerdrLead: (names: string) => `${names} 안에서 돌던 작업도 함께 멈춥니다.`,
+    stopHerdrConfirm: '끄기',
+    stopHerdrNone: '이 세션에 켜진 herdr 세션이 없습니다',
+    stopHerdrFailed: (failures: string) => `끄지 못했습니다 · ${failures}`,
 
     sessionFileMissing: '세션 파일을 찾을 수 없습니다',
     saved: (file: string) => `저장됨 · ${file}`,

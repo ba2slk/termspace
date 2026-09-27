@@ -152,7 +152,8 @@ Termspace shows you what will die and asks first. For work that must outlive
 the window, run a multiplexer inside a pane. herdr gets two keys for it:
 `Alt+H` attaches the focused pane to a new herdr session, `Alt+Shift+H` stops
 that session. A saved session remembers the attachment (`herdr:` in the pane)
-and what ran inside it, and starts both again next time.
+and what ran inside it, and starts both again next time. Right-click a session
+in the list to stop every herdr session it holds.
 
 ## Keys
 
