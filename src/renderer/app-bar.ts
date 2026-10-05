@@ -225,8 +225,11 @@ export function createAppBar(host: HTMLElement, hooks: AppBarHooks): AppBar {
   // and the right end differs between platforms.
   const updateChip = createUpdateChip({ onOpen: () => api.update.openRelease() })
 
-  // Splitting and saving both act on the arrangement, so they share a group.
-  left.append(menuButton, panelButton, divider, splitButton, saveButton, updateChip.element)
+  // The menu stands apart; splitting, saving and the list toggle all act on the
+  // session's layout, so they share the group after the divider. The toggle is
+  // last because it is the one that grows (with the session's name) and only the
+  // chip beyond it moves when it does.
+  left.append(menuButton, divider, splitButton, saveButton, panelButton, updateChip.element)
 
   const title = document.createElement('div')
   title.className = 'app-bar__title'

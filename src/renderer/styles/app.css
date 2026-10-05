@@ -2209,7 +2209,7 @@ button.keys__chord:hover {
   color: var(--fg);
 }
 
-/* Divider in the app bar, separating window controls from pane controls. */
+/* Divider in the app bar, setting the menu apart from the layout controls after it. */
 .app-bar__divider {
   width: 1px;
   height: 16px;
