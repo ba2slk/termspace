@@ -81,11 +81,14 @@ app's, not yours: it writes them, and nothing in them changes what a session *is
 
 - `session-order.json` — the order the sidebar lists sessions in, which is also the
   order `Alt` + `1`–`9` open. Set by dragging a row. A session not yet dragged sorts by
-  when its file was created.
+  when its file was created. The archive dock draws its rows in this same order, so
+  dragging an archived row writes here too: archived and available ids share the file,
+  and a move among one kind leaves the other kind's places alone.
 - `session-archive.json` — the ids of the sessions you have archived. An archived
   session is out of the list, out of `Alt` + `1`–`9` and off the step ring, sitting in
   the dock at the sidebar's bottom until you restore it, which puts it back at the end
-  of the list.
+  of the list. Which sessions are archived is all this file says; a newly archived one
+  lands last in the dock, or on the slot it was dropped on.
 
 Both hold ids, and an id that no longer has a file is simply ignored — deleting a
 session by hand leaves nothing to clean up, and cannot bring a deleted one back.

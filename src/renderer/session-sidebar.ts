@@ -11,6 +11,7 @@ import type { SessionSummary } from '../shared/protocol'
 import { t } from './i18n'
 import { IS_MAC } from './platform'
 import {
+  dropIndexAt,
   dropTargetAt,
   isRestoreDrop,
   REORDER_THRESHOLD,
@@ -41,13 +42,17 @@ export interface SidebarHooks {
   ) => void
   /** The user typed a new display name for a session. */
   readonly onRename: (id: string, newName: string) => void
-  /** The user dragged a row to a new index. */
+  /**
+   * The user dragged a row to a new index among the rows drawn with it: the
+   * list's, or the archive's for an archived row.
+   */
   readonly onReorder: (id: string, toIndex: number) => void
   /**
    * The user dropped a row on the archive. The shell decides what that costs —
-   * a running session has to end first — so only the id travels.
+   * a running session has to end first. `toIndex` is the slot it was dropped on
+   * among the archived rows; without one it lands last.
    */
-  readonly onArchive: (id: string) => void
+  readonly onArchive: (id: string, toIndex?: number) => void
   /**
    * The user dragged an archived row back out onto the list. Where it lands is
    * main's to say — the end of the list, as the menu's Restore does.
@@ -101,6 +106,27 @@ export interface SessionSidebar {
 
 export const SIDEBAR_MIN_WIDTH = 160
 export const SIDEBAR_MAX_WIDTH = 420
+
+/** Two columns of dots where a session row has its dot: this row can be dragged. */
+function gripIcon(): SVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('class', 'sidebar__handle')
+  svg.setAttribute('width', '6')
+  svg.setAttribute('height', '10')
+  svg.setAttribute('viewBox', '0 0 6 10')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const cy of [1, 5, 9]) {
+    for (const cx of [1, 5]) {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+      dot.setAttribute('cx', String(cx))
+      dot.setAttribute('cy', String(cy))
+      dot.setAttribute('r', '1')
+      dot.setAttribute('fill', 'currentColor')
+      svg.append(dot)
+    }
+  }
+  return svg
+}
 
 function icon(paths: string | readonly string[], size = 14): SVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -250,6 +276,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   // stay cold. The list never scrolls on its own — the highlight drags it along.
   let shown: readonly SessionSummary[] = []
   let shownRows: readonly HTMLElement[] = []
+  /** The dock's rows, in the order they are drawn. */
+  let archivedRows: readonly HTMLElement[] = []
   let currentId: string | null = null
   let wantingIds: ReadonlySet<string> = new Set()
   let previewIndex: number | null = null
@@ -313,9 +341,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     dropIndex: number
     /** Row positions taken before any row was pushed; a pushed row measures wrong. */
     boxes: readonly RowBox[]
-    /** The archive header's box, or null when it is not on screen to aim at. */
-    headerBox: RowBox | null
+    /** The whole dock's box, or null when it is not on screen to aim at. */
+    dockBox: RowBox | null
+    /** The archived rows' boxes while the dock is open; closed, there is no slot to aim at. */
+    archivedBoxes: readonly RowBox[] | null
     overArchive: boolean
+    archiveIndex: number | null
+    /** Holds the lifted row's place, so the rows under it keep theirs. */
+    slot: HTMLElement | null
   } | null = null
   let swallowClick = false
   /** The dock was put on screen for this drag alone, and goes away with it. */
@@ -332,17 +365,25 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     aside.append(dock)
   }
 
-  function headerBox(): RowBox | null {
-    if (!dock.isConnected) return null
-    const box = dockHeader.getBoundingClientRect()
-    // Nothing laid out (hidden sidebar, headless test): nothing to aim at.
-    return box.height === 0 ? null : { top: box.top, height: box.height }
-  }
-
-  function rowBoxes(): RowBox[] {
-    return shownRows.map((row) => {
+  const boxesOf = (rows: readonly HTMLElement[]): RowBox[] =>
+    rows.map((row) => {
       const box = row.getBoundingClientRect()
       return { top: box.top, height: box.height }
+    })
+
+  /** One row's pitch in a column of them: its height and the gap to the next. */
+  function slotOf(boxes: readonly RowBox[], index: number): number {
+    const own = boxes[index]
+    if (own === undefined) return 0
+    const next = boxes[index + 1] ?? boxes[index - 1]
+    return next === undefined ? own.height : Math.abs(next.top - own.top)
+  }
+
+  /** The slot a row dropped into the open archive would take: the rows from there on step down. */
+  function markArchiveSlot(index: number | null): void {
+    const slot = drag?.archivedBoxes == null ? 0 : slotOf(drag.archivedBoxes, 0)
+    archivedRows.forEach((row, i) => {
+      row.style.transform = index !== null && i >= index ? `translateY(${String(slot)}px)` : ''
     })
   }
 
@@ -354,10 +395,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   function markDrop(index: number): void {
     if (drag === null) return
     const { boxes, fromIndex } = drag
-    const dragged = boxes[fromIndex]
-    if (dragged === undefined) return
-    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
-    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
+    if (boxes[fromIndex] === undefined) return
+    const slot = slotOf(boxes, fromIndex)
     shownRows.forEach((row, i) => {
       if (i === fromIndex) return
       const shift = rowShift(i, fromIndex, index)
@@ -368,9 +407,11 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   function endDragVisuals(): void {
     if (drag !== null) {
       drag.row.classList.remove('sidebar__row--dragging')
-      drag.row.style.transform = ''
+      dropRow(drag.row)
+      drag.slot?.remove()
     }
     for (const row of shownRows) row.style.transform = ''
+    for (const row of archivedRows) row.style.transform = ''
     endListDragStyles()
     endDockTarget()
   }
@@ -430,8 +471,11 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       moved: false,
       dropIndex: index,
       boxes: [],
-      headerBox: null,
+      dockBox: null,
+      archivedBoxes: null,
       overArchive: false,
+      archiveIndex: null,
+      slot: null,
     }
   })
 
@@ -443,8 +487,11 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       // The wheel dial rebuilds rows; it cannot run under a live drag.
       clearPreview()
       showDockForDrag()
-      drag.boxes = rowBoxes()
-      drag.headerBox = headerBox()
+      drag.boxes = boxesOf(shownRows)
+      drag.dockBox = dockBox()
+      drag.archivedBoxes = dockOpen ? boxesOf(archivedRows) : null
+      // Out of flow, or the list would clip the row at its edge on the way to the dock.
+      drag.slot = liftRow(drag.row)
       drag.row.classList.add('sidebar__row--dragging')
       // Measured before the class hides the bar, which is what makes it 0.
       list.style.setProperty('--drag-bar-w', `${String(list.offsetWidth - list.clientWidth)}px`)
@@ -452,9 +499,17 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       list.setPointerCapture(event.pointerId)
     }
     drag.row.style.transform = `translateY(${String(event.clientY - drag.startY)}px)`
-    const target = dropTargetAt(event.clientY, drag.boxes, drag.fromIndex, drag.headerBox)
+    const target = dropTargetAt(
+      event.clientY,
+      drag.boxes,
+      drag.fromIndex,
+      drag.dockBox,
+      drag.archivedBoxes,
+    )
     drag.overArchive = target.kind === 'archive'
+    drag.archiveIndex = target.kind === 'archive' ? target.index : null
     dockHeader.classList.toggle('sidebar__dock-header--target', drag.overArchive)
+    markArchiveSlot(drag.archiveIndex)
     // Aiming at the archive is not aiming at a slot: the list settles back.
     drag.dropIndex = target.kind === 'index' ? target.index : drag.fromIndex
     markDrop(drag.dropIndex)
@@ -469,11 +524,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   function settleIntoSlot(): void {
     if (drag === null) return
     const { boxes, fromIndex, dropIndex, row } = drag
-    const dragged = boxes[fromIndex]
-    if (dragged === undefined) return
-    const next = boxes[fromIndex + 1] ?? boxes[fromIndex - 1]
-    const slot = next === undefined ? dragged.height : Math.abs(next.top - dragged.top)
-    row.style.transform = `translateY(${String((dropIndex - fromIndex) * slot)}px)`
+    if (boxes[fromIndex] === undefined) return
+    row.style.transform = `translateY(${String((dropIndex - fromIndex) * slotOf(boxes, fromIndex))}px)`
     row.classList.remove('sidebar__row--dragging')
     endListDragStyles()
     endDockTarget()
@@ -481,14 +533,17 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   const finishDrag = (event: PointerEvent): void => {
     if (drag === null || event.pointerId !== drag.pointerId) return
-    const { id, fromIndex, dropIndex, moved, overArchive } = drag
+    const { id, fromIndex, dropIndex, moved, overArchive, archiveIndex } = drag
     if (moved && dropIndex !== fromIndex) settleIntoSlot()
     else endDragVisuals()
     drag = null
     releaseDragPointer(event.pointerId)
     if (!moved) return
     swallowClick = true
-    if (overArchive) hooks.onArchive(id)
+    if (overArchive) {
+      if (archiveIndex === null) hooks.onArchive(id)
+      else hooks.onArchive(id, archiveIndex)
+    }
     else if (dropIndex !== fromIndex) hooks.onReorder(id, dropIndex)
   }
   list.addEventListener('pointerup', finishDrag)
@@ -513,18 +568,24 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     true,
   )
 
-  // ── Drag out of the archive ──────────────────────────
+  // ── Drag inside and out of the archive ───────────────
   //
-  // The reverse of dropping a row on the dock. A release above the dock's top
-  // edge is on the list, and that restores the session.
+  // Inside the dock a drag reorders, as it does in the list. A release above
+  // the dock's top edge is on the list, and that restores the session.
   let dockDrag: {
     readonly id: string
+    readonly fromIndex: number
     readonly startY: number
     readonly row: HTMLElement
     readonly pointerId: number
     moved: boolean
     /** The whole dock, header and rows: leaving it is what reads as a restore. */
     dockBox: RowBox | null
+    /** Row positions taken before the lift; a pushed row measures wrong. */
+    boxes: readonly RowBox[]
+    dropIndex: number
+    /** Holds the lifted row's place, so the rows under it keep theirs. */
+    slot: HTMLElement | null
     restoring: boolean
   } | null = null
 
@@ -536,16 +597,23 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   }
 
   /**
-   * Out of flow for the drag. The dock is a capped, scrolling box, so a row
-   * moving up out of it would be cut off at its edge; fixed escapes that clip,
-   * and the viewport coordinates it needs are the ones the row already has.
+   * Out of flow for the drag. The list and the dock are scrolling boxes, so a
+   * row moving out of either would be cut off at its edge; fixed escapes that
+   * clip, and the viewport coordinates it needs are the ones the row already has.
+   * Returns the empty box left in its place, so the rows under it keep theirs.
    */
-  function liftRow(row: HTMLElement): void {
+  function liftRow(row: HTMLElement): HTMLElement {
+    // Measured before the slot goes in: the slot pushes the row down a place.
     const box = row.getBoundingClientRect()
+    const slot = document.createElement('div')
+    slot.className = 'sidebar__drag-slot'
+    slot.style.height = `${String(box.height)}px`
+    row.before(slot)
     row.style.left = `${String(box.left)}px`
     row.style.top = `${String(box.top)}px`
     row.style.width = `${String(box.width)}px`
     row.classList.add('sidebar__row--lifted')
+    return slot
   }
 
   function dropRow(row: HTMLElement): void {
@@ -556,8 +624,24 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     row.style.width = ''
   }
 
+  /** The same preview the list gives: the rows between origin and target step aside. */
+  function markDockDrop(index: number): void {
+    if (dockDrag === null) return
+    const { boxes, fromIndex } = dockDrag
+    const slot = slotOf(boxes, fromIndex)
+    archivedRows.forEach((row, i) => {
+      if (i === fromIndex) return
+      const shift = rowShift(i, fromIndex, index)
+      row.style.transform = shift === 0 ? '' : `translateY(${String(shift * slot)}px)`
+    })
+  }
+
   function endDockDragVisuals(): void {
-    if (dockDrag !== null) dropRow(dockDrag.row)
+    if (dockDrag !== null) {
+      dropRow(dockDrag.row)
+      dockDrag.slot?.remove()
+    }
+    for (const row of archivedRows) row.style.transform = ''
     dockList.classList.remove('sidebar__dock-list--dragging')
     list.classList.remove('sidebar__list--restore-target')
   }
@@ -579,14 +663,19 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sidebar__row')
     if (row === null || row === undefined) return
     const id = row.dataset['sessionId']
-    if (id === undefined) return
+    const fromIndex = archivedRows.indexOf(row)
+    if (id === undefined || fromIndex === -1) return
     dockDrag = {
       id,
+      fromIndex,
       startY: event.clientY,
       row,
       pointerId: event.pointerId,
       moved: false,
       dockBox: null,
+      boxes: [],
+      dropIndex: fromIndex,
+      slot: null,
       restoring: false,
     }
   })
@@ -598,7 +687,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       dockDrag.moved = true
       // Measured before the lift takes the row out of flow.
       dockDrag.dockBox = dockBox()
-      liftRow(dockDrag.row)
+      dockDrag.boxes = boxesOf(archivedRows)
+      dockDrag.slot = liftRow(dockDrag.row)
       dockList.classList.add('sidebar__dock-list--dragging')
       dockList.setPointerCapture(event.pointerId)
     }
@@ -607,11 +697,17 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     dockDrag.restoring = restoring
     dockDrag.row.classList.toggle('sidebar__row--restoring', restoring)
     list.classList.toggle('sidebar__list--restore-target', restoring)
+    // On its way out it aims at no slot: the dock settles back.
+    dockDrag.dropIndex = restoring
+      ? dockDrag.fromIndex
+      : dropIndexAt(event.clientY, dockDrag.boxes, dockDrag.fromIndex)
+    markDockDrop(dockDrag.dropIndex)
   })
 
   const finishDockDrag = (event: PointerEvent): void => {
     if (dockDrag === null || event.pointerId !== dockDrag.pointerId) return
-    const { id, moved, restoring, row, pointerId } = dockDrag
+    const { id, moved, restoring, row, pointerId, fromIndex, dropIndex, boxes, slot } = dockDrag
+    const reordering = moved && !restoring && dropIndex !== fromIndex
     /*
      * A restore keeps the row where the pointer left it: the list it is joining
      * arrives with the next render, and putting the row back in the dock until
@@ -619,11 +715,18 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
      * rebuilds the dock's rows, this one included.
      */
     if (moved && restoring) {
+      slot?.remove()
       dockList.classList.remove('sidebar__dock-list--dragging')
       list.classList.remove('sidebar__list--restore-target')
+    } else if (reordering) {
+      // As in the list: the preview stays until the render that carries the new
+      // order replaces these rows, or the old order would flash in between.
+      row.style.transform = `translateY(${String((dropIndex - fromIndex) * slotOf(boxes, fromIndex))}px)`
+      dockList.classList.remove('sidebar__dock-list--dragging')
     } else endDockDragVisuals()
     dockDrag = null
     if (dockList.hasPointerCapture(pointerId)) dockList.releasePointerCapture(pointerId)
+    if (reordering) hooks.onReorder(id, dropIndex)
     if (!(moved && restoring)) return
     // A refused restore renders nothing, and by then the drag state that would
     // have put the row down is gone — so the row is the promise's to put back.
@@ -860,7 +963,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     const name = document.createElement('span')
     name.className = 'sidebar__name'
     name.textContent = session.name
-    item.append(name)
+    item.append(gripIcon(), name)
     return item
   }
 
@@ -931,12 +1034,14 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
          * leave nothing behind: a stale row is a live session offering Restore.
          * Closing it costs a refill its open state, which is the cheaper loss.
          */
+        archivedRows = []
         dockList.replaceChildren()
         dockCount.textContent = ''
         setDockOpen(false)
       } else {
         dockCount.textContent = String(archived.length)
-        dockList.replaceChildren(...archived.map(archivedRow))
+        archivedRows = archived.map(archivedRow)
+        dockList.replaceChildren(...archivedRows)
         aside.append(dock)
       }
 

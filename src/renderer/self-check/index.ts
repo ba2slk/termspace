@@ -66,6 +66,7 @@ import {
   checkSaveSession,
   checkSessionStepShortcut,
   checkShellIntegration,
+  checkArchiveDock,
   checkSidebarNarrowName,
   checkSidebarReorder,
   checkWheelSessionSwitch,
@@ -171,6 +172,7 @@ const GROUPS: Readonly<
     await checkHerdrKeys(report)
     await checkAttentionClearsOnReturn(report)
     await checkSidebarReorder(report)
+    await checkArchiveDock(report)
     await checkSidebarNarrowName(report)
     await checkErrorRowStaysDraggable(report)
   },

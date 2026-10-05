@@ -225,14 +225,31 @@ export async function listSessions(
   return markArchived(listed, await readArchive(archivePath))
 }
 
-/** Put a session away. Archiving twice is the same as archiving once. */
+/**
+ * Put a session away. Archiving twice is the same as archiving once.
+ *
+ * It lands at `toIndex` among the archived rows, or last without one: the
+ * archive has an order the user set, and an arrival must not cut into it.
+ */
 export async function archiveSession(
   dir: string,
   orderPath: string,
   archivePath: string,
   id: string,
+  toIndex?: number,
 ): Promise<SessionSummary[]> {
-  await writeArchive(archivePath, withArchived(await readArchive(archivePath), id))
+  const before = await readArchive(archivePath)
+  await writeArchive(archivePath, withArchived(before, id))
+  if (before.includes(id) && toIndex === undefined) return listSessions(dir, orderPath, archivePath)
+  // Seeds the order first, so an archive before any listing still has ids to move.
+  const seeded = await listSessions(dir, orderPath, archivePath)
+  const available = new Set(seeded.filter((s) => !s.archived).map((s) => s.id))
+  const order = seeded.map((s) => s.id)
+  try {
+    await writeOrder(orderPath, moveToVisible(order, available, id, toIndex ?? order.length))
+  } catch {
+    // A read-only config dir must not break archiving a session.
+  }
   return listSessions(dir, orderPath, archivePath)
 }
 
@@ -550,11 +567,13 @@ export async function reorderSession(
 ): Promise<SessionSummary[]> {
   // Seeds the order first, so a drag before any listing still has ids to move.
   const seeded = await listSessions(dir, orderPath, archivePath)
-  // toIndex counts the rows the sidebar draws, and it draws no archived row.
-  const archived = new Set(seeded.filter((s) => s.archived).map((s) => s.id))
+  // toIndex counts the rows drawn beside the moved one: the sidebar draws the
+  // available and the archived apart, and a row moves within its own.
+  const inArchive = seeded.find((s) => s.id === id)?.archived ?? false
+  const apart = new Set(seeded.filter((s) => s.archived !== inArchive).map((s) => s.id))
   const order = seeded.map((s) => s.id)
   try {
-    await writeOrder(orderPath, moveToVisible(order, archived, id, toIndex))
+    await writeOrder(orderPath, moveToVisible(order, apart, id, toIndex))
   } catch {
     // A read-only config dir must not break reordering's list response.
   }

@@ -716,13 +716,28 @@ These can't be replaced by automated judgment. They're matters of impression, no
       appear as typed (both English and Korean), Enter commits, and the session file has the
       new title without pressing save. Escape leaves the card as it was
 
-### Session archive (no self-check covers these)
+### Session archive
 
 The dock, its drag target and the confirm dialog are all pointer work over a live list,
 and archiving a running session ends real ptys. Unit and dom tests pin the decisions
-(which rows are reachable, where a drop lands, what the menu offers); what is left here is
-whether the pointer can actually reach those places on screen, and whether the shells
-really die.
+(which rows are reachable, where a drop lands, what the menu offers). The self-check
+(`checkArchiveDock`, in `sessions`) drags idle sessions with the dock's real geometry:
+
+- A drop on the closed dock's header archives (`archiveDropOnHeader`)
+- With the dock open, a drop on an archived row's upper half, above the header, lands in
+  front of that row (`archiveDropInsideDock`) — the whole dock is the target, not only
+  its header
+- A drop past the last row's middle lands last (`archiveDropAtSlot`)
+- Dragging the first archived row past the second swaps them (`archiveReorders`), and
+  main's listing agrees with the redrawn dock (`archiveOrderKept`)
+- The handle is left of the name with a width (`archiveHandleBesideName`) and has opacity
+  0 without the pointer over the row (`archiveHandleHiddenAtRest`) — a synthetic event
+  cannot hover, so the handle appearing is checked by eye
+- Restoring and deleting the three sessions takes the dock away (`archiveDockLeft`)
+- The dock opens on a transition. A window that gets no frames never finishes it, and
+  everything after the header drop is then `skipped` under `archiveDockSlots`
+
+What is left here is what a pointer has to show, and whether the shells really die.
 
 - [ ] **Archive an idle session.** Right-click a session that is not running › Archive
       session. The row leaves the list at once and appears in the dock at the sidebar's
@@ -743,6 +758,17 @@ really die.
       lights up, the list preview settles back to rest (aiming at the archive is visibly
       not aiming at a slot), and releasing archives instead of reordering. Dragging back up
       off the header reorders as before, and `Esc` mid-drag archives nothing
+- [ ] **Drag into the open dock.** Open the dock and drag a list row down into its rows:
+      the row stays visible under the pointer the whole way (it is not cut off at the
+      list's edge), the header lights up as soon as the pointer crosses the dock's top
+      edge, and the archived rows from the slot under the pointer step down to open a
+      gap. Releasing puts the session in that gap. Moving back up into the list closes
+      the gap
+- [ ] **Reorder the archive.** Hover an archived row: a six-dot handle appears left of its
+      name, where a session row has its dot, and the names line up with the list's. Press
+      the row and drag it past a neighbour: only the held row shows its handle, the rows it
+      passes step aside, and releasing leaves it there. The order survives a restart.
+      `Esc` mid-drag puts every row back
 - [ ] **Drag with nothing archived yet.** With an empty archive the dock is not on screen
       at all. Start dragging a row: the header appears while the drag is live, so there is
       something to aim at, and it goes away again if the drag is cancelled. This is the case

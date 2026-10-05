@@ -261,7 +261,7 @@ const sidebar = createSessionSidebar(workspace, {
   },
   onRename: (id, newName) => void renameSession(id, newName),
   // The same flow the right-click menu runs: it decides about a running session.
-  onArchive: (id) => archiveSession(id),
+  onArchive: (id, toIndex) => archiveSession(id, toIndex),
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
@@ -332,10 +332,10 @@ function sidebarMenuItems(sessionId: string | null, archived: boolean): readonly
  * which is the same loss closing the window asks about — the shelving itself is
  * one right-click away from being undone.
  */
-function archiveSession(id: string): void {
+function archiveSession(id: string, toIndex?: number): void {
   const runtime = sessions.get(id)?.runtime
   if (runtime === undefined) {
-    void applyArchive(id)
+    void applyArchive(id, toIndex)
     return
   }
   const summary = knownSessions.find((s) => s.id === id)
@@ -350,13 +350,13 @@ function archiveSession(id: string): void {
       confirmView.close()
       // The same end as the sidebar's power button, aftermath included.
       endSession(id)
-      void applyArchive(id)
+      void applyArchive(id, toIndex)
     },
   )
 }
 
-async function applyArchive(id: string): Promise<void> {
-  knownSessions = await api.archiveSession(id)
+async function applyArchive(id: string, toIndex?: number): Promise<void> {
+  knownSessions = await api.archiveSession(id, toIndex)
   renderSidebar()
 }
 

@@ -1407,6 +1407,132 @@ export async function checkSidebarReorder(report: Report): Promise<void> {
 }
 
 /**
+ * A row dropped anywhere in the open archive lands on the slot under the
+ * pointer, and archived rows reorder by drag.
+ *
+ * The dom tests hand every row its box; only the running app has the dock's
+ * real geometry, and the round trip through main's order file.
+ */
+export async function checkArchiveDock(report: Report): Promise<void> {
+  const ids = ['selfcheck-shelf-a', 'selfcheck-shelf-b', 'selfcheck-shelf-c'] as const
+  const [a, b, c] = ids
+  for (const id of ids) await api.createBlankSession(id, id, '~', 0)
+  refreshList()
+  const listed = await waitFor(() => ids.every((id) => rowOf(id) !== undefined), 5000)
+  if (!listed) {
+    report['archiveDock'] = 'FAIL (could not make the sessions to archive)'
+    for (const id of ids) await api.deleteSession(id)
+    refreshList()
+    return
+  }
+
+  const dockIds = (): string[] =>
+    [...document.querySelectorAll<HTMLElement>('.sidebar__dock-list .sidebar__row')].map(
+      (r) => r.dataset['sessionId'] ?? '?',
+    )
+  const box = (selector: string): DOMRect | undefined =>
+    document.querySelector<HTMLElement>(selector)?.getBoundingClientRect()
+  const midOf = (id: string): number => {
+    const rect = rowOf(id)?.getBoundingClientRect()
+    return rect === undefined ? 0 : rect.top + rect.height / 2
+  }
+  /** Press a row, travel far enough to become a drag, then go where `to` says and let go. */
+  const dragRow = (id: string, to: () => number): void => {
+    const row = rowOf(id)
+    if (row === undefined) return
+    const rect = row.getBoundingClientRect()
+    const startY = rect.top + rect.height / 2
+    const at = (y: number): PointerEventInit => ({
+      clientX: rect.left + 10,
+      clientY: y,
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+    })
+    row.dispatchEvent(new PointerEvent('pointerdown', at(startY)))
+    // The first move is what puts an empty archive's dock on screen to aim at.
+    row.dispatchEvent(new PointerEvent('pointermove', at(startY + 8)))
+    const targetY = to()
+    row.dispatchEvent(new PointerEvent('pointermove', at(targetY)))
+    row.dispatchEvent(new PointerEvent('pointerup', at(targetY)))
+  }
+
+  // Closed, the dock is its header: dropping there archives.
+  dragRow(a, () => {
+    const header = box('.sidebar__dock-header')
+    return header === undefined ? 0 : header.top + header.height / 2
+  })
+  const shelved = await waitFor(() => dockIds().includes(a))
+  report['archiveDropOnHeader'] = shelved ? 'ok' : `FAIL (dock holds ${dockIds().join(',')})`
+
+  document.querySelector<HTMLElement>('.sidebar__dock-header')?.click()
+  const opened = await waitFor(
+    () =>
+      document.querySelector('.sidebar__dock--settled') !== null &&
+      (rowOf(a)?.getBoundingClientRect().height ?? 0) > 0,
+  )
+  // The dock opens on a transition, and an occluded window produces no frames
+  // to run it: its rows then have no place on screen to aim between.
+  if (!opened) {
+    report['archiveDockSlots'] = 'skipped: the dock never finished opening (no frames arriving)'
+    await api.restoreSession(a)
+    for (const id of ids) await api.deleteSession(id)
+    refreshList()
+    await waitFor(() => ids.every((id) => rowOf(id) === undefined), 5000)
+    return
+  }
+
+  // Open, the rows are part of it: above the header, on the upper half of the one row.
+  const header = box('.sidebar__dock-header')
+  const upperHalf = (rowOf(a)?.getBoundingClientRect().top ?? 0) + 2
+  const aboveHeader = header !== undefined && upperHalf < header.top
+  dragRow(b, () => upperHalf)
+  const inFront = await waitFor(() => dockIds().join(',') === `${b},${a}`)
+  report['archiveDropInsideDock'] =
+    inFront && aboveHeader ? 'ok' : `FAIL (dock holds ${dockIds().join(',')}, above header ${String(aboveHeader)})`
+
+  // Past the last row's middle is the last slot.
+  dragRow(c, () => midOf(a) + 2)
+  const atEnd = await waitFor(() => dockIds().join(',') === `${b},${a},${c}`)
+  report['archiveDropAtSlot'] = atEnd ? 'ok' : `FAIL (dock holds ${dockIds().join(',')})`
+
+  // The first archived row past the second one's middle: the two swap.
+  dragRow(b, () => midOf(a) + 2)
+  const reordered = await waitFor(() => dockIds().join(',') === `${a},${b},${c}`)
+  report['archiveReorders'] = reordered ? 'ok' : `FAIL (dock holds ${dockIds().join(',')})`
+  // The file is the order: the redrawn dock and main's listing must agree.
+  const filed = (await api.listSessions()).filter((s) => s.archived).map((s) => s.id)
+  report['archiveOrderKept'] =
+    filed.join(',') === dockIds().join(',') ? 'ok' : `FAIL (listed ${filed.join(',')}, drawn ${dockIds().join(',')})`
+
+  // The handle takes the place of a session row's dot, and shows only under the pointer.
+  const handle = rowOf(a)?.querySelector<SVGElement>('.sidebar__handle')
+  const name = rowOf(a)?.querySelector<HTMLElement>('.sidebar__name')
+  const handleBox = handle?.getBoundingClientRect()
+  const nameBox = name?.getBoundingClientRect()
+  report['archiveHandleBesideName'] =
+    handleBox !== undefined && nameBox !== undefined && handleBox.width > 0 && handleBox.right <= nameBox.left
+      ? 'ok'
+      : `FAIL (handle ${String(handleBox?.left)}..${String(handleBox?.right)}, name from ${String(nameBox?.left)})`
+  report['archiveHandleHiddenAtRest'] =
+    handle != null && getComputedStyle(handle).opacity === '0'
+      ? 'ok'
+      : `FAIL (opacity ${handle == null ? 'none' : getComputedStyle(handle).opacity})`
+
+  // Leave nothing behind: an emptied archive takes its dock away with it.
+  for (const id of ids) {
+    await api.restoreSession(id)
+    await api.deleteSession(id)
+  }
+  refreshList()
+  const cleared = await waitFor(
+    () => ids.every((id) => rowOf(id) === undefined) && document.querySelector('.sidebar__dock') === null,
+    5000,
+  )
+  report['archiveDockLeft'] = cleared ? 'ok' : 'FAIL (rows or the dock stayed)'
+}
+
+/**
  * A session whose file failed to parse still shows a row, its open button
  * disabled so a click can't spawn a pty for it — but the row underneath must
  * still take a drag. That relies on `.sidebar__open:disabled { pointer-events:
