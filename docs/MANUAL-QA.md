@@ -320,10 +320,13 @@ group starts from nothing open. The save half runs first in `sessions`.
   — the feature is what the app shows before anything else
 - The pane's shell prints something (`defaultTerminalShell`) — a slot with a dead pty
   looks the same in the DOM. No prompt at all is `skipped`, not `FAIL`
-- The slot is drawn above the list, by its rectangle (`defaultTerminalAboveList`) — DOM
-  order alone does not say where it lands
-- The slot's bottom border is solid and between 0 and 1px (`defaultTerminalHairline`) —
-  computed widths snap to device pixels, so 1px can read as 0.6px
+- The slot is drawn above the list, under the "Sessions" label and its buttons, by its
+  rectangle (`defaultTerminalAboveList`) — DOM order alone does not say where it lands
+- The slot is a band one step darker than the sidebar panel, and it spans the panel's
+  inner width within 1px on both sides (`defaultTerminalBand`). The band's own edges are
+  the separators: a resting fill on the row would read as hover or as the current session
+- The band ends where the list starts, and has no border under it, so there is one
+  separation and not a band edge plus a line (`defaultTerminalBandEdge`)
 - The pane is as wide as the canvas beside the sidebar, within 1px of the column cap
   (`defaultTerminalFillsCanvas`) — boot waits for the window manager to finish sizing
   the window first. A window resized after the pane opened is `skipped`, with both widths
@@ -554,8 +557,8 @@ sessions' attention sets and the tab agree, and no unit test reaches that wiring
 - Clicking the row opens `verify`, removes the row, empties the count and, back on the
   Sessions tab, takes `--wants` off the session's dot, which was `--wants` before the
   click so the colour read can tell the two apart (`notifyQueueClickGoes`). On that
-  Sessions tab the buttons are back, below the default terminal's row and above the
-  first session row (`notifySessionActionsPlace`)
+  Sessions tab the buttons are back, above the default terminal's row, which is above
+  the list (`notifySessionActionsPlace`)
 - **The click empties the queue, and the sidebar leaves the Notifications tab by
   itself** (`notifyQueueReturnsToSessions`): no click on the Sessions tab is made, and
   the check waits for that tab's `aria-selected` and for the list to have a height.

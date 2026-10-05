@@ -108,7 +108,7 @@ export interface SessionSidebar {
   startRename(sessionId: string): void
   /**
    * The file-less terminal a launch opens, drawn above the list rather than in
-   * it: no number, no drag, no archive. Null means none is running: the row
+   * it, under the sessions label: no number, no drag, no archive. Null means none is running: the row
    * stays, as the way to start one.
    */
   setDefaultTerminal(state: { readonly current: boolean; readonly wants: boolean } | null): void
@@ -227,7 +227,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   header.append(tabs)
 
-  // Above the list and not in it: the buttons must not scroll away with the rows.
+  // Outside the list: the buttons must not scroll away with the rows.
   const listHeader = document.createElement('div')
   listHeader.className = 'sidebar__list-header'
   const listTitle = document.createElement('span')
@@ -239,9 +239,9 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   list.className = 'sidebar__list'
 
   /*
-   * The default terminal's slot. Outside the list, across a hairline, as the
-   * archive dock is below it: the list's wheel dial and drag listen on the list
-   * alone, so neither can reach this row.
+   * The default terminal's slot, under the "Sessions" label. Outside the list,
+   * across a hairline, as the archive dock is below it: the list's wheel dial and
+   * drag listen on the list alone, so neither can reach this row.
    */
   const pinned = document.createElement('div')
   pinned.className = 'sidebar__pinned'
@@ -353,7 +353,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   selectTab(false)
   let queued = 0
 
-  aside.append(header, pinned, listHeader, list, notifications)
+  aside.append(header, listHeader, pinned, list, notifications)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
   host.prepend(aside, grip)
 

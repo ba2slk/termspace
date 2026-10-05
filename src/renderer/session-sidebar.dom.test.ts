@@ -829,9 +829,8 @@ describe('the default terminal slot', () => {
     const sidebar = createSessionSidebar(host, hooks())
     sidebar.render([summary()], new Map(), null)
     const pinned = slot()!
-    expect(pinned.nextElementSibling?.nextElementSibling).toBe(
-      document.querySelector('.sidebar__list'),
-    )
+    expect(pinned.nextElementSibling).toBe(document.querySelector('.sidebar__list'))
+    expect(pinned.previousElementSibling).toBe(document.querySelector('.sidebar__list-header'))
     expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
     expect(pinned.querySelector('.sidebar__dot')).not.toBeNull()
     expect(pinned.querySelector('.sidebar__dot--on')).toBeNull()
@@ -844,8 +843,7 @@ describe('the default terminal slot', () => {
     sidebar.setDefaultTerminal({ current: true, wants: false })
     const pinned = slot()!
     const list = document.querySelector('.sidebar__list')!
-    // The sessions' own header row sits between the two.
-    expect(pinned.nextElementSibling?.nextElementSibling).toBe(list)
+    expect(pinned.nextElementSibling).toBe(list)
     expect(list.contains(pinned)).toBe(false)
     expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
     expect(pinned.querySelector('.sidebar__meta')?.textContent).toBe('unsaved')
@@ -965,13 +963,13 @@ describe('session sidebar tabs', () => {
     expect(header.querySelector('.sidebar__action')).toBeNull()
   })
 
-  it('puts the session actions in a row between the default terminal and the list', () => {
+  it('puts the session actions in a row above the default terminal and the list', () => {
     createSessionSidebar(host, hooks())
     const kids = [...aside().children].map((el) => el.className)
     expect(kids.slice(0, 4)).toEqual([
       'sidebar__header',
-      'sidebar__pinned',
       'sidebar__list-header',
+      'sidebar__pinned',
       'sidebar__list',
     ])
     const listHeader = document.querySelector('.sidebar__list-header')!

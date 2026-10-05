@@ -606,13 +606,14 @@ body {
   color: var(--fg-faint);
 }
 
-/* The default terminal: above the list and not in it, across the same hairline
-   that sets the archive dock apart below. The row inside is an ordinary row. */
+/* The default terminal: under the sessions label, outside the list. A band one
+   step darker than the panel, edge to edge, reads as fixed in place; its own edges
+   are the separators, so it takes no hairline. The label's 28px box already gives
+   the gap above it. The padding keeps the row on the same columns as the list's. */
 .sidebar__pinned {
   flex: 0 0 auto;
-  padding: 0 6px 6px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 6px;
+  background: var(--bg-canvas);
 }
 
 .sidebar__row {

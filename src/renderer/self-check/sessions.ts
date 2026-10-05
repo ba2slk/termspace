@@ -108,13 +108,32 @@ export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void
     slot !== undefined && list !== undefined && slot.height > 0 && slot.bottom <= list.top + 1
       ? 'ok'
       : `FAIL (slot ${String(slot?.bottom)} list ${String(list?.top)})`
-  const line = pinnedSlot() === null ? null : getComputedStyle(pinnedSlot()!)
-  // Border widths snap to device pixels, so 1px reads as 0.6px at dpr 1.67.
-  const width = Number.parseFloat(line?.borderBottomWidth ?? '')
-  report['defaultTerminalHairline'] =
-    line !== null && line.borderBottomStyle === 'solid' && width > 0 && width <= 1
-      ? 'ok'
-      : `FAIL (${String(line?.borderBottomStyle)} ${String(line?.borderBottomWidth)})`
+  // The band is the separator: darker than the panel, across its inner width, ending where the list starts.
+  const panel = document.querySelector<HTMLElement>('aside.sidebar')
+  const band = pinnedSlot()
+  const bandColour = band === null ? '' : getComputedStyle(band).backgroundColor
+  const panelColour = panel === null ? '' : getComputedStyle(panel).backgroundColor
+  const bandBox = band?.getBoundingClientRect()
+  const innerLeft = panel === null ? NaN : panel.getBoundingClientRect().left + panel.clientLeft
+  const innerRight = panel === null ? NaN : innerLeft + panel.clientWidth
+  report['defaultTerminalBand'] =
+    bandColour === '' || panelColour === '' || bandBox === undefined
+      ? 'FAIL (no band or panel)'
+      : bandColour === panelColour
+        ? `FAIL (band and panel are both ${bandColour})`
+        : Math.abs(bandBox.left - innerLeft) > 1 || Math.abs(bandBox.right - innerRight) > 1
+          ? `FAIL (band spans ${String(bandBox.left)}..${String(bandBox.right)}, panel inside ${String(innerLeft)}..${String(innerRight)})`
+          : 'ok'
+  // One separator, not a band edge plus a border line: nothing but the band sits between row and list.
+  const border = band === null ? '' : getComputedStyle(band).borderBottomWidth
+  report['defaultTerminalBandEdge'] =
+    bandBox === undefined || list === undefined
+      ? 'FAIL (no band or list)'
+      : Number.parseFloat(border) !== 0
+        ? `FAIL (band has a ${border} border under it)`
+        : Math.abs(bandBox.bottom - list.top) > 1
+          ? `FAIL (band ends at ${String(bandBox.bottom)}, list starts at ${String(list.top)})`
+          : 'ok'
 
   pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
   await waitFor(() => !terminalRuns() && visiblePanes().length === 0)
@@ -1316,23 +1335,21 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
       : returned
         ? 'ok'
         : `FAIL (sessions tab selected ${String(tabs()[0]?.getAttribute('aria-selected'))}, list ${String(rect(document.querySelector('.sidebar__list'))?.height)}px high)`
-  // Back on the sessions tab the actions sit between the default terminal and the list.
+  // Back on the sessions tab the actions sit above the default terminal, which sits above the list.
   const actionsBox = rect(document.querySelector('.sidebar__actions'))
   const pinnedBox = rect(pinnedSlot())
-  const firstRow = rect(document.querySelector('.sidebar__list .sidebar__row'))
   const listTop = rect(document.querySelector('.sidebar__list'))?.top
-  const below = firstRow?.top ?? listTop
   report['notifySessionActionsPlace'] =
     side === undefined || side.width === 0
       ? 'skipped (sidebar not laid out: closed or collapsed)'
       : actionsBox === undefined || actionsBox.width <= 0 || actionsBox.height <= 0
         ? 'FAIL (session actions have no size on the sessions tab)'
-        : pinnedBox === undefined || below === undefined
+        : pinnedBox === undefined || listTop === undefined
           ? 'FAIL (no default terminal row or list to measure against)'
-          : actionsBox.bottom > below + EPS
-            ? `FAIL (actions end at ${String(actionsBox.bottom)}, below the list's start at ${String(below)})`
-            : actionsBox.top < pinnedBox.bottom - EPS
-              ? `FAIL (actions start at ${String(actionsBox.top)}, over the default terminal ending at ${String(pinnedBox.bottom)})`
+          : actionsBox.bottom > pinnedBox.top + EPS
+            ? `FAIL (actions end at ${String(actionsBox.bottom)}, below the default terminal's start at ${String(pinnedBox.top)})`
+            : pinnedBox.bottom > listTop + EPS
+              ? `FAIL (default terminal ends at ${String(pinnedBox.bottom)}, below the list's start at ${String(listTop)})`
               : 'ok'
   const dotAfter = dotFill('verify')
   const clickProblems: string[] = []
