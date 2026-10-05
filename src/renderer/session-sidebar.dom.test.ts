@@ -39,6 +39,7 @@ const hooks = (): SidebarHooks => ({
   onOpenDefaultTerminal: vi.fn(),
   onCloseDefaultTerminal: vi.fn(),
   onDefaultTerminalMenu: vi.fn(),
+  onOpenNotification: vi.fn(),
 })
 
 let host: HTMLElement
@@ -972,5 +973,70 @@ describe('session sidebar tabs', () => {
     createSessionSidebar(host, hooks())
     const list = document.querySelector('.sidebar__list')!
     expect(list.nextElementSibling?.classList.contains('sidebar__notifications')).toBe(true)
+  })
+
+  describe('rows', () => {
+    const buttons = (): HTMLButtonElement[] => [
+      ...document.querySelectorAll<HTMLButtonElement>('.sidebar__notification'),
+    ]
+
+    it('draws one button per row, in the order given', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('b'), row('a'), row('c')])
+      expect(buttons().map((b) => b.dataset['paneId'])).toEqual(['b', 'a', 'c'])
+      expect(buttons().every((b) => b.type === 'button')).toBe(true)
+    })
+
+    it('shows session and pane on the first line with the time, and the text on the second', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('a')])
+      const button = buttons()[0]!
+      expect(button.querySelector('.sidebar__notification-session')!.textContent).toBe('work')
+      expect(button.querySelector('.sidebar__notification-pane')!.textContent).toBe('Terminal')
+      expect(button.querySelector('.sidebar__notification-time')!.textContent).toBe('14:32')
+      expect(button.querySelector('.sidebar__notification-text')!.textContent).toBe(
+        'Done: build finished',
+      )
+    })
+
+    it('shows a lone title or a lone body without a colon', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([
+        { ...row('a'), title: '', body: 'only body' },
+        { ...row('b'), title: 'only title', body: '' },
+      ])
+      const texts = [...document.querySelectorAll('.sidebar__notification-text')].map(
+        (el) => el.textContent,
+      )
+      expect(texts).toEqual(['only body', 'only title'])
+    })
+
+    it('renders markup in a notification as literal text', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([{ ...row('a'), body: '<b>x</b>', session: '<i>s</i>' }])
+      const box = document.querySelector('.sidebar__notifications')!
+      expect(box.querySelector('b')).toBeNull()
+      expect(box.querySelector('i')).toBeNull()
+      expect(box.querySelector('.sidebar__notification-text')!.textContent).toBe('Done: <b>x</b>')
+      expect(box.querySelector('.sidebar__notification-session')!.textContent).toBe('<i>s</i>')
+    })
+
+    it('calls the hook with the pane id and stays on the tab', () => {
+      const h = hooks()
+      const sidebar = createSessionSidebar(host, h)
+      sidebar.setNotifications([row('a'), row('b')])
+      tabs()[1]!.click()
+      buttons()[1]!.click()
+      expect(h.onOpenNotification).toHaveBeenCalledTimes(1)
+      expect(h.onOpenNotification).toHaveBeenCalledWith('b')
+      expect(aside().classList.contains('sidebar--notifications')).toBe(true)
+    })
+
+    it('removes the extra rows when called again with fewer', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('a'), row('b'), row('c')])
+      sidebar.setNotifications([row('b')])
+      expect(buttons().map((b) => b.dataset['paneId'])).toEqual(['b'])
+    })
   })
 })

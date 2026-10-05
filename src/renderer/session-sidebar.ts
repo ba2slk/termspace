@@ -19,6 +19,7 @@ import {
   type RowBox,
 } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
+import { notificationText } from './attention-queue'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
 export const WHEEL_SETTLE_MS = 200
@@ -71,6 +72,8 @@ export interface SidebarHooks {
   readonly onDefaultTerminalMenu: (at: { x: number; y: number }) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
+  /** A notification row was clicked: go to the pane that sent it. */
+  readonly onOpenNotification: (paneId: string) => void
 }
 
 export interface NotificationRow {
@@ -301,6 +304,30 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   notificationsEmpty.className = 'sidebar__notifications-empty'
   notificationsEmpty.textContent = t.sidebar.notificationsEmpty
   notifications.append(notificationsEmpty)
+
+  // Every string here is program output; textContent keeps it from being parsed.
+  function notificationButton(row: NotificationRow): HTMLButtonElement {
+    const part = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement('span')
+      el.className = `sidebar__notification-${cls}`
+      el.textContent = text
+      return el
+    }
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'sidebar__notification'
+    button.dataset['paneId'] = row.paneId
+    const head = document.createElement('span')
+    head.className = 'sidebar__notification-head'
+    head.append(
+      part('session', row.session),
+      part('pane', row.pane),
+      part('time', row.time),
+    )
+    button.append(head, part('text', notificationText(row.title, row.body)))
+    button.addEventListener('click', () => hooks.onOpenNotification(row.paneId))
+    return button
+  }
 
   // Runtime only, always opens on sessions. CSS does the swap off one class.
   function selectTab(showNotifications: boolean): void {
@@ -1067,8 +1094,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     setNotifications(rows) {
       notificationsCount.textContent = rows.length === 0 ? '' : String(rows.length)
-      // Rows are drawn by the next step; until then only the empty line varies.
-      notifications.replaceChildren(...(rows.length === 0 ? [notificationsEmpty] : []))
+      // The list is a handful of rows, so it is rebuilt rather than diffed.
+      notifications.replaceChildren(
+        ...(rows.length === 0 ? [notificationsEmpty] : rows.map(notificationButton)),
+      )
     },
 
     render(sessions, live, current, wanting) {

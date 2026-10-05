@@ -23,8 +23,9 @@ import { maxColumnWidth } from './layout-geometry'
 import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
 import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
-import { prune, upsert, type QueuedNotification } from './attention-queue'
-import { createSessionSidebar } from './session-sidebar'
+import { formatClock, prune, upsert, type QueuedNotification } from './attention-queue'
+import { createSessionSidebar, type NotificationRow } from './session-sidebar'
+import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createPageWebglCoordinator } from './page-webgl-coordinator'
 import { createSettingsView } from './settings-view'
@@ -266,6 +267,7 @@ const sidebar = createSessionSidebar(workspace, {
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
+  onOpenNotification: (paneId) => goToPane(paneId),
   onOpenDefaultTerminal: () => void openDefaultTerminal(),
   onCloseDefaultTerminal: () => endSession(DEFAULT_TERMINAL_ID),
   onDefaultTerminalMenu: (at) => {
@@ -544,6 +546,33 @@ function pruneQueue(): void {
   )
 }
 
+/** The queue with names filled in. A pane no session holds any more is skipped. */
+function notificationRows(): NotificationRow[] {
+  const rows: NotificationRow[] = []
+  for (const { paneId, title, body, at } of queue) {
+    const owner = sessionOwningPane(paneId)
+    if (owner === null) continue
+    const pane = sessions
+      .get(owner)
+      ?.runtime.snapshot()
+      .columns.flatMap((column) => column.panes)
+      .find((p) => p.paneId === paneId)
+    if (pane === undefined) continue
+    const session = isDefaultTerminal(owner)
+      ? t.sidebar.defaultTerminal
+      : (knownSessions.find((s) => s.id === owner)?.name ?? owner)
+    rows.push({
+      paneId,
+      session,
+      pane: isDefaultPaneTitle(pane.title) ? DEFAULT_PANE_TITLE : pane.title.trim(),
+      title,
+      body,
+      time: formatClock(at),
+    })
+  }
+  return rows
+}
+
 /**
  * Redraw from what is already known.
  *
@@ -555,6 +584,7 @@ function renderSidebar(): void {
     [...sessions].filter(([, entry]) => entry.runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
+  sidebar.setNotifications(notificationRows())
   const terminal = sessions.get(DEFAULT_TERMINAL_ID)?.runtime
   sidebar.setDefaultTerminal(
     terminal === undefined

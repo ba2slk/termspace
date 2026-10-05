@@ -35,3 +35,15 @@ export function prune(
   // Same reference when nothing went, so a caller can skip the redraw.
   return kept.length === queue.length ? queue : kept
 }
+
+/** Local 24h "HH:MM". Built by hand: toLocaleTimeString follows the machine's locale. */
+export function formatClock(at: number): string {
+  const time = new Date(at)
+  const two = (n: number): string => String(n).padStart(2, '0')
+  return `${two(time.getHours())}:${two(time.getMinutes())}`
+}
+
+/** What a row says: "title: body", or whichever of the two is there. */
+export function notificationText(title: string, body: string): string {
+  return title !== '' && body !== '' ? `${title}: ${body}` : title !== '' ? title : body
+}

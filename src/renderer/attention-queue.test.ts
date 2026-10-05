@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { prune, upsert, type QueuedNotification } from './attention-queue'
+import { formatClock, notificationText, prune, upsert, type QueuedNotification } from './attention-queue'
 
 function entry(paneId: string, at = 1, title = '', body = ''): QueuedNotification {
   return { paneId, title, body, at }
@@ -49,5 +49,34 @@ describe('prune', () => {
     const next = prune(queue, (id) => id === 'b')
     expect(queue.map((e) => e.paneId)).toEqual(['a', 'b'])
     expect(next).not.toBe(queue)
+  })
+})
+
+describe('formatClock', () => {
+  const at = (hh: number, mm: number): number => new Date(2026, 9, 5, hh, mm).getTime()
+
+  it('writes local 24h time, zero-padded', () => {
+    expect(formatClock(at(14, 32))).toBe('14:32')
+    expect(formatClock(at(9, 5))).toBe('09:05')
+  })
+
+  it('reads midnight as 00:00 and the last minute as 23:59', () => {
+    expect(formatClock(at(0, 0))).toBe('00:00')
+    expect(formatClock(at(23, 59))).toBe('23:59')
+  })
+})
+
+describe('notificationText', () => {
+  it('joins title and body with a colon', () => {
+    expect(notificationText('Done', 'build finished')).toBe('Done: build finished')
+  })
+
+  it('shows whichever is there when the other is empty', () => {
+    expect(notificationText('', 'build finished')).toBe('build finished')
+    expect(notificationText('Done', '')).toBe('Done')
+  })
+
+  it('is empty when both are', () => {
+    expect(notificationText('', '')).toBe('')
   })
 })

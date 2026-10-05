@@ -33,6 +33,7 @@ const hooks = (): SidebarHooks => ({
   onOpenDefaultTerminal: vi.fn(),
   onCloseDefaultTerminal: vi.fn(),
   onDefaultTerminalMenu: vi.fn(),
+  onOpenNotification: vi.fn(),
   gotoHint: (index: number) => `Cmd+${String(index + 1)}`,
   onCreateBlank: vi.fn(),
   onContextMenu: vi.fn(),

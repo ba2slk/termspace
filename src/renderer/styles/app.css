@@ -506,6 +506,65 @@ body {
   padding: 0 6px 8px;
 }
 
+/* Two lines: who waits and when, then what it said. */
+.sidebar__notification {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar__notification:hover {
+  background: var(--fill-hover-faint);
+}
+
+.sidebar__notification-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sidebar__notification-session,
+.sidebar__notification-pane,
+.sidebar__notification-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__notification-session {
+  flex: 0 1 auto;
+  font-size: var(--fs-ui-lg);
+  color: var(--fg);
+}
+
+.sidebar__notification-pane {
+  flex: 1 1 0;
+  font-size: var(--fs-ui-sm);
+}
+
+.sidebar__notification-time {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.sidebar__notification-text {
+  font-size: var(--fs-ui-sm);
+}
+
 .sidebar__notifications-empty {
   padding: 6px 8px;
   font-size: var(--fs-ui-sm);
