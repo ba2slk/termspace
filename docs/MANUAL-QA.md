@@ -550,6 +550,10 @@ sessions' attention sets and the tab agree, and no unit test reaches that wiring
 - Clicking the row opens `verify`, removes the row, empties the count and, back on the
   Sessions tab, takes `--wants` off the session's dot, which was `--wants` before the
   click so the colour read can tell the two apart (`notifyQueueClickGoes`)
+- **`Alt+N` (`Cmd+Shift+N`) goes to the oldest waiting pane with the Sessions tab
+  showing** (`notifyQueueKeyGoes`): the pane is rung again from another session, the
+  chord is read from the stored bindings, and the check wants `verify` on screen and the
+  tab's count empty. With nothing waiting the key does nothing
 - The Sessions tab is selected again and the temporary session is gone
   (`notifyQueueLeftAsFound`)
 
