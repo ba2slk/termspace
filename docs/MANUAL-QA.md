@@ -542,7 +542,8 @@ sessions' attention sets and the tab agree, and no unit test reaches that wiring
   (`notifyQueueHeader`). A passing line also records the
   sidebar's width, e.g. `ok (220px)`: the number is there to be read, not asserted
 - Opening the tab shows exactly one row, inside the sidebar's width, naming the session,
-  the title and the body, while the sessions list takes no space (`notifyQueueRow`)
+  the title and the body, the title painted in `--fg` and the body inside the row's
+  width, while the sessions list takes no space (`notifyQueueRow`)
 - With the tab open, the row that holds the new-session and refresh buttons
   (`.sidebar__list-header`) takes no space either, so neither button shows
   (`notifyQueueHidesSessionActions`)

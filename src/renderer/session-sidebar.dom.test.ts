@@ -1031,37 +1031,54 @@ describe('session sidebar tabs', () => {
       expect(buttons().every((b) => b.type === 'button')).toBe(true)
     })
 
-    it('shows session and pane on the first line with the time, and the text on the second', () => {
+    it('shows where it came from and when in the meta line', () => {
       const sidebar = createSessionSidebar(host, hooks())
       sidebar.setNotifications([row('a')])
       const button = buttons()[0]!
       expect(button.querySelector('.sidebar__notification-session')!.textContent).toBe('work')
       expect(button.querySelector('.sidebar__notification-pane')!.textContent).toBe('Terminal')
       expect(button.querySelector('.sidebar__notification-time')!.textContent).toBe('14:32')
-      expect(button.querySelector('.sidebar__notification-text')!.textContent).toBe(
-        'Done: build finished',
-      )
     })
 
-    it('shows a lone title or a lone body without a colon', () => {
+    it('shows the title and the body as separate elements', () => {
       const sidebar = createSessionSidebar(host, hooks())
-      sidebar.setNotifications([
-        { ...row('a'), title: '', body: 'only body' },
-        { ...row('b'), title: 'only title', body: '' },
-      ])
-      const texts = [...document.querySelectorAll('.sidebar__notification-text')].map(
-        (el) => el.textContent,
+      sidebar.setNotifications([row('a')])
+      const button = buttons()[0]!
+      expect(button.querySelector('.sidebar__notification-title')!.textContent).toBe('Done')
+      expect(button.querySelector('.sidebar__notification-body')!.textContent).toBe(
+        'build finished',
       )
-      expect(texts).toEqual(['only body', 'only title'])
+      expect(button.classList.contains('sidebar__notification--untitled')).toBe(false)
+    })
+
+    it('draws no title element, and marks the card untitled, when the title is empty', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([{ ...row('a'), title: '', body: 'only body' }])
+      const button = buttons()[0]!
+      expect(button.querySelector('.sidebar__notification-title')).toBeNull()
+      expect(button.querySelector('.sidebar__notification-body')!.textContent).toBe('only body')
+      expect(button.classList.contains('sidebar__notification--untitled')).toBe(true)
+    })
+
+    it('draws no body element when the body is empty', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([{ ...row('a'), body: '' }])
+      const button = buttons()[0]!
+      expect(button.querySelector('.sidebar__notification-body')).toBeNull()
+      expect(button.querySelector('.sidebar__notification-title')!.textContent).toBe('Done')
     })
 
     it('renders markup in a notification as literal text', () => {
       const sidebar = createSessionSidebar(host, hooks())
-      sidebar.setNotifications([{ ...row('a'), body: '<b>x</b>', session: '<i>s</i>' }])
+      sidebar.setNotifications([
+        { ...row('a'), title: '<u>t</u>', body: '<b>x</b>', session: '<i>s</i>' },
+      ])
       const box = document.querySelector('.sidebar__notifications')!
       expect(box.querySelector('b')).toBeNull()
       expect(box.querySelector('i')).toBeNull()
-      expect(box.querySelector('.sidebar__notification-text')!.textContent).toBe('Done: <b>x</b>')
+      expect(box.querySelector('u')).toBeNull()
+      expect(box.querySelector('.sidebar__notification-body')!.textContent).toBe('<b>x</b>')
+      expect(box.querySelector('.sidebar__notification-title')!.textContent).toBe('<u>t</u>')
       expect(box.querySelector('.sidebar__notification-session')!.textContent).toBe('<i>s</i>')
     })
 

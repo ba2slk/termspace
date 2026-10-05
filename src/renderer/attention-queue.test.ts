@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, notificationText, prune, upsert, type QueuedNotification } from './attention-queue'
+import { formatClock, prune, upsert, type QueuedNotification } from './attention-queue'
 
 function entry(paneId: string, at = 1, title = '', body = ''): QueuedNotification {
   return { paneId, title, body, at }
@@ -63,20 +63,5 @@ describe('formatClock', () => {
   it('reads midnight as 00:00 and the last minute as 23:59', () => {
     expect(formatClock(at(0, 0))).toBe('00:00')
     expect(formatClock(at(23, 59))).toBe('23:59')
-  })
-})
-
-describe('notificationText', () => {
-  it('joins title and body with a colon', () => {
-    expect(notificationText('Done', 'build finished')).toBe('Done: build finished')
-  })
-
-  it('shows whichever is there when the other is empty', () => {
-    expect(notificationText('', 'build finished')).toBe('build finished')
-    expect(notificationText('Done', '')).toBe('Done')
-  })
-
-  it('is empty when both are', () => {
-    expect(notificationText('', '')).toBe('')
   })
 })

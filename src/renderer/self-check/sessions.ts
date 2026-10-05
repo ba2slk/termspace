@@ -1250,6 +1250,19 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
     for (const want of [title, body, 'verify']) {
       if (!said.includes(want)) problems.push(`row lacks "${want}": "${said}"`)
     }
+    // The message leads: the title is drawn in --fg, and the body stays inside the card.
+    const titleEl = row.querySelector<HTMLElement>('.sidebar__notification-title')
+    const bodyEl = row.querySelector<HTMLElement>('.sidebar__notification-body')
+    const titleColour = titleEl === null ? '' : getComputedStyle(titleEl).color
+    if (titleEl === null) problems.push('row has no title element')
+    else if (titleColour !== resolveColor('var(--fg)')) {
+      problems.push(`title colour ${titleColour}, --fg is ${resolveColor('var(--fg)')}`)
+    }
+    const bodyBox = rect(bodyEl)
+    if (bodyBox === undefined) problems.push('row has no body element')
+    else if (bodyBox.left < rowBox.left - EPS || bodyBox.right > rowBox.right + EPS) {
+      problems.push(`body spans ${String(bodyBox.left)}..${String(bodyBox.right)}, row ${String(rowBox.left)}..${String(rowBox.right)}`)
+    }
     const listHidden =
       list === null ||
       getComputedStyle(list).display === 'none' ||

@@ -42,8 +42,3 @@ export function formatClock(at: number): string {
   const two = (n: number): string => String(n).padStart(2, '0')
   return `${two(time.getHours())}:${two(time.getMinutes())}`
 }
-
-/** What a row says: "title: body", or whichever of the two is there. */
-export function notificationText(title: string, body: string): string {
-  return title !== '' && body !== '' ? `${title}: ${body}` : title !== '' ? title : body
-}

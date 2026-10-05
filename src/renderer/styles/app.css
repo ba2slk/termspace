@@ -511,14 +511,14 @@ body {
   padding: 0 6px 8px;
 }
 
-/* Two lines: who waits and when, then what it said. */
+/* The message leads; where it came from and when is metadata above it. */
 .sidebar__notification {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   width: 100%;
   min-width: 0;
-  padding: 8px 8px;
+  padding: 10px;
   background: none;
   border: none;
   border-radius: var(--radius-sm);
@@ -528,20 +528,34 @@ body {
   cursor: default;
 }
 
+/* Cards are tall and multi-line: a hairline keeps neighbours apart, the first has none. */
+.sidebar__notification + .sidebar__notification {
+  border-top: 1px solid var(--border);
+}
+
 .sidebar__notification:hover {
   background: var(--fill-hover-faint);
 }
 
-.sidebar__notification-head {
+.sidebar__notification-meta {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-ui-sm);
+}
+
+.sidebar__notification-where {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .sidebar__notification-session,
 .sidebar__notification-pane,
-.sidebar__notification-text {
+.sidebar__notification-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -549,25 +563,41 @@ body {
 }
 
 .sidebar__notification-session {
-  flex: 0 1 auto;
-  font-size: var(--fs-ui-lg);
-  color: var(--fg);
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-dim);
 }
 
 .sidebar__notification-pane {
-  flex: 1 1 0;
-  font-size: var(--fs-ui-sm);
-}
-
-.sidebar__notification-time {
-  flex: none;
-  margin-left: auto;
   font-size: var(--fs-ui-sm);
   color: var(--fg-faint);
 }
 
-.sidebar__notification-text {
+.sidebar__notification-time {
+  flex: none;
   font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.sidebar__notification-title {
+  font-size: var(--fs-ui-lg);
+  color: var(--fg);
+}
+
+.sidebar__notification-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* A long path or URL has no break points and would widen the card. */
+  overflow-wrap: anywhere;
+  font-size: var(--fs-ui);
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* No title: the body is the message, so it takes the title's colour. */
+.sidebar__notification--untitled .sidebar__notification-body {
+  color: var(--fg);
 }
 
 .sidebar__notifications-empty {

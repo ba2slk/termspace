@@ -19,7 +19,6 @@ import {
   type RowBox,
 } from './sidebar-reorder'
 import { createWheelDetent } from './wheel-detent'
-import { notificationText } from './attention-queue'
 
 /** Wheel silence that counts as "arrived": the previewed session opens. */
 export const WHEEL_SETTLE_MS = 200
@@ -328,14 +327,17 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     button.type = 'button'
     button.className = 'sidebar__notification'
     button.dataset['paneId'] = row.paneId
-    const head = document.createElement('span')
-    head.className = 'sidebar__notification-head'
-    head.append(
-      part('session', row.session),
-      part('pane', row.pane),
-      part('time', row.time),
-    )
-    button.append(head, part('text', notificationText(row.title, row.body)))
+    const meta = document.createElement('span')
+    meta.className = 'sidebar__notification-meta'
+    const where = document.createElement('span')
+    where.className = 'sidebar__notification-where'
+    where.append(part('session', row.session), part('pane', row.pane))
+    meta.append(where, part('time', row.time))
+    button.append(meta)
+    if (row.title !== '') button.append(part('title', row.title))
+    // An OSC 9 notification is a body alone: it is the message, so it reads as one.
+    if (row.title === '') button.classList.add('sidebar__notification--untitled')
+    if (row.body !== '') button.append(part('body', row.body))
     button.addEventListener('click', () => hooks.onOpenNotification(row.paneId))
     return button
   }
