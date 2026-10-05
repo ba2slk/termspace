@@ -1375,6 +1375,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       detachDrag()
       offData()
       offExit()
+      // The caller redraws once teardown is over; unmountPane would call back
+      // per waiting pane into a runtime that is half gone.
+      attention.clear()
       for (const paneId of [...records.keys()]) unmountPane(paneId)
       canvas.destroy()
     },

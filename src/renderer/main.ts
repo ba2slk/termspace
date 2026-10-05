@@ -605,10 +605,10 @@ function sessionOwningPane(paneId: string): string | null {
   return null
 }
 
-/*
- * A desktop notification was clicked. main has already brought the window
- * forward; the pane still has to be found, since it may be off screen or in a
- * session that is not the one on display.
+/**
+ * Open the session that holds a pane and focus the pane.
+ *
+ * The pane may be off screen, or in a session that is not the one on display.
  */
 function goToPane(paneId: string): void {
   const owner = sessionOwningPane(paneId)
@@ -618,6 +618,7 @@ function goToPane(paneId: string): void {
   })
 }
 
+// A desktop notification was clicked; main has already brought the window forward.
 api.onFocusPane(goToPane)
 
 /*
