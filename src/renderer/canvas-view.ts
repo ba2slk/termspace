@@ -6,6 +6,16 @@
  * scroll-behavior gives no control over.
  */
 import {
+  EDGE_FRAME_CAP_MS,
+  EDGE_HOLD_MS,
+  EDGE_REST_PX,
+  edgeFollow,
+  edgeOverrun,
+  edgePullFor,
+  edgeRelease,
+  edgeUnwind,
+} from './edge-pull'
+import {
   CANVAS_BOTTOM,
   CANVAS_EDGE,
   canvasWidth,
@@ -254,8 +264,8 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     indicator.style.left = `${String(CANVAS_EDGE + metrics.offset)}px`
   }
 
+  // The overrun past either end is drawn on top of scrollX, which stays in range.
   let edgePull = 0
-  let edgeTarget = 0
   let edgeDistance = 0
   let edgeRaf: number | null = null
   let edgeInputAt = 0
@@ -270,23 +280,17 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     edgeRaf = null
     edgePull = 0
     edgeDistance = 0
-    edgeTarget = 0
     edgeFrameAt = 0
     paintTrack()
   }
 
   function springEdge(now: number): void {
-    const dt = edgeFrameAt === 0 ? FRAME_MS : Math.min(32, now - edgeFrameAt)
+    const dt = edgeFrameAt === 0 ? FRAME_MS : Math.min(EDGE_FRAME_CAP_MS, now - edgeFrameAt)
     edgeFrameAt = now
-    // Wheel events have no release phase. Ease the held target away after silence
-    // instead of dropping it to zero in one frame (which feels like a snap).
-    const silence = Math.max(0, now - edgeInputAt - 80)
-    const release = Math.exp(-((silence / 110) ** 2))
-    edgeTarget =
-      -Math.sign(edgeDistance) * 64 * (1 - Math.exp(-Math.abs(edgeDistance) / 130)) * release
-    const follow = 1 - Math.exp(-dt / 35)
-    edgePull += (edgeTarget - edgePull) * follow
-    if (silence > 0 && Math.abs(edgePull) < 0.2) {
+    const sinceInput = now - edgeInputAt
+    const target = edgePullFor(edgeDistance) * edgeRelease(sinceInput)
+    edgePull += (target - edgePull) * edgeFollow(dt)
+    if (sinceInput > EDGE_HOLD_MS && Math.abs(edgePull) < EDGE_REST_PX) {
       resetEdgePull()
       return
     }
@@ -294,9 +298,15 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     edgeRaf = requestAnimationFrame(springEdge)
   }
 
+  function holdEdge(now: number): void {
+    edgeInputAt = now
+    if (edgeRaf === null) edgeRaf = requestAnimationFrame(springEdge)
+  }
+
   function applyScroll(value: number): void {
     scrollX = value
     paintTrack()
+    // The track moves under it, so the zoom box has to move with the scroll.
     applyZoom()
     syncIndicator()
     hooks.onScroll?.()
@@ -378,30 +388,24 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
     cancelAnimation() // let go of any keyboard move in flight
     const limit = maxScrollX(currentLayout, host.clientWidth)
-    let remaining = delta
-    if (edgeDistance !== 0 && now - edgeInputAt <= 160 && Math.sign(delta) !== Math.sign(edgeDistance)) {
-      const released = Math.min(Math.abs(delta), Math.abs(edgeDistance))
-      edgeDistance += Math.sign(delta) * released
-      remaining -= Math.sign(delta) * released
-      edgeTarget = -Math.sign(edgeDistance) * 64 * (1 - Math.exp(-Math.abs(edgeDistance) / 130))
-      edgeInputAt = now
-      if (edgeRaf === null) edgeRaf = requestAnimationFrame(springEdge)
+    // Reverse input lets the pull go first; only what is left scrolls.
+    const unwound = Math.sign(delta) * edgeUnwind(edgeDistance, delta, now - edgeInputAt)
+    if (unwound !== 0) {
+      edgeDistance += unwound
+      holdEdge(now)
     }
+    const remaining = delta - unwound
     if (remaining === 0) return
 
+    // Accumulate from the pending target so repeated input adds up.
     const from = wheelRaf === null ? scrollX : wheelTarget
     const wanted = from + remaining * baseBoostOf() * burst
     wheelTarget = Math.max(0, Math.min(wanted, limit))
     const overflow = wanted - wheelTarget
     if (limit > 0 && overflow !== 0) {
-      // Accumulate unboosted gesture distance; boosted scroll must not amplify the pull.
-      if (Math.sign(edgeDistance) !== Math.sign(overflow) || now - edgeInputAt > 160) edgeDistance = 0
-      edgeDistance = Math.max(-600, Math.min(600, edgeDistance + remaining))
-      edgeTarget = -Math.sign(edgeDistance) * 64 * (1 - Math.exp(-Math.abs(edgeDistance) / 130))
-      edgeInputAt = now
-      if (edgeRaf === null) edgeRaf = requestAnimationFrame(springEdge)
+      edgeDistance = edgeOverrun(edgeDistance, remaining, overflow, now - edgeInputAt)
+      holdEdge(now)
     } else if (edgeRaf !== null) {
-      edgeTarget = 0
       edgeDistance = 0
     }
     if (wheelRaf === null) wheelRaf = requestAnimationFrame(glide)

@@ -1,4 +1,5 @@
 import { api } from '../api'
+import { EDGE_PULL_MAX } from '../edge-pull'
 import { CANVAS_EDGE } from '../layout-geometry'
 import {
   animationRuns,
@@ -50,11 +51,12 @@ export async function checkWheelScroll(report: Report): Promise<void> {
   const firstPull = trackOffset()
   for (let i = 0; i < 8; i++) {
     roll(-20)
+    // Input pacing, not a wait: notches this close together are one gesture.
     await sleep(30)
   }
   const heldPull = trackOffset()
   report['wheelEdgeFollowsGesture'] =
-    heldPull > firstPull + 5 && heldPull < 65
+    heldPull > firstPull + 5 && heldPull < EDGE_PULL_MAX
       ? `ok (${Math.round(firstPull)} → ${Math.round(heldPull)}px)`
       : `FAIL (${Math.round(firstPull)} → ${Math.round(heldPull)}px)`
   roll(80)
