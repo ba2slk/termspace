@@ -1285,6 +1285,33 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
   if (dotAfter === WANTS) clickProblems.push('the session dot is still --wants')
   report['notifyQueueClickGoes'] = clickProblems.length === 0 ? 'ok' : `FAIL (${clickProblems.join('; ')})`
 
+  // The key goes to the oldest waiting pane without the tab being opened.
+  await openSession(name)
+  api.write(rang, `printf '\\033]777;notify;${title};${body}\\a'\n`)
+  const waiting = await waitFor(() => countOf()?.textContent === '1')
+  // The stored chord, as main hands it to the keymap, not a spelling written here.
+  const stored = (await api.getKeybindings())['next-notification'][0]
+  const parts = stored?.split('+') ?? []
+  const keyCode = parts[parts.length - 1]
+  if (!waiting || stored === undefined || keyCode === undefined) {
+    report['notifyQueueKeyGoes'] = !waiting
+      ? 'FAIL (the pane never queued)'
+      : 'FAIL (next-notification has no chord)'
+  } else {
+    press(keyCode, {
+      ctrlKey: parts.includes('Ctrl'),
+      altKey: parts.includes('Alt'),
+      shiftKey: parts.includes('Shift'),
+      metaKey: parts.includes('Meta'),
+    })
+    const there = await waitFor(() => document.title.includes('verify'), 8000)
+    const emptied = await waitFor(() => countOf()?.textContent === '', 8000)
+    report['notifyQueueKeyGoes'] =
+      there && emptied
+        ? 'ok'
+        : `FAIL (${stored}: title ${document.title}, count "${countOf()?.textContent ?? 'no element'}")`
+  }
+
   await leave()
 }
 

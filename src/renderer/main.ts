@@ -1000,6 +1000,10 @@ function onAppKeyDown(event: KeyboardEvent): void {
     case 'default-terminal':
       goToDefaultTerminal()
       break
+    case 'next-notification':
+      // Silent when nothing waits: the key is also pressed by habit.
+      if (queue[0] !== undefined) goToPane(queue[0].paneId)
+      break
     case 'goto-session':
       gotoSession(action.index)
       break

@@ -38,6 +38,7 @@ export type ActionId =
   | 'reveal-focus'
   | 'overview'
   | 'pane-jump'
+  | 'next-notification'
   | 'search'
   | 'copy'
   | 'paste'
@@ -93,6 +94,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   'reveal-focus': ['Alt+KeyG'],
   overview: ['Alt+KeyM'],
   'pane-jump': ['Alt+KeyK'],
+  // Next to the pane jump: both go to a pane, this one the pane that asked.
+  'next-notification': ['Alt+KeyN'],
   search: ['Ctrl+Shift+KeyF'],
   copy: ['Ctrl+Shift+KeyC'],
   paste: ['Ctrl+Shift+KeyV'],
@@ -150,6 +153,7 @@ export const DEFAULT_BINDINGS_MAC: Bindings = {
   overview: ['Shift+Meta+KeyM'],
   // Cmd+K clears the screen on a mac terminal; the jump moves behind Shift.
   'pane-jump': ['Shift+Meta+KeyK'],
+  'next-notification': ['Shift+Meta+KeyN'],
   search: ['Meta+KeyF'],
   copy: ['Meta+KeyC'],
   paste: ['Meta+KeyV'],
@@ -191,6 +195,7 @@ export const ACTION_GROUPS: readonly { readonly group: ActionGroup; readonly ids
       'reveal-focus',
       'overview',
       'pane-jump',
+      'next-notification',
     ],
   },
   {

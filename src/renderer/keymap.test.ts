@@ -107,6 +107,11 @@ describe('resolveAction — other bindings', () => {
     expect(isAppAction({ t: 'pane-jump' })).toBe(false)
   })
 
+  it('Alt+N goes to the next waiting pane, with nothing open too', () => {
+    expect(resolveAction(chord('KeyN', { altKey: true }))).toEqual({ t: 'next-notification' })
+    expect(isAppAction({ t: 'next-notification' })).toBe(true)
+  })
+
   it('Alt+G scrolls back to the focused pane', () => {
     expect(resolveAction(chord('KeyG', { altKey: true }))).toEqual({ t: 'reveal-focus' })
   })
@@ -389,6 +394,12 @@ describe('resolveAction — mac mode', () => {
     expect(
       resolveAction(chord('KeyK', { metaKey: true, shiftKey: true }), DEFAULT_BINDINGS_MAC, true),
     ).toEqual({ t: 'pane-jump' })
+  })
+
+  it('goes to the next waiting pane on Cmd+Shift+N', () => {
+    expect(
+      resolveAction(chord('KeyN', { metaKey: true, shiftKey: true }), DEFAULT_BINDINGS_MAC, true),
+    ).toEqual({ t: 'next-notification' })
   })
 
   it('goes to the default terminal on Cmd+Shift+0, leaving Cmd+0 to the font', () => {
