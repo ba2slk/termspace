@@ -6,6 +6,16 @@
  * scroll-behavior gives no control over.
  */
 import {
+  EDGE_FRAME_CAP_MS,
+  EDGE_HOLD_MS,
+  EDGE_REST_PX,
+  edgeFollow,
+  edgeOverrun,
+  edgePullFor,
+  edgeRelease,
+  edgeUnwind,
+} from './edge-pull'
+import {
   CANVAS_BOTTOM,
   CANVAS_EDGE,
   canvasWidth,
@@ -254,9 +264,48 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     indicator.style.left = `${String(CANVAS_EDGE + metrics.offset)}px`
   }
 
+  // The overrun past either end is drawn on top of scrollX, which stays in range.
+  let edgePull = 0
+  let edgeDistance = 0
+  let edgeRaf: number | null = null
+  let edgeInputAt = 0
+  let edgeFrameAt = 0
+
+  function paintTrack(): void {
+    track.style.transform = `translateX(${-snapToDevicePixels(scrollX - edgePull, window.devicePixelRatio)}px)`
+  }
+
+  function resetEdgePull(): void {
+    if (edgeRaf !== null) cancelAnimationFrame(edgeRaf)
+    edgeRaf = null
+    edgePull = 0
+    edgeDistance = 0
+    edgeFrameAt = 0
+    paintTrack()
+  }
+
+  function springEdge(now: number): void {
+    const dt = edgeFrameAt === 0 ? FRAME_MS : Math.min(EDGE_FRAME_CAP_MS, now - edgeFrameAt)
+    edgeFrameAt = now
+    const sinceInput = now - edgeInputAt
+    const target = edgePullFor(edgeDistance) * edgeRelease(sinceInput)
+    edgePull += (target - edgePull) * edgeFollow(dt)
+    if (sinceInput > EDGE_HOLD_MS && Math.abs(edgePull) < EDGE_REST_PX) {
+      resetEdgePull()
+      return
+    }
+    paintTrack()
+    edgeRaf = requestAnimationFrame(springEdge)
+  }
+
+  function holdEdge(now: number): void {
+    edgeInputAt = now
+    if (edgeRaf === null) edgeRaf = requestAnimationFrame(springEdge)
+  }
+
   function applyScroll(value: number): void {
     scrollX = value
-    track.style.transform = `translateX(${-snapToDevicePixels(value, window.devicePixelRatio)}px)`
+    paintTrack()
     // The track moves under it, so the zoom box has to move with the scroll.
     applyZoom()
     syncIndicator()
@@ -339,9 +388,26 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
     cancelAnimation() // let go of any keyboard move in flight
     const limit = maxScrollX(currentLayout, host.clientWidth)
+    // Reverse input lets the pull go first; only what is left scrolls.
+    const unwound = Math.sign(delta) * edgeUnwind(edgeDistance, delta, now - edgeInputAt)
+    if (unwound !== 0) {
+      edgeDistance += unwound
+      holdEdge(now)
+    }
+    const remaining = delta - unwound
+    if (remaining === 0) return
+
     // Accumulate from the pending target so repeated input adds up.
     const from = wheelRaf === null ? scrollX : wheelTarget
-    wheelTarget = Math.max(0, Math.min(from + delta * baseBoostOf() * burst, limit))
+    const wanted = from + remaining * baseBoostOf() * burst
+    wheelTarget = Math.max(0, Math.min(wanted, limit))
+    const overflow = wanted - wheelTarget
+    if (limit > 0 && overflow !== 0) {
+      edgeDistance = edgeOverrun(edgeDistance, remaining, overflow, now - edgeInputAt)
+      holdEdge(now)
+    } else if (edgeRaf !== null) {
+      edgeDistance = 0
+    }
     if (wheelRaf === null) wheelRaf = requestAnimationFrame(glide)
   }
 
@@ -353,6 +419,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
   function scrollByExact(dx: number): void {
     if (currentLayout === null || dx === 0 || zoomedPaneId !== null) return
     cancelAnimation()
+    resetEdgePull()
     stopWheelGlide()
     const limit = maxScrollX(currentLayout, host.clientWidth)
     const next = Math.max(0, Math.min(scrollX + dx, limit))
@@ -539,6 +606,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
 
     scrollToPane(paneId, layout) {
       const target = scrollToReveal(rects, paneId, this.getViewport(), layout)
+      resetEdgePull()
       if (target === null) return
       // Drop any wheel glide, or there would be two targets.
       stopWheelGlide()
@@ -610,6 +678,7 @@ export function createCanvasView(host: HTMLElement, hooks: CanvasHooks): CanvasV
     destroy() {
       cancelAnimation()
       stopWheelGlide()
+      resetEdgePull()
       host.removeEventListener('mousedown', onHostMouseDown)
       host.removeEventListener('dblclick', onHostDoubleClick)
       host.removeEventListener('mouseup', onHostMouseUp)
