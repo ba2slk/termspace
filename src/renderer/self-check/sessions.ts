@@ -12,6 +12,7 @@ import {
   press,
   RENDERER_CANVAS,
   type Report,
+  resolveColor,
   rowOf,
   sleep,
   termOf,
@@ -1079,6 +1080,212 @@ export async function checkAttentionClearsOnReturn(report: Report): Promise<void
   await api.deleteSession(name)
   refreshList()
   await waitFor(() => rowOf(name) === undefined)
+}
+
+/**
+ * The sidebar's Notifications tab: a pane that rang while unwatched is listed,
+ * counted in the tab, and one click on its row goes there.
+ *
+ * Nothing but the live app can show this. The queue is fed by the attention
+ * stream and pruned by the sessions' own attention sets, and the tab strip has
+ * to fit a 30px header beside the actions at whatever width the sidebar has.
+ */
+export async function checkNotificationQueue(report: Report): Promise<void> {
+  const name = 'selfcheck-queue'
+  const title = 'Queue check'
+  const body = 'needs you now'
+  const WANTS = resolveColor('var(--wants)')
+
+  const aside = (): HTMLElement | null => document.querySelector<HTMLElement>('aside.sidebar')
+  const tabs = (): HTMLButtonElement[] => [
+    ...document.querySelectorAll<HTMLButtonElement>('.sidebar__tab'),
+  ]
+  const notifRows = (): HTMLElement[] => [
+    ...document.querySelectorAll<HTMLElement>('.sidebar__notification'),
+  ]
+  const countOf = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.sidebar__tab-count')
+  /** The dot's painted fill, not its class: a class can be on and overridden. */
+  const dotFill = (id: string): string | undefined => {
+    const dot = rowOf(id)?.querySelector<HTMLElement>('.sidebar__dot')
+    return dot == null ? undefined : getComputedStyle(dot).backgroundColor
+  }
+  const rect = (el: Element | null | undefined): DOMRect | undefined => el?.getBoundingClientRect()
+  /** Sub-pixel layout rounds; a real overflow is a pixel or more. */
+  const EPS = 0.5
+
+  const rang = focusedId()
+  if (rang === undefined) {
+    report['notifyQueueSetup'] = 'FAIL (no focused pane to ring)'
+    return
+  }
+  const made = await api.createBlankSession(name, name, '~', 0)
+  if (!made.ok) {
+    report['notifyQueueSetup'] = `FAIL (${made.error ?? 'create failed'})`
+    return
+  }
+  refreshList()
+  await waitFor(() => rowOf(name) !== undefined)
+
+  /*
+   * A second unwatched pane, without making one: a session that already runs
+   * (the dot is lit), visited once to learn which pane it has focused. That pane
+   * is the one it looks at on return, so arriving there puts its mark down again.
+   * Panes cannot be told apart by session from the DOM of a hidden host alone.
+   */
+  let bell: { id: string; label: string; pane: string } | undefined
+  const other = [...document.querySelectorAll<HTMLElement>('.sidebar__row')].find(
+    (r) =>
+      r.dataset['sessionId'] !== 'verify' &&
+      r.dataset['sessionId'] !== name &&
+      r.querySelector('.sidebar__dot--on') !== null &&
+      r.querySelector('.sidebar__dot--wants') === null,
+  )
+  const otherLabel = other?.querySelector('.sidebar__name')?.textContent
+  if (other?.dataset['sessionId'] !== undefined && otherLabel != null && otherLabel !== '') {
+    await openSession(otherLabel)
+    // Scoped to the host on screen: a hidden session's focused pane comes first in the DOM.
+    const pane = document.querySelector<HTMLElement>(
+      '.session-host:not([hidden]) .pane--focused',
+    )?.dataset['paneId']
+    if (pane !== undefined && document.title.includes(otherLabel)) {
+      bell = { id: other.dataset['sessionId'], label: otherLabel, pane }
+    }
+  }
+  await openSession(name)
+
+  /** Back to how the group found things, whatever happened above. */
+  const leave = async (): Promise<void> => {
+    tabs()[0]?.click()
+    // The bell mark is cleared by looking, as a user would.
+    if (bell !== undefined && rowOf(bell.id)?.querySelector('.sidebar__dot--wants') != null) {
+      await openSession(bell.label)
+      await waitFor(() => rowOf(bell.id)?.querySelector('.sidebar__dot--wants') == null)
+    }
+    await openSession('verify')
+    await api.deleteSession(name)
+    refreshList()
+    await waitFor(() => rowOf(name) === undefined)
+    const sessionsTabOn = tabs()[0]?.getAttribute('aria-selected') === 'true'
+    const gone = rowOf(name) === undefined && notifRows().length === 0
+    report['notifyQueueLeftAsFound'] =
+      sessionsTabOn && gone && document.title.includes('verify')
+        ? 'ok'
+        : `FAIL (sessions tab ${String(sessionsTabOn)}, temporary session gone ${String(rowOf(name) === undefined)}, rows ${String(notifRows().length)}, title ${document.title})`
+  }
+
+  if (!document.title.includes(name)) {
+    report['notifyQueueSetup'] = `FAIL (did not reach ${name}: ${document.title})`
+    await leave()
+    return
+  }
+  report['notifyQueueSetup'] = 'ok'
+
+  // From off screen, on the pane that was focused: the only kind that is queued.
+  api.write(rang, `printf '\\033]777;notify;${title};${body}\\a'\n`)
+  const counted = await waitFor(() => countOf()?.textContent === '1')
+  const count = countOf()
+  const fill = count === null ? '' : getComputedStyle(count).color
+  report['notifyQueueCount'] = !counted
+    ? `FAIL (tab count reads "${count?.textContent ?? 'no count element'}", wanted "1")`
+    : fill !== WANTS
+      ? `FAIL (count colour ${fill}, --wants is ${WANTS})`
+      : 'ok'
+
+  // The header at the sidebar's current width.
+  const side = rect(aside())
+  const header = rect(document.querySelector('.sidebar__header'))
+  const strip = rect(document.querySelector('.sidebar__tabs'))
+  const actions = rect(document.querySelector('.sidebar__actions'))
+  const lastTab = rect(tabs()[1])
+  const countBox = rect(countOf())
+  if (side === undefined || side.width === 0 || header === undefined || strip === undefined || actions === undefined || countBox === undefined) {
+    report['notifyQueueHeader'] = 'skipped (sidebar not laid out: closed or collapsed)'
+  } else {
+    const problems: string[] = []
+    if (Math.abs(header.height - 30) > EPS) problems.push(`header is ${String(header.height)}px tall, wanted 30`)
+    if (strip.right > actions.left + EPS) {
+      problems.push(`tab strip ends at ${String(strip.right)}, past the actions at ${String(actions.left)}`)
+    }
+    if (lastTab !== undefined && lastTab.right > actions.left + EPS) {
+      problems.push(`notifications tab ends at ${String(lastTab.right)}, past the actions at ${String(actions.left)}`)
+    }
+    if (countBox.width <= 0) problems.push('count has no width')
+    if (countBox.left < header.left - EPS || countBox.right > header.right + EPS) {
+      problems.push(`count spans ${String(countBox.left)}..${String(countBox.right)}, header ${String(header.left)}..${String(header.right)}`)
+    }
+    if (countBox.right > actions.left + EPS) {
+      problems.push(`count ends at ${String(countBox.right)}, under the actions at ${String(actions.left)}`)
+    }
+    const labels = [...document.querySelectorAll<HTMLElement>('.sidebar__tab-label')]
+    const cut = (i: number): string => String((labels[i]?.scrollWidth ?? 0) > (labels[i]?.clientWidth ?? 0))
+    report['notifyQueueHeader'] =
+      problems.length === 0
+        ? `ok (${String(Math.round(side.width))}px, labels truncated: sessions=${cut(0)} notifications=${cut(1)})`
+        : `FAIL (${problems.join('; ')})`
+  }
+
+  // The tab, then what it lists.
+  tabs()[1]?.click()
+  await waitFor(() => notifRows().length > 0)
+  const rows = notifRows()
+  const row = rows[0]
+  const list = document.querySelector<HTMLElement>('.sidebar__list')
+  const rowBox = rect(row)
+  const listBox = rect(list)
+  if (side === undefined || side.width === 0) {
+    report['notifyQueueRow'] = 'skipped (sidebar not laid out: closed or collapsed)'
+  } else if (rows.length !== 1 || row === undefined || rowBox === undefined) {
+    report['notifyQueueRow'] = `FAIL (${String(rows.length)} rows, wanted 1)`
+  } else {
+    const said = row.textContent ?? ''
+    const sideNow = rect(aside()) ?? side
+    const problems: string[] = []
+    if (rowBox.width <= 0 || rowBox.height <= 0) problems.push(`row is ${String(rowBox.width)}x${String(rowBox.height)}`)
+    if (rowBox.left < sideNow.left - EPS || rowBox.right > sideNow.right + EPS) {
+      problems.push(`row spans ${String(rowBox.left)}..${String(rowBox.right)}, sidebar ${String(sideNow.left)}..${String(sideNow.right)}`)
+    }
+    for (const want of [title, body, 'verify']) {
+      if (!said.includes(want)) problems.push(`row lacks "${want}": "${said}"`)
+    }
+    const listHidden =
+      list === null ||
+      getComputedStyle(list).display === 'none' ||
+      (listBox !== undefined && (listBox.width === 0 || listBox.height === 0))
+    if (!listHidden) problems.push('sessions list still takes space')
+    report['notifyQueueRow'] = problems.length === 0 ? 'ok' : `FAIL (${problems.join('; ')})`
+  }
+
+  // A bell marks a dot and nothing else.
+  if (bell === undefined) {
+    report['notifyQueueBellSkipsQueue'] = 'skipped (no second unwatched pane)'
+  } else {
+    api.write(bell.pane, `printf '\\a'\n`)
+    const marked = await waitFor(() => rowOf(bell.id)?.querySelector('.sidebar__dot--wants') != null)
+    // The queue is fed in the same call that marks the dot, so the mark is the last word.
+    report['notifyQueueBellSkipsQueue'] = !marked
+      ? `FAIL (the bell never marked ${bell.label})`
+      : notifRows().length === 1 && countOf()?.textContent === '1'
+        ? 'ok'
+        : `FAIL (${String(notifRows().length)} rows, count "${countOf()?.textContent ?? ''}", wanted 1)`
+  }
+
+  // One click goes to the pane, and its row leaves.
+  const dotBefore = dotFill('verify')
+  row?.click()
+  const arrived = await waitFor(() => document.title.includes('verify'), 8000)
+  const cleared = await waitFor(() => notifRows().length === 0, 8000)
+  tabs()[0]?.click()
+  const dotAfter = dotFill('verify')
+  const clickProblems: string[] = []
+  if (dotBefore !== WANTS) clickProblems.push(`the session's dot was ${dotBefore ?? 'missing'} before the click, not --wants`)
+  if (!arrived) clickProblems.push(`still on ${document.title}`)
+  if (!cleared) clickProblems.push(`${String(notifRows().length)} rows left`)
+  if (countOf()?.textContent !== '') clickProblems.push(`count reads "${countOf()?.textContent ?? 'no element'}"`)
+  if (dotAfter === WANTS) clickProblems.push('the session dot is still --wants')
+  report['notifyQueueClickGoes'] = clickProblems.length === 0 ? 'ok' : `FAIL (${clickProblems.join('; ')})`
+
+  await leave()
 }
 
 /**

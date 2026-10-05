@@ -527,6 +527,32 @@ group starts from nothing open. The save half runs first in `sessions`.
   and the rows rolled past stay cold — a step that opened every session it passed would
   spawn a shell per notch
 
+**Notification queue (the sidebar's Notifications tab)**
+
+Run in `sessions` after the attention check: a temporary session is put on screen and
+an OSC 777 with a known title and body is written to the focused pane of `verify`,
+which is then not being watched. Nothing else shows whether the attention stream, the
+sessions' attention sets and the tab agree, and no unit test reaches that wiring.
+
+- The tab's count reads `1` in the same colour `--wants` paints (`notifyQueueCount`;
+  the token is resolved through a probe element, not compared with a literal)
+- The header stays 30px tall, the tab strip and the count end before `.sidebar__actions`,
+  and the count lies inside the header with a width (`notifyQueueHeader`). A passing line
+  also records the sidebar's width and whether either label is cut with an ellipsis,
+  e.g. `ok (220px, labels truncated: sessions=true notifications=true)`: the number is
+  there to be read, not asserted
+- Opening the tab shows exactly one row, inside the sidebar's width, naming the session,
+  the title and the body, while the sessions list takes no space (`notifyQueueRow`)
+- **A bell marks the session's dot and adds no row** (`notifyQueueBellSkipsQueue`): the
+  bell is written to the focused pane of another session that already runs. A window
+  with no such session reports `skipped (no second unwatched pane)` instead of starting
+  one, since opening a session spawns a shell per pane
+- Clicking the row opens `verify`, removes the row, empties the count and, back on the
+  Sessions tab, takes `--wants` off the session's dot, which was `--wants` before the
+  click so the colour read can tell the two apart (`notifyQueueClickGoes`)
+- The Sessions tab is selected again and the temporary session is gone
+  (`notifyQueueLeftAsFound`)
+
 **herdr keys (`Alt+H` / `Alt+Shift+H`)**
 
 Run in `sessions` on the focused pane of the session on screen, found as
