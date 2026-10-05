@@ -87,7 +87,7 @@ describe('Ctrl+click on mac', () => {
       new Map(),
       null,
     )
-    const rows = [...document.querySelectorAll<HTMLElement>('.sidebar__row')]
+    const rows = [...document.querySelectorAll<HTMLElement>('.sidebar__list .sidebar__row')]
     stubBoxes(rows)
 
     // Ctrl+click is the mac right click, and it arrives as button 0.
@@ -107,7 +107,7 @@ describe('Ctrl+click on mac', () => {
       new Map(),
       null,
     )
-    const rows = [...document.querySelectorAll<HTMLElement>('.sidebar__row')]
+    const rows = [...document.querySelectorAll<HTMLElement>('.sidebar__list .sidebar__row')]
     stubBoxes(rows)
 
     pointer(rows[0]!, 'pointerdown', 110)

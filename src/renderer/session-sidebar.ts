@@ -56,10 +56,13 @@ export interface SidebarHooks {
    * held over the list goes back to the dock, since no render is coming.
    */
   readonly onRestore: (id: string) => void | Promise<void>
-  /** The default terminal's row: it has no id to pass, and no file behind it. */
+  /**
+   * The default terminal's row: it has no id to pass, and no file behind it.
+   * Open also starts one when none is running.
+   */
   readonly onOpenDefaultTerminal: () => void
   readonly onCloseDefaultTerminal: () => void
-  /** Right-click on the default terminal's row; it has its own, shorter menu. */
+  /** Right-click on the running default terminal's row; it has its own, shorter menu. */
   readonly onDefaultTerminalMenu: (at: { x: number; y: number }) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
@@ -86,7 +89,8 @@ export interface SessionSidebar {
   startRename(sessionId: string): void
   /**
    * The file-less terminal a launch opens, drawn above the list rather than in
-   * it: no number, no drag, no archive. Null takes the slot away.
+   * it: no number, no drag, no archive. Null means none is running: the row
+   * stays, as the way to start one.
    */
   setDefaultTerminal(state: { readonly current: boolean; readonly wants: boolean } | null): void
   setVisible(visible: boolean): void
@@ -169,6 +173,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
    */
   const pinned = document.createElement('div')
   pinned.className = 'sidebar__pinned'
+  let terminalRunning = false
 
   /*
    * The archive dock: a header pinned under the list, and the archived rows
@@ -219,7 +224,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   aside.addEventListener('contextmenu', (event) => {
     event.preventDefault()
     if ((event.target as HTMLElement | null)?.closest('.sidebar__pinned') != null) {
-      hooks.onDefaultTerminalMenu({ x: event.clientX, y: event.clientY })
+      // Its one item saves what is running; with nothing running there is no menu.
+      if (terminalRunning) hooks.onDefaultTerminalMenu({ x: event.clientX, y: event.clientY })
       return
     }
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sidebar__row')
@@ -230,7 +236,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     )
   })
 
-  aside.append(header, list)
+  aside.append(header, pinned, list)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
   host.prepend(aside, grip)
 
@@ -794,20 +800,25 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     return item
   }
 
-  /** Built like a running row, minus what belongs to a file: count, number. */
-  function defaultTerminalRow(current: boolean, wants: boolean): HTMLElement {
+  /**
+   * Built like a session row, minus what belongs to a file: count, number.
+   * Null draws it as a session that is not running: no lit dot, nothing to end.
+   */
+  function defaultTerminalRow(
+    state: { readonly current: boolean; readonly wants: boolean } | null,
+  ): HTMLElement {
     const item = document.createElement('div')
     item.className = 'sidebar__row'
-    if (current) item.classList.add('sidebar__row--current')
+    if (state?.current === true) item.classList.add('sidebar__row--current')
 
     const open = document.createElement('button')
     open.type = 'button'
     open.className = 'sidebar__open'
 
     const dot = document.createElement('span')
-    dot.className = 'sidebar__dot sidebar__dot--on'
-    if (wants) dot.classList.add('sidebar__dot--wants')
-    dot.title = wants ? t.sidebar.wants : t.sidebar.running
+    dot.className = state === null ? 'sidebar__dot' : 'sidebar__dot sidebar__dot--on'
+    if (state?.wants === true) dot.classList.add('sidebar__dot--wants')
+    dot.title = state === null ? '' : state.wants ? t.sidebar.wants : t.sidebar.running
 
     const name = document.createElement('span')
     name.className = 'sidebar__name'
@@ -815,10 +826,13 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     const meta = document.createElement('span')
     meta.className = 'sidebar__meta'
-    meta.textContent = t.sidebar.unsaved
+    // Nothing is running, so there is nothing unsaved either.
+    meta.textContent = state === null ? '' : t.sidebar.unsaved
 
     open.append(dot, name, meta)
     open.addEventListener('click', () => hooks.onOpenDefaultTerminal())
+    item.append(open)
+    if (state === null) return item
 
     const close = document.createElement('button')
     close.type = 'button'
@@ -831,7 +845,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
       hooks.onCloseDefaultTerminal()
     })
 
-    item.append(open, close)
+    item.append(close)
     return item
   }
 
@@ -886,19 +900,16 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   applyWidth(width)
 
+  pinned.append(defaultTerminalRow(null))
+
   return {
     element: aside,
 
     startRename,
 
     setDefaultTerminal(state) {
-      if (state === null) {
-        pinned.remove()
-        pinned.replaceChildren()
-        return
-      }
-      pinned.replaceChildren(defaultTerminalRow(state.current, state.wants))
-      if (!pinned.isConnected) list.before(pinned)
+      terminalRunning = state !== null
+      pinned.replaceChildren(defaultTerminalRow(state))
     },
 
     render(sessions, live, current, wanting) {

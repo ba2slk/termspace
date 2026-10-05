@@ -56,6 +56,8 @@ const refreshList = (): void => {
 }
 
 const pinnedSlot = (): HTMLElement | null => document.querySelector<HTMLElement>('.sidebar__pinned')
+/** The slot's row stays when its terminal ends; the button that ends one is there only while one runs. */
+const terminalRuns = (): boolean => pinnedSlot()?.querySelector('.sidebar__close') != null
 
 /**
  * A window resized with a pane open: that pane's width was fixed before, so it
@@ -82,9 +84,9 @@ const fillsCanvas = (resized = false): string => {
  * Runs in each process before its groups.
  */
 export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void> {
-  await waitFor(() => pinnedSlot() !== null && visiblePanes().length > 0, 15_000)
+  await waitFor(() => terminalRuns() && visiblePanes().length > 0, 15_000)
   report['defaultTerminalAtLaunch'] =
-    pinnedSlot() !== null && visiblePanes().length === 1 ? 'ok' : `FAIL (${String(visiblePanes().length)} panes)`
+    terminalRuns() && visiblePanes().length === 1 ? 'ok' : `FAIL (${String(visiblePanes().length)} panes)`
 
   const term = termOf(focusedHost())
   report['defaultTerminalShell'] =
@@ -114,8 +116,22 @@ export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void
       : `FAIL (${String(line?.borderBottomStyle)} ${String(line?.borderBottomWidth)})`
 
   pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
-  await waitFor(() => pinnedSlot() === null && visiblePanes().length === 0)
-  report['defaultTerminalEnds'] = pinnedSlot() === null ? 'ok' : 'FAIL (the slot stayed)'
+  await waitFor(() => !terminalRuns() && visiblePanes().length === 0)
+  report['defaultTerminalEnds'] =
+    !terminalRuns() && visiblePanes().length === 0 ? 'ok' : 'FAIL (still running)'
+
+  // The row outlives its terminal, in the same place, and is the way back to one.
+  const stayed = pinnedSlot()?.querySelector<HTMLElement>('.sidebar__row')?.getBoundingClientRect()
+  const listNow = document.querySelector<HTMLElement>('.sidebar__list')?.getBoundingClientRect()
+  report['defaultTerminalRowStays'] =
+    stayed !== undefined && listNow !== undefined && stayed.height > 0 && stayed.bottom <= listNow.top + 1
+      ? 'ok'
+      : `FAIL (row ${String(stayed?.height)} high, bottom ${String(stayed?.bottom)}, list ${String(listNow?.top)})`
+  pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__open')?.click()
+  const reopened = await waitFor(() => terminalRuns() && visiblePanes().length === 1, 15_000)
+  report['defaultTerminalRowReopens'] = reopened ? 'ok' : `FAIL (${String(visiblePanes().length)} panes)`
+  pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
+  await waitFor(() => !terminalRuns() && visiblePanes().length === 0)
 }
 
 /**
@@ -132,7 +148,7 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
     newTerminal !== null && document.activeElement === newTerminal ? 'ok' : 'FAIL (not focused)'
   // A synthetic Enter does not press a button; Enter itself is in MANUAL-QA.
   newTerminal?.click()
-  await waitFor(() => pinnedSlot() !== null && visiblePanes().length === 1, 15_000)
+  await waitFor(() => terminalRuns() && visiblePanes().length === 1, 15_000)
   report['newTerminalFillsCanvas'] = fillsCanvas()
   const paneId = focusedId()
   const term = termOf(focusedHost())
@@ -176,9 +192,9 @@ export async function checkDefaultTerminalSave(report: Report): Promise<void> {
   }
   await dialogChecked(name)
   button?.click()
-  await waitFor(() => !saveDialogOpen() && pinnedSlot() === null, 5000)
+  await waitFor(() => !saveDialogOpen() && !terminalRuns(), 5000)
   report['defaultTerminalSaved'] =
-    pinnedSlot() === null && document.title.includes(name) ? 'ok' : `FAIL (title ${document.title})`
+    !terminalRuns() && document.title.includes(name) ? 'ok' : `FAIL (title ${document.title})`
 
   // Same pty: what the shell printed before the save is still on screen.
   term.selectAll()
@@ -790,7 +806,7 @@ export async function checkSaveCurrentLayout(report: Report): Promise<void> {
  */
 export async function checkNewSession(report: Report): Promise<void> {
   // The menu differs over a row versus empty space.
-  const row = document.querySelector<HTMLElement>('.sidebar__row')
+  const row = document.querySelector<HTMLElement>('.sidebar__list .sidebar__row')
   row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 140 }))
   await waitFor(() => menuItems().length > 0)
   const rowItems = menuItems()
@@ -1333,7 +1349,9 @@ export async function checkHeldSessionJump(report: Report): Promise<void> {
  * where the row landed.
  */
 export async function checkSidebarReorder(report: Report): Promise<void> {
-  const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('.sidebar__row')]
+  const rows = (): HTMLElement[] => [
+    ...document.querySelectorAll<HTMLElement>('.sidebar__list .sidebar__row'),
+  ]
   const idsOf = (list: readonly HTMLElement[]): string[] =>
     list.map((r) => r.dataset['sessionId'] ?? '?')
 
@@ -1424,7 +1442,7 @@ export async function checkErrorRowStaysDraggable(report: Report): Promise<void>
  * this — happy-dom measures every box as zero.
  */
 export async function checkSidebarNarrowName(report: Report): Promise<void> {
-  const row = document.querySelector<HTMLElement>('.sidebar__row')
+  const row = document.querySelector<HTMLElement>('.sidebar__list .sidebar__row')
   const grip = document.querySelector<HTMLElement>('.sidebar__grip')
   const open = row?.querySelector<HTMLElement>('.sidebar__open') ?? null
   const name = row?.querySelector<HTMLElement>('.sidebar__name') ?? null

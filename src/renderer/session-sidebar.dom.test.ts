@@ -49,7 +49,7 @@ beforeEach(() => {
 })
 
 function metaText(): string {
-  return document.querySelector('.sidebar__meta')?.textContent ?? ''
+  return document.querySelector('.sidebar__list .sidebar__meta')?.textContent ?? ''
 }
 
 describe('session sidebar pane count', () => {
@@ -103,7 +103,7 @@ describe('inline rename', () => {
     input.value = 'beta'
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(onRename).not.toHaveBeenCalled()
-    expect(host.querySelector('.sidebar__name')?.textContent).toBe('alpha')
+    expect(host.querySelector('.sidebar__list .sidebar__name')?.textContent).toBe('alpha')
   })
 
   it('the Enter that ends a composition does not commit', () => {
@@ -724,10 +724,15 @@ describe('reordering by drag', () => {
 describe('the default terminal slot', () => {
   const slot = (): HTMLElement | null => document.querySelector('.sidebar__pinned')
 
-  it('is absent until there is a default terminal', () => {
+  it('is there before any terminal runs, drawn as not running', () => {
     const sidebar = createSessionSidebar(host, hooks())
     sidebar.render([summary()], new Map(), null)
-    expect(slot()).toBeNull()
+    const pinned = slot()!
+    expect(pinned.nextElementSibling).toBe(document.querySelector('.sidebar__list'))
+    expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
+    expect(pinned.querySelector('.sidebar__dot')).not.toBeNull()
+    expect(pinned.querySelector('.sidebar__dot--on')).toBeNull()
+    expect(pinned.querySelector('.sidebar__close')).toBeNull()
   })
 
   it('sits above the list, outside it, and reads as unsaved', () => {
@@ -744,11 +749,30 @@ describe('the default terminal slot', () => {
     expect(pinned.querySelector('.sidebar__dot--on')).not.toBeNull()
   })
 
-  it('goes away whole when the terminal ends', () => {
-    const sidebar = createSessionSidebar(host, hooks())
-    sidebar.setDefaultTerminal({ current: false, wants: false })
+  it('keeps its row when the terminal ends, with nothing left to end or save', () => {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.setDefaultTerminal({ current: true, wants: true })
     sidebar.setDefaultTerminal(null)
-    expect(slot()).toBeNull()
+    const pinned = slot()!
+    expect(pinned.querySelectorAll('.sidebar__row')).toHaveLength(1)
+    expect(pinned.querySelector('.sidebar__row--current')).toBeNull()
+    expect(pinned.querySelector('.sidebar__dot--on')).toBeNull()
+    expect(pinned.querySelector('.sidebar__dot--wants')).toBeNull()
+    expect(pinned.querySelector('.sidebar__meta')?.textContent).toBe('')
+    expect(pinned.querySelector('.sidebar__close')).toBeNull()
+    pinned.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 6 }))
+    expect(h.onDefaultTerminalMenu).not.toHaveBeenCalled()
+    expect(h.onContextMenu).not.toHaveBeenCalled()
+  })
+
+  it('asks to open from the row of an ended terminal', () => {
+    const h = hooks()
+    const sidebar = createSessionSidebar(host, h)
+    sidebar.setDefaultTerminal(null)
+    slot()!.querySelector<HTMLButtonElement>('.sidebar__open')!.click()
+    expect(h.onOpenDefaultTerminal).toHaveBeenCalledTimes(1)
+    expect(h.onOpen).not.toHaveBeenCalled()
   })
 
   it('opens, ends and asks for its menu through its own hooks', () => {
