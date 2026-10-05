@@ -606,14 +606,13 @@ body {
   color: var(--fg-faint);
 }
 
-/* The default terminal: under the sessions label, outside the list. A band one
-   step darker than the panel, edge to edge, reads as fixed in place; its own edges
-   are the separators, so it takes no hairline. The label's 28px box already gives
-   the gap above it. The padding keeps the row on the same columns as the list's. */
+/* The default terminal: under the sessions label, outside the list. The container
+   is plain and takes the list's side padding, so the row lines up with the saved
+   rows; the row alone is the recessed well (see below). The label's 28px box
+   already gives the gap above it; the bottom padding is the gap to the first row. */
 .sidebar__pinned {
   flex: 0 0 auto;
-  padding: 4px 6px;
-  background: var(--bg-canvas);
+  padding: 0 6px 6px;
 }
 
 .sidebar__row {
@@ -630,6 +629,24 @@ body {
 /* The session on screen — exactly one row is lit. */
 .sidebar__row--current {
   background: var(--fill-selected);
+}
+
+/* The default terminal's row is a well, not a list row: it keeps its dark fill in
+   every state, so a resting fill never reads as the current session. Hover layers
+   the faint fill over the well; the current one gains a ring, drawn as an inset
+   outline like the wheel dial's, so the box never changes size. */
+.sidebar__pinned .sidebar__row {
+  background: var(--bg-well);
+}
+
+.sidebar__pinned .sidebar__row:hover:not(.sidebar__row--current) {
+  background: linear-gradient(var(--fill-hover-faint), var(--fill-hover-faint)), var(--bg-well);
+}
+
+.sidebar__pinned .sidebar__row--current {
+  background: var(--bg-well);
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
 }
 
 /* Where the wheel dial points; the session opens once the wheel rests. */

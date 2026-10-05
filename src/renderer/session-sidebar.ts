@@ -240,8 +240,8 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
   /*
    * The default terminal's slot, under the "Sessions" label. Outside the list,
-   * across a hairline, as the archive dock is below it: the list's wheel dial and
-   * drag listen on the list alone, so neither can reach this row.
+   * as the archive dock is below it: the list's wheel dial and drag listen on the
+   * list alone, so neither can reach this row.
    */
   const pinned = document.createElement('div')
   pinned.className = 'sidebar__pinned'

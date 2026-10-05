@@ -322,11 +322,12 @@ group starts from nothing open. The save half runs first in `sessions`.
   looks the same in the DOM. No prompt at all is `skipped`, not `FAIL`
 - The slot is drawn above the list, under the "Sessions" label and its buttons, by its
   rectangle (`defaultTerminalAboveList`) — DOM order alone does not say where it lands
-- The slot is a band one step darker than the sidebar panel, and it spans the panel's
-  inner width within 1px on both sides (`defaultTerminalBand`). The band's own edges are
-  the separators: a resting fill on the row would read as hover or as the current session
-- The band ends where the list starts, and has no border under it, so there is one
-  separation and not a band edge plus a line (`defaultTerminalBandEdge`)
+- The row is a recessed well: its own fill differs from the sidebar panel, the container
+  paints nothing, and the corners match a saved row's (`defaultTerminalWell`). A fill that
+  was lighter than the panel would read as hover or as the current session
+- The well's left and right edges equal the first saved row's within 1px, and a gap
+  separates the two (`defaultTerminalWellAligned`). With no saved session laid out it is
+  `skipped`
 - The pane is as wide as the canvas beside the sidebar, within 1px of the column cap
   (`defaultTerminalFillsCanvas`) — boot waits for the window manager to finish sizing
   the window first. A window resized after the pane opened is `skipped`, with both widths

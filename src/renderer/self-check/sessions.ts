@@ -108,32 +108,40 @@ export async function checkDefaultTerminalAtLaunch(report: Report): Promise<void
     slot !== undefined && list !== undefined && slot.height > 0 && slot.bottom <= list.top + 1
       ? 'ok'
       : `FAIL (slot ${String(slot?.bottom)} list ${String(list?.top)})`
-  // The band is the separator: darker than the panel, across its inner width, ending where the list starts.
+  // The row is a recessed well: its own fill differs from the panel, the container adds none,
+  // and it has the same corners as a saved row.
   const panel = document.querySelector<HTMLElement>('aside.sidebar')
-  const band = pinnedSlot()
-  const bandColour = band === null ? '' : getComputedStyle(band).backgroundColor
+  const well = pinnedSlot()?.querySelector<HTMLElement>('.sidebar__row') ?? null
+  const saved = document.querySelector<HTMLElement>('.sidebar__list .sidebar__row')
+  const wellColour = well === null ? '' : getComputedStyle(well).backgroundColor
   const panelColour = panel === null ? '' : getComputedStyle(panel).backgroundColor
-  const bandBox = band?.getBoundingClientRect()
-  const innerLeft = panel === null ? NaN : panel.getBoundingClientRect().left + panel.clientLeft
-  const innerRight = panel === null ? NaN : innerLeft + panel.clientWidth
-  report['defaultTerminalBand'] =
-    bandColour === '' || panelColour === '' || bandBox === undefined
-      ? 'FAIL (no band or panel)'
-      : bandColour === panelColour
-        ? `FAIL (band and panel are both ${bandColour})`
-        : Math.abs(bandBox.left - innerLeft) > 1 || Math.abs(bandBox.right - innerRight) > 1
-          ? `FAIL (band spans ${String(bandBox.left)}..${String(bandBox.right)}, panel inside ${String(innerLeft)}..${String(innerRight)})`
-          : 'ok'
-  // One separator, not a band edge plus a border line: nothing but the band sits between row and list.
-  const border = band === null ? '' : getComputedStyle(band).borderBottomWidth
-  report['defaultTerminalBandEdge'] =
-    bandBox === undefined || list === undefined
-      ? 'FAIL (no band or list)'
-      : Number.parseFloat(border) !== 0
-        ? `FAIL (band has a ${border} border under it)`
-        : Math.abs(bandBox.bottom - list.top) > 1
-          ? `FAIL (band ends at ${String(bandBox.bottom)}, list starts at ${String(list.top)})`
-          : 'ok'
+  const slotColour = pinnedSlot() === null ? '' : getComputedStyle(pinnedSlot() as HTMLElement).backgroundColor
+  const slotClear = slotColour === 'rgba(0, 0, 0, 0)' || slotColour === 'transparent' || slotColour === panelColour
+  const wellRadius = well === null ? '' : getComputedStyle(well).borderRadius
+  const savedRadius = saved === null ? '' : getComputedStyle(saved).borderRadius
+  report['defaultTerminalWell'] =
+    wellColour === '' || panelColour === ''
+      ? 'FAIL (no row or panel)'
+      : wellColour === panelColour
+        ? `FAIL (well and panel are both ${wellColour})`
+        : !slotClear
+          ? `FAIL (container paints ${slotColour})`
+          : saved !== null && wellRadius !== savedRadius
+            ? `FAIL (well radius ${wellRadius}, saved row ${savedRadius})`
+            : 'ok'
+  // Same columns as the saved rows, and a gap before the first of them.
+  const wellBox = well?.getBoundingClientRect()
+  const savedBox = saved?.getBoundingClientRect()
+  report['defaultTerminalWellAligned'] =
+    wellBox === undefined
+      ? 'FAIL (no row)'
+      : savedBox === undefined || savedBox.height === 0
+        ? 'skipped: no saved session is laid out'
+        : Math.abs(wellBox.left - savedBox.left) > 1 || Math.abs(wellBox.right - savedBox.right) > 1
+          ? `FAIL (well ${String(wellBox.left)}..${String(wellBox.right)}, saved row ${String(savedBox.left)}..${String(savedBox.right)})`
+          : savedBox.top - wellBox.bottom <= 0
+            ? `FAIL (gap ${String(savedBox.top - wellBox.bottom)})`
+            : 'ok'
 
   pinnedSlot()?.querySelector<HTMLButtonElement>('.sidebar__close')?.click()
   await waitFor(() => !terminalRuns() && visiblePanes().length === 0)
