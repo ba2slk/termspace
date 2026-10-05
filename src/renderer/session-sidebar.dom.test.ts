@@ -192,11 +192,13 @@ describe('the archive dock', () => {
     expect(host.querySelectorAll('.sidebar__dock-list .sidebar__row')).toHaveLength(1)
   })
 
-  it('an archived row is a name and nothing else, and does not open', () => {
+  it('an archived row is a name and a drag handle, and does not open', () => {
     const { h, sidebar } = open()
     sidebar.render([summary({ id: 'old', name: 'old', archived: true })], new Map([['old', 1]]), null)
     const row = host.querySelector<HTMLElement>('.sidebar__row--archived')!
     expect(row.querySelector('.sidebar__name')?.textContent).toBe('old')
+    expect(row.querySelector('.sidebar__handle')).not.toBeNull()
+    expect(row.firstElementChild?.classList.contains('sidebar__handle')).toBe(true)
     expect(row.querySelector('.sidebar__dot')).toBeNull()
     expect(row.querySelector('.sidebar__meta')).toBeNull()
     expect(row.querySelector('.sidebar__hint')).toBeNull()
@@ -321,16 +323,63 @@ describe('restoring by drag', () => {
     expect(rows[0]!.style.transform).toBe('')
   })
 
-  it('a drop back inside the dock restores nothing', () => {
+  it('a drop back on its own slot restores nothing and moves nothing', () => {
     const { hooks: h, rows } = renderArchive()
     press(rows[0]!, 305, 'pointerdown')
     press(rows[0]!, 200, 'pointermove')
-    // Second thoughts: back over the archive it came from.
-    press(rows[0]!, 360, 'pointermove')
+    // Second thoughts: back over the slot it came from.
+    press(rows[0]!, 312, 'pointermove')
     expect(rows[0]!.classList.contains('sidebar__row--restoring')).toBe(false)
-    press(rows[0]!, 360, 'pointerup')
+    press(rows[0]!, 312, 'pointerup')
     expect(h.onRestore).not.toHaveBeenCalled()
+    expect(h.onReorder).not.toHaveBeenCalled()
     expect(rows[0]!.style.transform).toBe('')
+    expect(host.querySelector('.sidebar__drag-slot')).toBeNull()
+  })
+
+  it('a drag past another archived row reorders the archive', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 350, 'pointermove')
+    // Its place is held open, and the row it passed steps up into the gap.
+    expect(host.querySelector<HTMLElement>('.sidebar__drag-slot')?.style.height).toBe('30px')
+    expect(rows[1]!.style.transform).toBe('translateY(-30px)')
+    press(rows[0]!, 350, 'pointerup')
+    expect(h.onReorder).toHaveBeenCalledWith('old', 1)
+    expect(h.onRestore).not.toHaveBeenCalled()
+    // Held in its new slot until the render that carries the order arrives.
+    expect(rows[0]!.style.transform).toBe('translateY(30px)')
+  })
+
+  it('dragging up the archive moves the rows it passes down', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[1]!, 340, 'pointerdown')
+    press(rows[1]!, 305, 'pointermove')
+    expect(rows[0]!.style.transform).toBe('translateY(30px)')
+    press(rows[1]!, 305, 'pointerup')
+    expect(h.onReorder).toHaveBeenCalledWith('older', 0)
+  })
+
+  it('leaving the dock mid-reorder settles the archive back, and restores', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 350, 'pointermove')
+    press(rows[0]!, 200, 'pointermove')
+    expect(rows[1]!.style.transform).toBe('')
+    press(rows[0]!, 200, 'pointerup')
+    expect(h.onRestore).toHaveBeenCalledWith('old')
+    expect(h.onReorder).not.toHaveBeenCalled()
+  })
+
+  it('Escape mid-reorder moves nothing and leaves no slot behind', () => {
+    const { hooks: h, rows } = renderArchive()
+    press(rows[0]!, 305, 'pointerdown')
+    press(rows[0]!, 350, 'pointermove')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    press(rows[0]!, 350, 'pointerup')
+    expect(h.onReorder).not.toHaveBeenCalled()
+    expect(rows[1]!.style.transform).toBe('')
+    expect(host.querySelector('.sidebar__drag-slot')).toBeNull()
   })
 
   it('Escape mid-drag restores nothing and strands no lift', () => {
@@ -584,14 +633,15 @@ describe('reordering by drag', () => {
     expect(host.querySelectorAll('.sidebar__row--preview')).toHaveLength(1)
   })
 
-  // happy-dom gives no boxes, so the dock header needs one to be aimed at.
-  const stubHeader = (top: number): void => {
-    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
-    head.getBoundingClientRect = () =>
+  // happy-dom gives no boxes, so the dock needs one to be aimed at. Closed, it
+  // is as tall as its header.
+  const stubHeader = (top: number, height = 30): void => {
+    const dock = host.querySelector<HTMLElement>('.sidebar__dock')!
+    dock.getBoundingClientRect = () =>
       ({
         top,
-        height: 30,
-        bottom: top + 30,
+        height,
+        bottom: top + height,
         left: 0,
         right: 200,
         width: 200,
@@ -613,6 +663,55 @@ describe('reordering by drag', () => {
     expect(h.onArchive).toHaveBeenCalledWith('a')
     expect(h.onReorder).not.toHaveBeenCalled()
     expect(head.classList.contains('sidebar__dock-header--target')).toBe(false)
+  })
+
+  it('the dragged row leaves the flow, and an empty slot holds its place', () => {
+    const { rows } = renderThreeSessions()
+    stubBoxes(rows)
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 170, 'pointermove')
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(true)
+    expect(rows[0]!.previousElementSibling?.classList.contains('sidebar__drag-slot')).toBe(true)
+    press(rows[0]!, 170, 'pointercancel')
+    expect(rows[0]!.classList.contains('sidebar__row--lifted')).toBe(false)
+    expect(host.querySelector('.sidebar__drag-slot')).toBeNull()
+  })
+
+  it('a drop anywhere in the open dock archives, at the slot under the pointer', () => {
+    const { hooks: h, rows } = renderThreeSessions({ archived: true })
+    host.querySelector<HTMLElement>('.sidebar__dock-header')!.click()
+    stubBoxes(rows)
+    // One archived row at 300, the header under it at 330.
+    stubHeader(300, 60)
+    const shelved = host.querySelector<HTMLElement>('.sidebar__dock-list .sidebar__row')!
+    shelved.getBoundingClientRect = () => ({ top: 300, height: 30 }) as DOMRect
+    press(rows[0]!, 110, 'pointerdown')
+    // Over the archived row's upper half, well above the header.
+    press(rows[0]!, 305, 'pointermove')
+    const head = host.querySelector<HTMLElement>('.sidebar__dock-header')!
+    expect(head.classList.contains('sidebar__dock-header--target')).toBe(true)
+    // The row it would land above steps down to show the slot.
+    expect(shelved.style.transform).toBe('translateY(30px)')
+    press(rows[0]!, 320, 'pointermove')
+    expect(shelved.style.transform).toBe('')
+    press(rows[0]!, 320, 'pointerup')
+    expect(h.onArchive).toHaveBeenCalledWith('a', 1)
+    expect(h.onReorder).not.toHaveBeenCalled()
+  })
+
+  it('a drag that leaves the open dock again clears the slot it showed', () => {
+    const { hooks: h, rows } = renderThreeSessions({ archived: true })
+    host.querySelector<HTMLElement>('.sidebar__dock-header')!.click()
+    stubBoxes(rows)
+    stubHeader(300, 60)
+    const shelved = host.querySelector<HTMLElement>('.sidebar__dock-list .sidebar__row')!
+    shelved.getBoundingClientRect = () => ({ top: 300, height: 30 }) as DOMRect
+    press(rows[0]!, 110, 'pointerdown')
+    press(rows[0]!, 305, 'pointermove')
+    press(rows[0]!, 210, 'pointermove')
+    expect(shelved.style.transform).toBe('')
+    press(rows[0]!, 210, 'pointerup')
+    expect(h.onArchive).not.toHaveBeenCalled()
   })
 
   it('a drag that leaves the header again drops back into the list', () => {

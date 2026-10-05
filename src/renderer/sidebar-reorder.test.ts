@@ -35,7 +35,7 @@ describe('dropIndexAt', () => {
 })
 
 describe('dropTargetAt', () => {
-  // The archive header, 30px tall, sits under the three rows.
+  // The closed dock, its header 30px tall, sits under the three rows.
   const header: RowBox = { top: 240, height: 30 }
 
   it('reads as a slot while the pointer is over the list', () => {
@@ -44,11 +44,39 @@ describe('dropTargetAt', () => {
 
   it('reads as the archive over the header, not as the last slot', () => {
     expect(dropIndexAt(250, rows, 0)).toBe(2) // What the list alone would say.
-    expect(dropTargetAt(250, rows, 0, header)).toEqual({ kind: 'archive' })
+    expect(dropTargetAt(250, rows, 0, header)).toEqual({ kind: 'archive', index: null })
   })
 
   it('stays the archive below the header, where nothing else sits', () => {
-    expect(dropTargetAt(999, rows, 0, header)).toEqual({ kind: 'archive' })
+    expect(dropTargetAt(999, rows, 0, header)).toEqual({ kind: 'archive', index: null })
+  })
+
+  describe('over an open dock', () => {
+    // Two archived rows of 30px above the header: the dock starts at 240.
+    const dock: RowBox = { top: 240, height: 90 }
+    const archived: RowBox[] = [
+      { top: 240, height: 30 },
+      { top: 270, height: 30 },
+    ]
+
+    it('is the archive anywhere inside it, not only on the header', () => {
+      expect(dropTargetAt(241, rows, 0, dock, archived).kind).toBe('archive')
+      expect(dropTargetAt(285, rows, 0, dock, archived).kind).toBe('archive')
+    })
+
+    it('aims at the slot between the archived rows under the pointer', () => {
+      expect(dropTargetAt(250, rows, 0, dock, archived)).toEqual({ kind: 'archive', index: 0 })
+      expect(dropTargetAt(260, rows, 0, dock, archived)).toEqual({ kind: 'archive', index: 1 })
+      expect(dropTargetAt(290, rows, 0, dock, archived)).toEqual({ kind: 'archive', index: 2 })
+    })
+
+    it('is the last slot over the header under the rows', () => {
+      expect(dropTargetAt(310, rows, 0, dock, archived)).toEqual({ kind: 'archive', index: 2 })
+    })
+
+    it('counts every archived row, whichever list row is dragged', () => {
+      expect(dropTargetAt(290, rows, 1, dock, archived)).toEqual({ kind: 'archive', index: 2 })
+    })
   })
 
   it('is a slot again just above the header', () => {

@@ -470,12 +470,9 @@ body {
   outline-offset: -1px;
 }
 
-/* The row under the pointer. It moves by transform, so it keeps its layout slot
-   and the rows below it stay put: only the drop line says where it would land. */
-/* Lifted: it rides the pointer, over the rows stepping aside beneath it. */
+/* The list row a drag holds. It rides the pointer lifted out of flow (see
+   .sidebar__row--lifted), over the rows stepping aside beneath it. */
 .sidebar__row--dragging {
-  position: relative;
-  z-index: 1;
   background: var(--bg-raised);
 }
 
@@ -691,9 +688,37 @@ body {
 
 /* Archived rows are readable, not addressable: no dot, no count, no power. */
 .sidebar__row--archived {
+  gap: 7px;
   padding: 6px 8px;
   color: var(--fg-faint);
   font-size: var(--fs-ui-lg);
+}
+
+/* Where a session row has its dot, and as wide: the names line up with the
+   list's. Shown only under the pointer, and on the row being held. */
+.sidebar__handle {
+  flex: 0 0 auto;
+  opacity: 0;
+  cursor: grab;
+}
+
+.sidebar__row--archived:hover .sidebar__handle,
+.sidebar__row--lifted .sidebar__handle {
+  opacity: 1;
+}
+
+/* A drag in progress shows one handle, the held row's. */
+.sidebar__dock-list--dragging .sidebar__row--archived:not(.sidebar__row--lifted) .sidebar__handle {
+  opacity: 0;
+}
+
+.sidebar__dock-list--dragging .sidebar__handle {
+  cursor: grabbing;
+}
+
+/* The lifted row's place, kept open so the rows under it stay put. */
+.sidebar__drag-slot {
+  flex: 0 0 auto;
 }
 
 .sidebar__dock-list--dragging {
@@ -702,8 +727,8 @@ body {
   user-select: none;
 }
 
-/* A row on its way out of the archive. Fixed, not translated in place: the dock
-   is a capped scrolling box and would cut the row off at its own top edge.
+/* A row held by a drag. Fixed, not translated in place: the list and the dock
+   are scrolling boxes and would cut the row off at their own edges.
    Under the menus and the toast, over everything in the sidebar. */
 .sidebar__row--lifted {
   position: fixed;

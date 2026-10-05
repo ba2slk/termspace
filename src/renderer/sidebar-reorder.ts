@@ -29,22 +29,34 @@ export function dropIndexAt(
   return index
 }
 
-/** Where a released drag would land: a slot in the list, or the archive. */
-export type DropTarget = { readonly kind: 'index'; readonly index: number } | { readonly kind: 'archive' }
+/**
+ * Where a released drag would land: a slot in the list, or the archive. The
+ * archive's index is a slot among its rows, or null when none are on screen to
+ * aim between, which lands the row last.
+ */
+export type DropTarget =
+  | { readonly kind: 'index'; readonly index: number }
+  | { readonly kind: 'archive'; readonly index: number | null }
 
 /**
- * The archive header sits under the list, so the pointer reaching it also reads
- * as "past every row" to `dropIndexAt`. The header wins: a drag that has gone
- * that far is aiming at it, not at the last slot. Anything at or below its top
- * edge counts, because nothing else lives down there.
+ * The dock sits under the list, so the pointer reaching it also reads as "past
+ * every row" to `dropIndexAt`. The dock wins: a drag that has gone that far is
+ * aiming at it, not at the last slot. Anything at or below its top edge counts,
+ * rows and header alike, because nothing else lives down there.
+ *
+ * @param archived the archived rows' boxes while the dock is open, else null
  */
 export function dropTargetAt(
   pointerY: number,
   rows: readonly RowBox[],
   fromIndex: number,
-  header: RowBox | null,
+  dock: RowBox | null,
+  archived: readonly RowBox[] | null = null,
 ): DropTarget {
-  if (header !== null && pointerY >= header.top) return { kind: 'archive' }
+  if (dock !== null && pointerY >= dock.top) {
+    // No archived row is the one being dragged, so none is skipped as a landmark.
+    return { kind: 'archive', index: archived === null ? null : dropIndexAt(pointerY, archived, -1) }
+  }
   return { kind: 'index', index: dropIndexAt(pointerY, rows, fromIndex) }
 }
 
