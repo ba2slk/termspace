@@ -1303,7 +1303,19 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
   row?.click()
   const arrived = await waitFor(() => document.title.includes('verify'), 8000)
   const cleared = await waitFor(() => notifRows().length === 0, 8000)
-  tabs()[0]?.click()
+  // Nothing is waiting any more: the sidebar leaves the empty tab by itself, with no click here.
+  const returned = await waitFor(
+    () =>
+      tabs()[0]?.getAttribute('aria-selected') === 'true' &&
+      (rect(document.querySelector('.sidebar__list'))?.height ?? 0) > 0,
+    3000,
+  )
+  report['notifyQueueReturnsToSessions'] =
+    side === undefined || side.width === 0
+      ? 'skipped (sidebar not laid out: closed or collapsed)'
+      : returned
+        ? 'ok'
+        : `FAIL (sessions tab selected ${String(tabs()[0]?.getAttribute('aria-selected'))}, list ${String(rect(document.querySelector('.sidebar__list'))?.height)}px high)`
   // Back on the sessions tab the actions sit between the default terminal and the list.
   const actionsBox = rect(document.querySelector('.sidebar__actions'))
   const pinnedBox = rect(pinnedSlot())

@@ -1013,6 +1013,48 @@ describe('session sidebar tabs', () => {
     expect(box.textContent).toBe('No pane is waiting.')
   })
 
+  describe('when the queue empties', () => {
+    const selected = (): (string | null)[] =>
+      tabs().map((tab) => tab.getAttribute('aria-selected'))
+
+    it('stays on notifications while a card is left', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('a'), row('b')])
+      tabs()[1]!.click()
+      sidebar.setNotifications([row('b')])
+      expect(aside().classList.contains('sidebar--notifications')).toBe(true)
+      expect(selected()).toEqual(['false', 'true'])
+    })
+
+    it('goes back to sessions when the last card leaves', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('a')])
+      tabs()[1]!.click()
+      sidebar.setNotifications([])
+      expect(aside().classList.contains('sidebar--notifications')).toBe(false)
+      expect(selected()).toEqual(['true', 'false'])
+    })
+
+    it('does not bounce a tab opened by hand while empty', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      tabs()[1]!.click()
+      sidebar.setNotifications([])
+      expect(aside().classList.contains('sidebar--notifications')).toBe(true)
+      expect(selected()).toEqual(['false', 'true'])
+      expect(document.querySelector('.sidebar__notifications')!.textContent).toBe(
+        'No pane is waiting.',
+      )
+    })
+
+    it('leaves the sessions tab alone', () => {
+      const sidebar = createSessionSidebar(host, hooks())
+      sidebar.setNotifications([row('a')])
+      sidebar.setNotifications([])
+      expect(aside().classList.contains('sidebar--notifications')).toBe(false)
+      expect(selected()).toEqual(['true', 'false'])
+    })
+  })
+
   it('puts the notifications box after the list', () => {
     createSessionSidebar(host, hooks())
     const list = document.querySelector('.sidebar__list')!

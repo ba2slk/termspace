@@ -556,6 +556,10 @@ sessions' attention sets and the tab agree, and no unit test reaches that wiring
   click so the colour read can tell the two apart (`notifyQueueClickGoes`). On that
   Sessions tab the buttons are back, below the default terminal's row and above the
   first session row (`notifySessionActionsPlace`)
+- **The click empties the queue, and the sidebar leaves the Notifications tab by
+  itself** (`notifyQueueReturnsToSessions`): no click on the Sessions tab is made, and
+  the check waits for that tab's `aria-selected` and for the list to have a height.
+  Opening the tab by hand while it is empty does not bounce (unit-tested only)
 - **`Alt+N` (`Cmd+Shift+N`) goes to the oldest waiting pane with the Sessions tab
   showing** (`notifyQueueKeyGoes`): the pane is rung again from another session, the
   chord is read from the stored bindings, and the check wants `verify` on screen and the

@@ -351,6 +351,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   sessionsTab.addEventListener('click', () => selectTab(false))
   notificationsTab.addEventListener('click', () => selectTab(true))
   selectTab(false)
+  let queued = 0
 
   aside.append(header, pinned, listHeader, list, notifications)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
@@ -1107,6 +1108,11 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
 
     setNotifications(rows) {
       notificationsCount.textContent = rows.length === 0 ? '' : String(rows.length)
+      // Only the last card leaving sends you back: a tab opened by hand while empty stays.
+      if (rows.length === 0 && queued > 0 && aside.classList.contains('sidebar--notifications')) {
+        selectTab(false)
+      }
+      queued = rows.length
       // The list is a handful of rows, so it is rebuilt rather than diffed.
       notifications.replaceChildren(
         ...(rows.length === 0 ? [notificationsEmpty] : rows.map(notificationButton)),
