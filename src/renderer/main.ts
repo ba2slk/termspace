@@ -23,6 +23,7 @@ import { maxColumnWidth } from './layout-geometry'
 import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
 import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
+import { prune, upsert, type QueuedNotification } from './attention-queue'
 import { createSessionSidebar } from './session-sidebar'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createPageWebglCoordinator } from './page-webgl-coordinator'
@@ -533,6 +534,16 @@ function livePaneCount(runtime: SessionRuntime): number {
   return runtime.snapshot().columns.reduce((sum, c) => sum + c.panes.length, 0)
 }
 
+/** Panes that sent a notification and are still waiting, oldest first. */
+let queue: readonly QueuedNotification[] = []
+
+/** The queue follows the sessions' attention sets; a pane they no longer hold leaves it. */
+function pruneQueue(): void {
+  queue = prune(queue, (paneId) =>
+    [...sessions.values()].some(({ runtime }) => runtime.wants(paneId)),
+  )
+}
+
 /**
  * Redraw from what is already known.
  *
@@ -573,7 +584,14 @@ function reportWatchedPane(): void {
  */
 api.onAttention((attention) => {
   for (const { runtime } of sessions.values()) {
-    if (runtime.noteAttention(attention.paneId)) return
+    if (!runtime.noteAttention(attention.paneId)) continue
+    // noteAttention has already pruned, so the entry goes in after it.
+    if (attention.kind === 'notify' && runtime.wants(attention.paneId)) {
+      const { paneId, title, body } = attention
+      queue = upsert(queue, { paneId, title, body, at: Date.now() })
+      renderSidebar()
+    }
+    return
   }
 })
 
@@ -592,13 +610,15 @@ function sessionOwningPane(paneId: string): string | null {
  * forward; the pane still has to be found, since it may be off screen or in a
  * session that is not the one on display.
  */
-api.onFocusPane((paneId) => {
+function goToPane(paneId: string): void {
   const owner = sessionOwningPane(paneId)
   if (owner === null) return
   void openSession(owner).then(() => {
     sessions.get(owner)?.runtime.focusPane(paneId)
   })
-})
+}
+
+api.onFocusPane(goToPane)
 
 /*
  * Copy or Paste came from the mac application menu.
@@ -1053,6 +1073,7 @@ function endSession(id: string): void {
   entry?.runtime.destroy()
   entry?.host.remove()
   sessions.delete(id)
+  pruneQueue()
   if (previousName === id) previousName = null
 
   if (currentName === id) {
@@ -1130,7 +1151,10 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
     onPaneRenamed: () => {
       if (!isDefaultTerminal(idOf(runtime))) void saveCurrentLayout()
     },
-    onAttentionChanged: renderSidebar,
+    onAttentionChanged: () => {
+      pruneQueue()
+      renderSidebar()
+    },
     onWatchedPaneChanged: reportWatchedPane,
     // By identity, not by the id captured here: a rename moves the session to a
     // new key and this closure outlives that.
