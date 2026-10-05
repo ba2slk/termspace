@@ -64,6 +64,10 @@ start at the canvas's left edge, independent of scroll. Insets live in
 `src/renderer/layout-geometry.ts` (`CANVAS_EDGE`, `CANVAS_BOTTOM`) and are mirrored by the
 `--edge` token; change both together.
 
+The scroll position never leaves `0..maxScrollX`. A wheel that overruns an end is drawn as
+a separate offset on top of it (`paintTrack` in `canvas-view.ts`), so the viewport, the
+scrollbar and the renderer budget do not see it.
+
 `desiredY` on the layout is the focused pane's centre as a ratio. Closing a pane and
 moving one across columns land nearest to it. A ←→ focus move does not read it: it goes
 to the pane drawn across from the focused one, since a folded bar's height is not its
@@ -72,17 +76,18 @@ ratio.
 ### Pure modules, and everything else
 
 Anything that can be decided without the DOM, Node or Electron lives in a module with a
-`.test.ts` beside it — 36 test files today, spread over `src/renderer` (`layout-model`,
-`layout-geometry`, `keymap`, `renderer-budget`, `wheel-physics`, `overview-model`,
-`session-ring`, …), `src/main` (`session-schema`, `session-writer`, `pane-command`, `terminal-signals`,
+`.test.ts` beside it — 51 test files today, spread over `src/renderer` (`layout-model`,
+`layout-geometry`, `keymap`, `renderer-budget`, `wheel-physics`, `edge-pull`,
+`overview-model`, `session-ring`, …), `src/main` (`session-schema`, `session-writer`, `pane-command`, `terminal-signals`,
 `session-config`, `shell-integration`, …) and `src/shared` (`keybindings`, `ui-strings`,
-`terminal-themes`, …). Six `*.dom.test.ts` files additionally exercise view modules under
+`terminal-themes`, …). Sixteen `*.dom.test.ts` files additionally exercise view modules under
 happy-dom. New logic belongs beside one of these unless it genuinely needs a live surface.
 That split is what keeps `npm test` around two seconds.
 
 `renderer-budget` decides which panes hold a WebGL renderer and which freeze off screen;
 the focused pane never freezes. `wheel-physics` is shared by the canvas and the terminal so
-both directions feel the same.
+both directions feel the same. `edge-pull` is canvas-only: how far the track is drawn past
+either end while the wheel keeps going.
 
 ### Sessions
 
