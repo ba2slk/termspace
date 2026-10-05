@@ -1217,11 +1217,15 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
     if (countBox.right > actions.left + EPS) {
       problems.push(`count ends at ${String(countBox.right)}, under the actions at ${String(actions.left)}`)
     }
-    const labels = [...document.querySelectorAll<HTMLElement>('.sidebar__tab-label')]
-    const cut = (i: number): string => String((labels[i]?.scrollWidth ?? 0) > (labels[i]?.clientWidth ?? 0))
+    tabs().forEach((tab, i) => {
+      const glyph = rect(tab.querySelector('svg'))
+      if (glyph === undefined || glyph.width <= 0 || glyph.height <= 0) {
+        problems.push(`tab ${String(i)} has no icon with a size`)
+      }
+    })
     report['notifyQueueHeader'] =
       problems.length === 0
-        ? `ok (${String(Math.round(side.width))}px, labels truncated: sessions=${cut(0)} notifications=${cut(1)})`
+        ? `ok (${String(Math.round(side.width))}px)`
         : `FAIL (${problems.join('; ')})`
   }
 

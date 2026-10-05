@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionSummary } from '../shared/protocol'
 import type { SidebarHooks } from './session-sidebar'
+import { stringsFor } from '../shared/ui-strings'
 
 /*
  * The sidebar reads the platform from the bridge as the module loads — Ctrl is
@@ -931,16 +932,27 @@ describe('session sidebar tabs', () => {
     expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false'])
   })
 
-  it('keeps the label and the count as siblings inside the tab', () => {
+  it('names each tab by title and aria-label, and draws an icon with no text', () => {
+    createSessionSidebar(host, hooks())
+    const catalog = stringsFor('en').sidebar
+    const names = [catalog.title, catalog.notifications]
+    tabs().forEach((tab, i) => {
+      expect(tab.title).toBe(names[i])
+      expect(tab.getAttribute('aria-label')).toBe(names[i])
+      expect(tab.querySelector('svg')).not.toBeNull()
+      expect(tab.textContent).toBe('')
+    })
+  })
+
+  it('keeps the icon and the count as siblings inside the tab', () => {
     const sidebar = createSessionSidebar(host, hooks())
     sidebar.setNotifications([row('a')])
     const tab = tabs()[1]!
-    const label = tab.querySelector('.sidebar__tab-label')!
     const count = tab.querySelector('.sidebar__tab-count')!
-    expect(label.textContent).toBe('Notifications')
     expect(count.parentElement).toBe(tab)
-    expect(label.contains(count)).toBe(false)
-    expect(tabs()[0]!.querySelector('.sidebar__tab-label')!.textContent).toBe('Sessions')
+    expect(tab.querySelector('svg')!.contains(count)).toBe(false)
+    expect(count.textContent).toBe('1')
+    expect(tabs()[0]!.querySelector('.sidebar__tab-count')).toBeNull()
   })
 
   it('keeps the header actions in both tabs', () => {

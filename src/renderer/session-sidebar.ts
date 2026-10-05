@@ -170,6 +170,10 @@ const POWER_PATH = 'M8 2.6v5'
 const POWER_RING = 'M4.2 6.2A4.6 4.6 0 1 0 11.8 6.2'
 /* A box with its lid on: the archive. */
 const ARCHIVE_PATHS = ['M2.5 3.5h11v2.5h-11z', 'M3.5 6v6.5h9V6', 'M6.5 8.6h3']
+/* Three rows, each with a dot in front: the list of sessions. */
+const SESSIONS_PATH = 'M2.5 4h.01M6 4h7.5M2.5 8h.01M6 8h7.5M2.5 12h.01M6 12h7.5'
+/* A bell with its clapper below. */
+const BELL_PATHS = ['M3 12.5 4 11V7a4 4 0 0 1 8 0v4l1 1.5z', 'M6.5 14.2h3']
 
 export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): SessionSidebar {
   const aside = document.createElement('aside')
@@ -184,19 +188,18 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   tabs.className = 'sidebar__tabs'
   tabs.setAttribute('role', 'tablist')
 
-  function makeTab(label: string): HTMLButtonElement {
+  function makeTab(label: string, glyph: string | readonly string[]): HTMLButtonElement {
     const tab = document.createElement('button')
     tab.type = 'button'
     tab.className = 'sidebar__tab'
     tab.setAttribute('role', 'tab')
-    const text = document.createElement('span')
-    text.className = 'sidebar__tab-label'
-    text.textContent = label
-    tab.append(text)
+    tab.title = label
+    tab.setAttribute('aria-label', label)
+    tab.append(icon(glyph))
     return tab
   }
-  const sessionsTab = makeTab(t.sidebar.title)
-  const notificationsTab = makeTab(t.sidebar.notifications)
+  const sessionsTab = makeTab(t.sidebar.title, SESSIONS_PATH)
+  const notificationsTab = makeTab(t.sidebar.notifications, BELL_PATHS)
   const notificationsCount = document.createElement('span')
   notificationsCount.className = 'sidebar__tab-count'
   notificationsTab.append(notificationsCount)

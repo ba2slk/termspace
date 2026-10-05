@@ -410,11 +410,8 @@ body {
 .sidebar__tabs {
   display: flex;
   align-items: center;
-  /* The first label sits where the title did: cancel the tab's own padding. */
+  /* The first icon sits where the header's content starts: cancel the tab's own padding. */
   margin-left: -6px;
-  /* English labels are wider than a narrow sidebar leaves: the tabs give way, never the actions. */
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 .sidebar__tab {
@@ -422,31 +419,24 @@ body {
   align-items: center;
   gap: 5px;
   height: 24px;
-  min-width: 0;
   padding: 0 6px;
   background: none;
   border: none;
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: var(--fs-ui-sm);
-  letter-spacing: 0.06em;
-  color: var(--fg-dim);
+  color: var(--fg-faint);
   cursor: default;
 }
 
-.sidebar__tab[aria-selected='true'] {
-  color: var(--fg);
-}
-
 .sidebar__tab:hover {
+  background: var(--bg-raised);
   color: var(--fg);
 }
 
-.sidebar__tab-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.sidebar__tab[aria-selected='true'] {
+  background: var(--fill-selected);
+  color: var(--fg);
 }
 
 /* The count is the signal: it is never the part that gets cut. */
