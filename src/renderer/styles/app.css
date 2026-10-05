@@ -412,6 +412,9 @@ body {
   align-items: center;
   /* The first label sits where the title did: cancel the tab's own padding. */
   margin-left: -6px;
+  /* English labels are wider than a narrow sidebar leaves: the tabs give way, never the actions. */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sidebar__tab {
@@ -419,6 +422,7 @@ body {
   align-items: center;
   gap: 5px;
   height: 24px;
+  min-width: 0;
   padding: 0 6px;
   background: none;
   border: none;
@@ -438,7 +442,16 @@ body {
   color: var(--fg);
 }
 
+.sidebar__tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The count is the signal: it is never the part that gets cut. */
 .sidebar__tab-count {
+  flex: none;
   color: var(--wants);
 }
 
@@ -2364,6 +2377,7 @@ button.keys__chord:hover {
 .sidebar__actions {
   display: flex;
   align-items: center;
+  flex: none;
   gap: 2px;
 }
 

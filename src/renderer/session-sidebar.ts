@@ -186,7 +186,10 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     tab.type = 'button'
     tab.className = 'sidebar__tab'
     tab.setAttribute('role', 'tab')
-    tab.append(label)
+    const text = document.createElement('span')
+    text.className = 'sidebar__tab-label'
+    text.textContent = label
+    tab.append(text)
     return tab
   }
   const sessionsTab = makeTab(t.sidebar.title)

@@ -930,6 +930,18 @@ describe('session sidebar tabs', () => {
     expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false'])
   })
 
+  it('keeps the label and the count as siblings inside the tab', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    sidebar.setNotifications([row('a')])
+    const tab = tabs()[1]!
+    const label = tab.querySelector('.sidebar__tab-label')!
+    const count = tab.querySelector('.sidebar__tab-count')!
+    expect(label.textContent).toBe('Notifications')
+    expect(count.parentElement).toBe(tab)
+    expect(label.contains(count)).toBe(false)
+    expect(tabs()[0]!.querySelector('.sidebar__tab-label')!.textContent).toBe('Sessions')
+  })
+
   it('keeps the header actions in both tabs', () => {
     createSessionSidebar(host, hooks())
     tabs()[1]!.click()
