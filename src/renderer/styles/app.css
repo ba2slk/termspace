@@ -407,10 +407,44 @@ body {
   padding: 0 6px 0 10px;
 }
 
-.sidebar__title {
+.sidebar__tabs {
+  display: flex;
+  align-items: center;
+  /* The first label sits where the title did: cancel the tab's own padding. */
+  margin-left: -6px;
+}
+
+.sidebar__tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
   font-size: var(--fs-ui-sm);
   letter-spacing: 0.06em;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
+  cursor: default;
+}
+
+.sidebar__tab[aria-selected='true'] {
+  color: var(--fg);
+}
+
+.sidebar__tab:hover {
+  color: var(--fg);
+}
+
+.sidebar__tab-count {
+  color: var(--wants);
+}
+
+/* Nothing waiting: no text, and the gap goes with it. */
+.sidebar__tab-count:empty {
+  display: none;
 }
 
 .sidebar__action {
@@ -437,6 +471,32 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 0 6px 8px;
+}
+
+.sidebar__notifications {
+  display: none;
+}
+
+/* One class on the aside swaps the tabs; the dock is appended at runtime, so
+   it is hidden by rule and not by removal. */
+.sidebar--notifications .sidebar__pinned,
+.sidebar--notifications .sidebar__list,
+.sidebar--notifications .sidebar__dock {
+  display: none;
+}
+
+.sidebar--notifications .sidebar__notifications {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 8px;
+}
+
+.sidebar__notifications-empty {
+  padding: 6px 8px;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
 }
 
 /* The default terminal: above the list and not in it, across the same hairline

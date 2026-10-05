@@ -137,6 +137,8 @@ const en = {
     endSession: 'End session',
     endSessionNamed: (name: string) => `End the ${name} session`,
     archive: 'Archive',
+    notifications: 'Notifications',
+    notificationsEmpty: 'No pane is waiting.',
   },
 
   /** session-runtime.ts: in-session notices. */
@@ -523,6 +525,8 @@ const ko: Catalog = {
     endSession: '세션 끝내기',
     endSessionNamed: (name: string) => `${name} 세션 끝내기`,
     archive: '아카이브',
+    notifications: '알림',
+    notificationsEmpty: '기다리는 pane이 없습니다.',
   },
 
   runtime: {

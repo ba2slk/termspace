@@ -897,3 +897,68 @@ describe('the default terminal slot', () => {
     expect(document.querySelectorAll('.sidebar__list .sidebar__row')).toHaveLength(1)
   })
 })
+
+describe('session sidebar tabs', () => {
+  const tabs = (): HTMLButtonElement[] => [
+    ...document.querySelectorAll<HTMLButtonElement>('.sidebar__tabs .sidebar__tab'),
+  ]
+  const aside = (): HTMLElement => document.querySelector<HTMLElement>('aside.sidebar')!
+  const row = (paneId: string) => ({
+    paneId,
+    session: 'work',
+    pane: 'Terminal',
+    title: 'Done',
+    body: 'build finished',
+    time: '14:32',
+  })
+
+  it('starts on the sessions tab', () => {
+    createSessionSidebar(host, hooks())
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false'])
+    expect(aside().classList.contains('sidebar--notifications')).toBe(false)
+    expect(document.querySelector('.sidebar__tabs')!.getAttribute('role')).toBe('tablist')
+    expect(tabs().map((tab) => tab.getAttribute('role'))).toEqual(['tab', 'tab'])
+  })
+
+  it('switches to the notifications tab and back', () => {
+    createSessionSidebar(host, hooks())
+    tabs()[1]!.click()
+    expect(aside().classList.contains('sidebar--notifications')).toBe(true)
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual(['false', 'true'])
+    tabs()[0]!.click()
+    expect(aside().classList.contains('sidebar--notifications')).toBe(false)
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false'])
+  })
+
+  it('keeps the header actions in both tabs', () => {
+    createSessionSidebar(host, hooks())
+    tabs()[1]!.click()
+    expect(document.querySelectorAll('.sidebar__header .sidebar__action')).toHaveLength(2)
+  })
+
+  it('counts the waiting panes on the tab, and shows nothing at zero', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    const count = (): string => document.querySelector('.sidebar__tab-count')!.textContent ?? ''
+    expect(count()).toBe('')
+    sidebar.setNotifications([row('a'), row('b')])
+    expect(count()).toBe('2')
+    sidebar.setNotifications([])
+    expect(count()).toBe('')
+  })
+
+  it('shows the empty line only while no pane is waiting', () => {
+    const sidebar = createSessionSidebar(host, hooks())
+    const box = document.querySelector('.sidebar__notifications')!
+    expect(box.textContent).toBe('No pane is waiting.')
+    sidebar.setNotifications([row('a')])
+    expect(box.textContent).not.toContain('No pane is waiting.')
+    sidebar.setNotifications([])
+    expect(box.textContent).toBe('No pane is waiting.')
+  })
+
+  it('puts the notifications box after the list', () => {
+    createSessionSidebar(host, hooks())
+    const list = document.querySelector('.sidebar__list')!
+    expect(list.nextElementSibling?.classList.contains('sidebar__notifications')).toBe(true)
+  })
+})

@@ -73,6 +73,18 @@ export interface SidebarHooks {
   readonly gotoHint: (index: number) => string
 }
 
+export interface NotificationRow {
+  readonly paneId: string
+  /** The session's display name. */
+  readonly session: string
+  /** The pane's title; the default pane title when unnamed. */
+  readonly pane: string
+  readonly title: string
+  readonly body: string
+  /** Already formatted, e.g. "14:32". */
+  readonly time: string
+}
+
 export interface SessionSidebar {
   readonly element: HTMLElement
   /**
@@ -98,6 +110,8 @@ export interface SessionSidebar {
    * stays, as the way to start one.
    */
   setDefaultTerminal(state: { readonly current: boolean; readonly wants: boolean } | null): void
+  /** The panes waiting on a notification, oldest first, across sessions. */
+  setNotifications(rows: readonly NotificationRow[]): void
   setVisible(visible: boolean): void
   setWidth(width: number): void
   readonly visible: boolean
@@ -162,9 +176,25 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   const header = document.createElement('header')
   header.className = 'sidebar__header'
 
-  const title = document.createElement('span')
-  title.className = 'sidebar__title'
-  title.textContent = t.sidebar.title
+  // The tabs take the title's place, so the header keeps its height.
+  const tabs = document.createElement('div')
+  tabs.className = 'sidebar__tabs'
+  tabs.setAttribute('role', 'tablist')
+
+  function makeTab(label: string): HTMLButtonElement {
+    const tab = document.createElement('button')
+    tab.type = 'button'
+    tab.className = 'sidebar__tab'
+    tab.setAttribute('role', 'tab')
+    tab.append(label)
+    return tab
+  }
+  const sessionsTab = makeTab(t.sidebar.title)
+  const notificationsTab = makeTab(t.sidebar.notifications)
+  const notificationsCount = document.createElement('span')
+  notificationsCount.className = 'sidebar__tab-count'
+  notificationsTab.append(notificationsCount)
+  tabs.append(sessionsTab, notificationsTab)
 
   const refresh = document.createElement('button')
   refresh.type = 'button'
@@ -187,7 +217,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   headerActions.className = 'sidebar__actions'
   headerActions.append(create, refresh)
 
-  header.append(title, headerActions)
+  header.append(tabs, headerActions)
 
   const list = document.createElement('div')
   list.className = 'sidebar__list'
@@ -262,7 +292,24 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     )
   })
 
-  aside.append(header, pinned, list)
+  const notifications = document.createElement('div')
+  notifications.className = 'sidebar__notifications'
+  const notificationsEmpty = document.createElement('div')
+  notificationsEmpty.className = 'sidebar__notifications-empty'
+  notificationsEmpty.textContent = t.sidebar.notificationsEmpty
+  notifications.append(notificationsEmpty)
+
+  // Runtime only, always opens on sessions. CSS does the swap off one class.
+  function selectTab(showNotifications: boolean): void {
+    aside.classList.toggle('sidebar--notifications', showNotifications)
+    sessionsTab.setAttribute('aria-selected', String(!showNotifications))
+    notificationsTab.setAttribute('aria-selected', String(showNotifications))
+  }
+  sessionsTab.addEventListener('click', () => selectTab(false))
+  notificationsTab.addEventListener('click', () => selectTab(true))
+  selectTab(false)
+
+  aside.append(header, pinned, list, notifications)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
   host.prepend(aside, grip)
 
@@ -1013,6 +1060,12 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     setDefaultTerminal(state) {
       terminalRunning = state !== null
       pinned.replaceChildren(defaultTerminalRow(state))
+    },
+
+    setNotifications(rows) {
+      notificationsCount.textContent = rows.length === 0 ? '' : String(rows.length)
+      // Rows are drawn by the next step; until then only the empty line varies.
+      notifications.replaceChildren(...(rows.length === 0 ? [notificationsEmpty] : []))
     },
 
     render(sessions, live, current, wanting) {
