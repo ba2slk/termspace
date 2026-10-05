@@ -265,7 +265,7 @@ const sidebar = createSessionSidebar(workspace, {
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
-  onOpenDefaultTerminal: () => void openSession(DEFAULT_TERMINAL_ID),
+  onOpenDefaultTerminal: () => void openDefaultTerminal(),
   onCloseDefaultTerminal: () => endSession(DEFAULT_TERMINAL_ID),
   onDefaultTerminalMenu: (at) => {
     appBar.closeMenus()
@@ -1091,7 +1091,7 @@ async function openSession(id: string): Promise<void> {
     return
   }
 
-  // It has no file to load; once it ends, only openDefaultTerminal brings it back.
+  // It has no file to load; once it ends, openDefaultTerminal starts a new one.
   if (isDefaultTerminal(id)) return
 
   const loaded = await api.loadSession(id)
@@ -1153,7 +1153,8 @@ function fillWidth(): number {
 
 /**
  * The shell a launch opens, before any session: no file, one pane at home.
- * At most one; the empty canvas's button brings it back after it ends.
+ * At most one; its sidebar row, its key and the empty canvas's button bring it
+ * back after it ends.
  */
 async function openDefaultTerminal(): Promise<void> {
   if (sessions.has(DEFAULT_TERMINAL_ID)) {

@@ -327,7 +327,13 @@ group starts from nothing open. The save half runs first in `sessions`.
 - The pane is as wide as the canvas beside the sidebar, within 1px of the column cap
   (`defaultTerminalFillsCanvas`) — boot waits for the window manager to finish sizing
   the window first. A window resized after the pane opened is `skipped`, with both widths
-- The row's × ends it and the slot goes (`defaultTerminalEnds`)
+- The row's power button ends it: no pane, and nothing left on the row to end
+  (`defaultTerminalEnds`)
+- The row is still drawn above the list after that, by its rectangle
+  (`defaultTerminalRowStays`) — it is the only way back by mouse while another session
+  is open
+- Clicking the row starts one pane again (`defaultTerminalRowReopens`), which the check
+  then ends
 - On the empty canvas "New terminal" holds focus (`newTerminalFocused`) — otherwise
   `Enter` does nothing there. A synthetic `Enter` presses no button, so `Enter` itself
   is checked by eye
@@ -340,7 +346,8 @@ group starts from nothing open. The save half runs first in `sessions`.
   shell starts in `$HOME`, so a root taken from the start would be wrong
 - A taken name disables the button with the "pick another" wording
   (`defaultTerminalRefusesTaken`) — this dialog must never overwrite a session
-- Saving removes the slot and the window title shows the new name (`defaultTerminalSaved`)
+- Saving leaves the slot with nothing running and the window title shows the new name
+  (`defaultTerminalSaved`)
 - The same xterm, with its earlier output, is on screen after the save
   (`defaultTerminalKeepsPty`) — a save that restarted the shell would kill what ran in it
 
@@ -652,8 +659,11 @@ These can't be replaced by automated judgment. They're matters of impression, no
 - [ ] Save under an existing session's name: the dialog refuses it (the self-check covers
       this), and the existing file is unchanged afterwards
 - [ ] Right-click the row: the only item is "Save as session". Dragging the row does
-      nothing and it cannot be dropped on the archive dock. Its × ends it without asking,
-      as on every other row
+      nothing and it cannot be dropped on the archive dock. Its power button ends it
+      without asking, as on every other row
+- [ ] End it while another session is open: the row stays with an unlit dot, no
+      "unsaved" and no power button, and right-click shows no menu. Clicking it starts a
+      new shell in `$HOME`
 - [ ] `Alt+1`–`9` and `Alt+Shift+<` / `>` never land on the default terminal
 - [ ] ``Alt+` `` (mac `Cmd+Shift+0`) goes to the default terminal, creates one when none
       exists, and pressed again returns to the previous session

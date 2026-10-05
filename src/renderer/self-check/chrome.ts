@@ -731,7 +731,7 @@ export async function checkSettings(report: Report): Promise<void> {
   await capture(report, 'sidebar-row')
   for (const el of hoverOnly) el.style.removeProperty('opacity')
 
-  const sessionButton = document.querySelector<HTMLButtonElement>('.sidebar__open')
+  const sessionButton = document.querySelector<HTMLButtonElement>('.sidebar__list .sidebar__open')
   sessionButton?.click()
   await waitFor(() => !settingsOpen() && visiblePanes().length > 0, 10_000)
   report['sidebarClosesSettings'] =

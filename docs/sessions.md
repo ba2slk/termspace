@@ -123,13 +123,17 @@ pane and opens the file in `$EDITOR`, falling back to `$VISUAL`, then `vi`.
 Every launch opens one shell in `$HOME`, shown above the session list as
 "Default". It has no file, and nothing about it is written until you save it.
 
+The row stays after the terminal ends, drawn like a session that is not running.
+Clicking it, or `` Alt + ` `` (mac `Cmd+Shift` + `0`), starts a new shell in
+`$HOME`. What ran in the ended one does not come back.
+
 `Alt+Shift` + `S` (mac `Cmd` + `S`), ☰ → save as, or right-click the row →
 save as session opens the same dialog as above. The name field starts empty;
 the base directory is suggested from where the shells stand. A name that is
 already taken is refused, with no overwrite offered. Saving writes an ordinary
 session file, captured by the same rules as any other save, and the running
 programs keep running: the terminal becomes that session in place, at the end
-of the list.
+of the list. The "Default" row is then free to start another.
 
 ## What a save captures
 
