@@ -38,6 +38,51 @@ export async function checkWheelScroll(report: Report): Promise<void> {
   // Earlier checks may have parked at the right edge, where nothing can move.
   roll(-100_000)
   await settle()
+  await waitFor(() => Math.abs(trackOffset()) < 1, 2000)
+  // The logical position stays at zero, but the track yields briefly before returning.
+  roll(-120)
+  const pulled = await waitFor(() => trackOffset() > 2, 1000)
+  const returned = await waitFor(() => Math.abs(trackOffset()) < 1, 2000)
+  report['wheelEdgeReturns'] =
+    pulled && returned ? 'ok (left edge yielded and returned)' : `FAIL (pulled=${String(pulled)}, returned=${String(returned)})`
+  roll(-20)
+  await waitFor(() => trackOffset() > 2, 1000)
+  const firstPull = trackOffset()
+  for (let i = 0; i < 8; i++) {
+    roll(-20)
+    await sleep(30)
+  }
+  const heldPull = trackOffset()
+  report['wheelEdgeFollowsGesture'] =
+    heldPull > firstPull + 5 && heldPull < 65
+      ? `ok (${Math.round(firstPull)} → ${Math.round(heldPull)}px)`
+      : `FAIL (${Math.round(firstPull)} → ${Math.round(heldPull)}px)`
+  roll(80)
+  const reversed = await waitFor(() => trackOffset() < heldPull - 5, 1000)
+  report['wheelEdgeReversesUnderFinger'] =
+    reversed && trackOffset() > 0
+      ? `ok (${Math.round(heldPull)} → ${Math.round(trackOffset())}px, still at edge)`
+      : `FAIL (${Math.round(heldPull)} → ${Math.round(trackOffset())}px)`
+  let smallestReturn = heldPull
+  const settledEdge = await waitFor(() => {
+    const position = trackOffset()
+    smallestReturn = Math.min(smallestReturn, position)
+    return Math.abs(position) < 1
+  }, 2000)
+  report['wheelEdgeNoRebound'] =
+    settledEdge && smallestReturn >= 0
+      ? 'ok (returned without crossing the edge)'
+      : `FAIL (minimum ${smallestReturn.toFixed(1)}px)`
+
+  roll(-40)
+  await waitFor(() => trackOffset() > 2, 1000)
+  roll(120)
+  const enteredCanvas = await waitFor(() => trackOffset() < -2, 1000)
+  report['wheelEdgeReverseRemainderPans'] =
+    enteredCanvas ? 'ok (excess reverse input pans the canvas)' : 'FAIL (reverse input stayed at edge)'
+  roll(-100_000)
+  await settle()
+  await waitFor(() => Math.abs(trackOffset()) < 1, 2000)
 
   // Distance per notch. Without boost this would be the raw 100px.
   const before = Math.abs(trackOffset())
