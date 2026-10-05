@@ -338,10 +338,16 @@ export interface TermspaceApi {
   deleteSession(id: string): Promise<SaveSessionResult>
   /** Rewrite the display name; the file name/id may change to match the new name. */
   renameSession(id: string, newName: string): Promise<SaveSessionResult>
-  /** Move a session to an index in the list; returns the list as it now stands. */
+  /**
+   * Move a session to an index among the rows drawn with it, the available or
+   * the archived; returns the list as it now stands.
+   */
   reorderSession(id: string, toIndex: number): Promise<readonly SessionSummary[]>
-  /** Put a session away; returns the list as it now stands. */
-  archiveSession(id: string): Promise<readonly SessionSummary[]>
+  /**
+   * Put a session away, at an index among the archived or last without one;
+   * returns the list as it now stands.
+   */
+  archiveSession(id: string, toIndex?: number): Promise<readonly SessionSummary[]>
   /** Bring a session back, at the end of the available list. */
   restoreSession(id: string): Promise<readonly SessionSummary[]>
   /** Full editor invocation for this session's file, or null when it is missing. */

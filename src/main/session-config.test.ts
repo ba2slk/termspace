@@ -560,6 +560,16 @@ describe('reorderSession', () => {
     const list = await reorderSession(dir, orderPath(), archivePath(), 'a', 2)
     expect(list.filter((s) => !s.archived).map((s) => s.id)).toEqual(['b', 'c', 'a'])
   })
+
+  it('moves an archived session among the archived, leaving the rest where they are', async () => {
+    for (const n of ['a', 'x', 'b', 'y', 'z']) await write(n)
+    await writeFile(orderPath(), JSON.stringify(['a', 'x', 'b', 'y', 'z']))
+    await writeFile(archivePath(), JSON.stringify(['x', 'y', 'z']))
+    // The dock shows x y z, so index 0 is its top.
+    const list = await reorderSession(dir, orderPath(), archivePath(), 'z', 0)
+    expect(list.filter((s) => s.archived).map((s) => s.id)).toEqual(['z', 'x', 'y'])
+    expect(list.filter((s) => !s.archived).map((s) => s.id)).toEqual(['a', 'b'])
+  })
 })
 
 describe('archiveSession and restoreSession', () => {
@@ -581,6 +591,32 @@ describe('archiveSession and restoreSession', () => {
     expect(archivedIds(list)).toEqual(['b'])
     expect(list.map((s) => s.id).sort()).toEqual(['a', 'b'])
     expect(JSON.parse(await readFile(archivePath(), 'utf8'))).toEqual(['b'])
+  })
+
+  it('lands last among the archived, wherever it stood in the list', async () => {
+    for (const n of ['a', 'b', 'c', 'd']) await write(n)
+    await writeFile(orderPath(), JSON.stringify(['a', 'b', 'c', 'd']))
+    await archiveSession(dir, orderPath(), archivePath(), 'c')
+    const list = await archiveSession(dir, orderPath(), archivePath(), 'a')
+    expect(archivedIds(list)).toEqual(['c', 'a'])
+    expect(list.filter((s) => !s.archived).map((s) => s.id)).toEqual(['b', 'd'])
+  })
+
+  it('lands at the slot it was dropped on', async () => {
+    for (const n of ['a', 'b', 'c', 'd']) await write(n)
+    await writeFile(orderPath(), JSON.stringify(['a', 'b', 'c', 'd']))
+    await archiveSession(dir, orderPath(), archivePath(), 'b')
+    await archiveSession(dir, orderPath(), archivePath(), 'c')
+    const list = await archiveSession(dir, orderPath(), archivePath(), 'd', 1)
+    expect(archivedIds(list)).toEqual(['b', 'd', 'c'])
+  })
+
+  it('archiving again without a slot leaves the archive in its order', async () => {
+    for (const n of ['a', 'b']) await write(n)
+    await archiveSession(dir, orderPath(), archivePath(), 'a')
+    await archiveSession(dir, orderPath(), archivePath(), 'b')
+    const list = await archiveSession(dir, orderPath(), archivePath(), 'a')
+    expect(archivedIds(list)).toEqual(['a', 'b'])
   })
 
   it('archiving twice records the id once', async () => {

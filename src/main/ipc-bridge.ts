@@ -192,8 +192,8 @@ export function registerIpcHandlers(
 
   registerHandler(
     'session:archive',
-    (_e, id: string): Promise<SessionSummary[]> =>
-      archiveSession(dir, orderPath, archivePath, id),
+    (_e, id: string, toIndex?: number): Promise<SessionSummary[]> =>
+      archiveSession(dir, orderPath, archivePath, id, typeof toIndex === 'number' ? toIndex : undefined),
   )
 
   registerHandler(
