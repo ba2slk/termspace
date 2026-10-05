@@ -226,7 +226,15 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   headerActions.className = 'sidebar__actions'
   headerActions.append(create, refresh)
 
-  header.append(tabs, headerActions)
+  header.append(tabs)
+
+  // Above the list and not in it: the buttons must not scroll away with the rows.
+  const listHeader = document.createElement('div')
+  listHeader.className = 'sidebar__list-header'
+  const listTitle = document.createElement('span')
+  listTitle.className = 'sidebar__title'
+  listTitle.textContent = t.sidebar.title
+  listHeader.append(listTitle, headerActions)
 
   const list = document.createElement('div')
   list.className = 'sidebar__list'
@@ -342,7 +350,7 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   notificationsTab.addEventListener('click', () => selectTab(true))
   selectTab(false)
 
-  aside.append(header, pinned, list, notifications)
+  aside.append(header, pinned, listHeader, list, notifications)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
   host.prepend(aside, grip)
 

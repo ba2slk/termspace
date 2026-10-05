@@ -1196,26 +1196,24 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
   const side = rect(aside())
   const header = rect(document.querySelector('.sidebar__header'))
   const strip = rect(document.querySelector('.sidebar__tabs'))
-  const actions = rect(document.querySelector('.sidebar__actions'))
-  const lastTab = rect(tabs()[1])
   const countBox = rect(countOf())
-  if (side === undefined || side.width === 0 || header === undefined || strip === undefined || actions === undefined || countBox === undefined) {
+  if (side === undefined || side.width === 0 || header === undefined || strip === undefined || countBox === undefined) {
     report['notifyQueueHeader'] = 'skipped (sidebar not laid out: closed or collapsed)'
   } else {
     const problems: string[] = []
     if (Math.abs(header.height - 30) > EPS) problems.push(`header is ${String(header.height)}px tall, wanted 30`)
-    if (strip.right > actions.left + EPS) {
-      problems.push(`tab strip ends at ${String(strip.right)}, past the actions at ${String(actions.left)}`)
+    // Centred by the gap on either side, so a count that widens the strip cannot tip it.
+    const gapLeft = strip.left - header.left
+    const gapRight = header.right - strip.right
+    if (Math.abs(gapLeft - gapRight) > 1) {
+      problems.push(`tab strip is off centre: ${String(gapLeft)}px left, ${String(gapRight)}px right`)
     }
-    if (lastTab !== undefined && lastTab.right > actions.left + EPS) {
-      problems.push(`notifications tab ends at ${String(lastTab.right)}, past the actions at ${String(actions.left)}`)
+    if (strip.left < header.left - EPS || strip.right > header.right + EPS) {
+      problems.push(`tab strip spans ${String(strip.left)}..${String(strip.right)}, header ${String(header.left)}..${String(header.right)}`)
     }
     if (countBox.width <= 0) problems.push('count has no width')
     if (countBox.left < header.left - EPS || countBox.right > header.right + EPS) {
       problems.push(`count spans ${String(countBox.left)}..${String(countBox.right)}, header ${String(header.left)}..${String(header.right)}`)
-    }
-    if (countBox.right > actions.left + EPS) {
-      problems.push(`count ends at ${String(countBox.right)}, under the actions at ${String(actions.left)}`)
     }
     tabs().forEach((tab, i) => {
       const glyph = rect(tab.querySelector('svg'))
@@ -1260,6 +1258,19 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
     report['notifyQueueRow'] = problems.length === 0 ? 'ok' : `FAIL (${problems.join('; ')})`
   }
 
+  // The session actions belong to the sessions view: none visible here.
+  const listHeader = document.querySelector<HTMLElement>('.sidebar__list-header')
+  const listHeaderBox = rect(listHeader)
+  report['notifyQueueHidesSessionActions'] =
+    side === undefined || side.width === 0
+      ? 'skipped (sidebar not laid out: closed or collapsed)'
+      : listHeader === null
+        ? 'FAIL (no .sidebar__list-header)'
+        : getComputedStyle(listHeader).display === 'none' ||
+            (listHeaderBox !== undefined && (listHeaderBox.width === 0 || listHeaderBox.height === 0))
+          ? 'ok'
+          : `FAIL (list header is ${String(listHeaderBox?.width)}x${String(listHeaderBox?.height)} under the notifications tab)`
+
   // A bell marks a dot and nothing else.
   if (bell === undefined) {
     report['notifyQueueBellSkipsQueue'] = 'skipped (no second unwatched pane)'
@@ -1280,6 +1291,24 @@ export async function checkNotificationQueue(report: Report): Promise<void> {
   const arrived = await waitFor(() => document.title.includes('verify'), 8000)
   const cleared = await waitFor(() => notifRows().length === 0, 8000)
   tabs()[0]?.click()
+  // Back on the sessions tab the actions sit between the default terminal and the list.
+  const actionsBox = rect(document.querySelector('.sidebar__actions'))
+  const pinnedBox = rect(pinnedSlot())
+  const firstRow = rect(document.querySelector('.sidebar__list .sidebar__row'))
+  const listTop = rect(document.querySelector('.sidebar__list'))?.top
+  const below = firstRow?.top ?? listTop
+  report['notifySessionActionsPlace'] =
+    side === undefined || side.width === 0
+      ? 'skipped (sidebar not laid out: closed or collapsed)'
+      : actionsBox === undefined || actionsBox.width <= 0 || actionsBox.height <= 0
+        ? 'FAIL (session actions have no size on the sessions tab)'
+        : pinnedBox === undefined || below === undefined
+          ? 'FAIL (no default terminal row or list to measure against)'
+          : actionsBox.bottom > below + EPS
+            ? `FAIL (actions end at ${String(actionsBox.bottom)}, below the list's start at ${String(below)})`
+            : actionsBox.top < pinnedBox.bottom - EPS
+              ? `FAIL (actions start at ${String(actionsBox.top)}, over the default terminal ending at ${String(pinnedBox.bottom)})`
+              : 'ok'
   const dotAfter = dotFill('verify')
   const clickProblems: string[] = []
   if (dotBefore !== WANTS) clickProblems.push(`the session's dot was ${dotBefore ?? 'missing'} before the click, not --wants`)

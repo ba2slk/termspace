@@ -829,7 +829,9 @@ describe('the default terminal slot', () => {
     const sidebar = createSessionSidebar(host, hooks())
     sidebar.render([summary()], new Map(), null)
     const pinned = slot()!
-    expect(pinned.nextElementSibling).toBe(document.querySelector('.sidebar__list'))
+    expect(pinned.nextElementSibling?.nextElementSibling).toBe(
+      document.querySelector('.sidebar__list'),
+    )
     expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
     expect(pinned.querySelector('.sidebar__dot')).not.toBeNull()
     expect(pinned.querySelector('.sidebar__dot--on')).toBeNull()
@@ -842,7 +844,8 @@ describe('the default terminal slot', () => {
     sidebar.setDefaultTerminal({ current: true, wants: false })
     const pinned = slot()!
     const list = document.querySelector('.sidebar__list')!
-    expect(pinned.nextElementSibling).toBe(list)
+    // The sessions' own header row sits between the two.
+    expect(pinned.nextElementSibling?.nextElementSibling).toBe(list)
     expect(list.contains(pinned)).toBe(false)
     expect(pinned.querySelector('.sidebar__name')?.textContent).toBe('Default')
     expect(pinned.querySelector('.sidebar__meta')?.textContent).toBe('unsaved')
@@ -955,10 +958,39 @@ describe('session sidebar tabs', () => {
     expect(tabs()[0]!.querySelector('.sidebar__tab-count')).toBeNull()
   })
 
-  it('keeps the header actions in both tabs', () => {
+  it('holds only the tab strip in the header', () => {
+    createSessionSidebar(host, hooks())
+    const header = document.querySelector('.sidebar__header')!
+    expect([...header.children].map((el) => el.className)).toEqual(['sidebar__tabs'])
+    expect(header.querySelector('.sidebar__action')).toBeNull()
+  })
+
+  it('puts the session actions in a row between the default terminal and the list', () => {
+    createSessionSidebar(host, hooks())
+    const kids = [...aside().children].map((el) => el.className)
+    expect(kids.slice(0, 4)).toEqual([
+      'sidebar__header',
+      'sidebar__pinned',
+      'sidebar__list-header',
+      'sidebar__list',
+    ])
+    const listHeader = document.querySelector('.sidebar__list-header')!
+    expect(listHeader.querySelector('.sidebar__title')!.textContent).toBe(
+      stringsFor('en').sidebar.title,
+    )
+    const catalog = stringsFor('en').sidebar
+    expect(
+      [...listHeader.querySelectorAll<HTMLButtonElement>('.sidebar__actions .sidebar__action')].map(
+        (b) => b.title,
+      ),
+    ).toEqual([catalog.newSession, catalog.refreshList])
+  })
+
+  it('still reaches the actions with the notifications tab on, and hides nothing by removal', () => {
     createSessionSidebar(host, hooks())
     tabs()[1]!.click()
-    expect(document.querySelectorAll('.sidebar__header .sidebar__action')).toHaveLength(2)
+    // Hidden by CSS under the aside class; the buttons stay in the DOM.
+    expect(document.querySelectorAll('.sidebar__list-header .sidebar__action')).toHaveLength(2)
   })
 
   it('counts the waiting panes on the tab, and shows nothing at zero', () => {

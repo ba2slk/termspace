@@ -536,19 +536,25 @@ sessions' attention sets and the tab agree, and no unit test reaches that wiring
 
 - The tab's count reads `1` in the same colour `--wants` paints (`notifyQueueCount`;
   the token is resolved through a probe element, not compared with a literal)
-- The header stays 30px tall, the tab strip and the count end before `.sidebar__actions`,
-  and the count lies inside the header with a width, and each tab holds an icon that
-  was painted with a size (`notifyQueueHeader`). A passing line also records the
+- The header stays 30px tall, the tab strip is centred in it (the gaps on its left and
+  right differ by at most 1px), the strip and the count lie inside the header, the
+  count has a width, and each tab holds an icon that was painted with a size
+  (`notifyQueueHeader`). A passing line also records the
   sidebar's width, e.g. `ok (220px)`: the number is there to be read, not asserted
 - Opening the tab shows exactly one row, inside the sidebar's width, naming the session,
   the title and the body, while the sessions list takes no space (`notifyQueueRow`)
+- With the tab open, the row that holds the new-session and refresh buttons
+  (`.sidebar__list-header`) takes no space either, so neither button shows
+  (`notifyQueueHidesSessionActions`)
 - **A bell marks the session's dot and adds no row** (`notifyQueueBellSkipsQueue`): the
   bell is written to the focused pane of another session that already runs. A window
   with no such session reports `skipped (no second unwatched pane)` instead of starting
   one, since opening a session spawns a shell per pane
 - Clicking the row opens `verify`, removes the row, empties the count and, back on the
   Sessions tab, takes `--wants` off the session's dot, which was `--wants` before the
-  click so the colour read can tell the two apart (`notifyQueueClickGoes`)
+  click so the colour read can tell the two apart (`notifyQueueClickGoes`). On that
+  Sessions tab the buttons are back, below the default terminal's row and above the
+  first session row (`notifySessionActionsPlace`)
 - **`Alt+N` (`Cmd+Shift+N`) goes to the oldest waiting pane with the Sessions tab
   showing** (`notifyQueueKeyGoes`): the pane is rung again from another session, the
   chord is read from the stored bindings, and the check wants `verify` on screen and the

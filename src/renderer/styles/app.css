@@ -401,17 +401,15 @@ body {
 .sidebar__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex: 0 0 auto;
   height: 30px;
-  padding: 0 6px 0 10px;
+  padding: 0 6px;
 }
 
 .sidebar__tabs {
   display: flex;
   align-items: center;
-  /* The first icon sits where the header's content starts: cancel the tab's own padding. */
-  margin-left: -6px;
 }
 
 .sidebar__tab {
@@ -469,6 +467,22 @@ body {
   color: var(--fg);
 }
 
+/* The label starts where a row's dot does: the list's 6px plus the row's 8px. */
+.sidebar__list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 6px 0 14px;
+}
+
+.sidebar__title {
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+}
+
 .sidebar__list {
   flex: 1;
   min-height: 0;
@@ -483,6 +497,7 @@ body {
 /* One class on the aside swaps the tabs; the dock is appended at runtime, so
    it is hidden by rule and not by removal. */
 .sidebar--notifications .sidebar__pinned,
+.sidebar--notifications .sidebar__list-header,
 .sidebar--notifications .sidebar__list,
 .sidebar--notifications .sidebar__dock {
   display: none;
@@ -2422,7 +2437,7 @@ button.keys__chord:hover {
   gap: 8px;
 }
 
-/* Header actions, sitting together on the right. */
+/* The session actions, sitting together on the right of the list's header. */
 .sidebar__actions {
   display: flex;
   align-items: center;
