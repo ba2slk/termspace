@@ -23,7 +23,9 @@ import { maxColumnWidth } from './layout-geometry'
 import { createConfirmCloseView, type ConfirmRequest, type RunningSession } from './confirm-close-view'
 import { createSaveSessionView } from './save-session-view'
 import { defaultTerminalTarget, gotoTarget, reachableSessions, stepSession } from './session-ring'
-import { createSessionSidebar } from './session-sidebar'
+import { formatClock, prune, upsert, type QueuedNotification } from './attention-queue'
+import { createSessionSidebar, type NotificationRow } from './session-sidebar'
+import { DEFAULT_PANE_TITLE, isDefaultPaneTitle } from './pane-title'
 import { startSession, type SessionRuntime } from './session-runtime'
 import { createPageWebglCoordinator } from './page-webgl-coordinator'
 import { createSettingsView } from './settings-view'
@@ -265,6 +267,7 @@ const sidebar = createSessionSidebar(workspace, {
   // As the menu's Restore does, landing at the end of the list. The sidebar
   // waits on this one: a refusal is how the row it is holding gets put back.
   onRestore: (id) => restoreSession(id),
+  onOpenNotification: (paneId) => goToPane(paneId),
   onOpenDefaultTerminal: () => void openDefaultTerminal(),
   onCloseDefaultTerminal: () => endSession(DEFAULT_TERMINAL_ID),
   onDefaultTerminalMenu: (at) => {
@@ -533,6 +536,43 @@ function livePaneCount(runtime: SessionRuntime): number {
   return runtime.snapshot().columns.reduce((sum, c) => sum + c.panes.length, 0)
 }
 
+/** Panes that sent a notification and are still waiting, oldest first. */
+let queue: readonly QueuedNotification[] = []
+
+/** The queue follows the sessions' attention sets; a pane they no longer hold leaves it. */
+function pruneQueue(): void {
+  queue = prune(queue, (paneId) =>
+    [...sessions.values()].some(({ runtime }) => runtime.wants(paneId)),
+  )
+}
+
+/** The queue with names filled in. A pane no session holds any more is skipped. */
+function notificationRows(): NotificationRow[] {
+  const rows: NotificationRow[] = []
+  for (const { paneId, title, body, at } of queue) {
+    const owner = sessionOwningPane(paneId)
+    if (owner === null) continue
+    const pane = sessions
+      .get(owner)
+      ?.runtime.snapshot()
+      .columns.flatMap((column) => column.panes)
+      .find((p) => p.paneId === paneId)
+    if (pane === undefined) continue
+    const session = isDefaultTerminal(owner)
+      ? t.sidebar.defaultTerminal
+      : (knownSessions.find((s) => s.id === owner)?.name ?? owner)
+    rows.push({
+      paneId,
+      session,
+      pane: isDefaultPaneTitle(pane.title) ? DEFAULT_PANE_TITLE : pane.title.trim(),
+      title,
+      body,
+      time: formatClock(at),
+    })
+  }
+  return rows
+}
+
 /**
  * Redraw from what is already known.
  *
@@ -544,6 +584,7 @@ function renderSidebar(): void {
     [...sessions].filter(([, entry]) => entry.runtime.wantsAttention()).map(([id]) => id),
   )
   sidebar.render(knownSessions, live, currentName, wanting)
+  sidebar.setNotifications(notificationRows())
   const terminal = sessions.get(DEFAULT_TERMINAL_ID)?.runtime
   sidebar.setDefaultTerminal(
     terminal === undefined
@@ -573,7 +614,14 @@ function reportWatchedPane(): void {
  */
 api.onAttention((attention) => {
   for (const { runtime } of sessions.values()) {
-    if (runtime.noteAttention(attention.paneId)) return
+    if (!runtime.noteAttention(attention.paneId)) continue
+    // noteAttention has already pruned, so the entry goes in after it.
+    if (attention.kind === 'notify' && runtime.wants(attention.paneId)) {
+      const { paneId, title, body } = attention
+      queue = upsert(queue, { paneId, title, body, at: Date.now() })
+      renderSidebar()
+    }
+    return
   }
 })
 
@@ -587,18 +635,21 @@ function sessionOwningPane(paneId: string): string | null {
   return null
 }
 
-/*
- * A desktop notification was clicked. main has already brought the window
- * forward; the pane still has to be found, since it may be off screen or in a
- * session that is not the one on display.
+/**
+ * Open the session that holds a pane and focus the pane.
+ *
+ * The pane may be off screen, or in a session that is not the one on display.
  */
-api.onFocusPane((paneId) => {
+function goToPane(paneId: string): void {
   const owner = sessionOwningPane(paneId)
   if (owner === null) return
   void openSession(owner).then(() => {
     sessions.get(owner)?.runtime.focusPane(paneId)
   })
-})
+}
+
+// A desktop notification was clicked; main has already brought the window forward.
+api.onFocusPane(goToPane)
 
 /*
  * Copy or Paste came from the mac application menu.
@@ -949,6 +1000,10 @@ function onAppKeyDown(event: KeyboardEvent): void {
     case 'default-terminal':
       goToDefaultTerminal()
       break
+    case 'next-notification':
+      // Silent when nothing waits: the key is also pressed by habit.
+      if (queue[0] !== undefined) goToPane(queue[0].paneId)
+      break
     case 'goto-session':
       gotoSession(action.index)
       break
@@ -1053,6 +1108,7 @@ function endSession(id: string): void {
   entry?.runtime.destroy()
   entry?.host.remove()
   sessions.delete(id)
+  pruneQueue()
   if (previousName === id) previousName = null
 
   if (currentName === id) {
@@ -1130,7 +1186,10 @@ function mountRuntime(id: string, spec: SessionSpec, file: string): SessionRunti
     onPaneRenamed: () => {
       if (!isDefaultTerminal(idOf(runtime))) void saveCurrentLayout()
     },
-    onAttentionChanged: renderSidebar,
+    onAttentionChanged: () => {
+      pruneQueue()
+      renderSidebar()
+    },
     onWatchedPaneChanged: reportWatchedPane,
     // By identity, not by the id captured here: a rename moves the session to a
     // new key and this closure outlives that.

@@ -34,6 +34,9 @@ if (isSelfCheck) {
   // Per process: parallel groups must not share a user-data folder.
   const id = process.env['SELFCHECK_SCOPE'] ?? 'all'
   app.setPath('userData', `${app.getPath('temp')}/termspace-selfcheck-${id}`)
+  // On Wayland the app id comes from the desktop name; --class only reaches X11.
+  const windowClass = process.env['SELFCHECK_CLASS']
+  if (windowClass) app.setDesktopName(`${windowClass}.desktop`)
 }
 
 // A second instance would open a second copy of the same session's ptys.

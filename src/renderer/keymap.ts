@@ -44,6 +44,8 @@ export type Action =
   /** Stop the herdr session the focused pane is attached to. */
   | { readonly t: 'herdr-stop' }
   | { readonly t: 'toggle-sidebar' }
+  /** Go to the pane that has waited longest, whichever session holds it. */
+  | { readonly t: 'next-notification' }
   /** Show the default terminal, or go back from it. */
   | { readonly t: 'default-terminal' }
   /** Jump to the nth session in the sidebar, zero-based. */
@@ -83,6 +85,7 @@ export function isAppAction(action: Action): boolean {
     action.t === 'save-layout' ||
     action.t === 'fullscreen' ||
     action.t === 'default-terminal' ||
+    action.t === 'next-notification' ||
     action.t === 'goto-session' ||
     action.t === 'step-session' ||
     action.t === 'font-size' ||
@@ -123,6 +126,7 @@ const FIXED_ACTION: Partial<Readonly<Record<ActionId, Action>>> = {
   paste: { t: 'paste' },
   'toggle-sidebar': { t: 'toggle-sidebar' },
   'default-terminal': { t: 'default-terminal' },
+  'next-notification': { t: 'next-notification' },
   'prev-session': { t: 'step-session', delta: -1 },
   'next-session': { t: 'step-session', delta: 1 },
   settings: { t: 'settings' },

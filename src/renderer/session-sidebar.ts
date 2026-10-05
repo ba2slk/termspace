@@ -71,6 +71,20 @@ export interface SidebarHooks {
   readonly onDefaultTerminalMenu: (at: { x: number; y: number }) => void
   /** The chord that opens the nth session, which the user can rebind. */
   readonly gotoHint: (index: number) => string
+  /** A notification row was clicked: go to the pane that sent it. */
+  readonly onOpenNotification: (paneId: string) => void
+}
+
+export interface NotificationRow {
+  readonly paneId: string
+  /** The session's display name. */
+  readonly session: string
+  /** The pane's title; the default pane title when unnamed. */
+  readonly pane: string
+  readonly title: string
+  readonly body: string
+  /** Already formatted, e.g. "14:32". */
+  readonly time: string
 }
 
 export interface SessionSidebar {
@@ -94,10 +108,12 @@ export interface SessionSidebar {
   startRename(sessionId: string): void
   /**
    * The file-less terminal a launch opens, drawn above the list rather than in
-   * it: no number, no drag, no archive. Null means none is running: the row
+   * it, under the sessions label: no number, no drag, no archive. Null means none is running: the row
    * stays, as the way to start one.
    */
   setDefaultTerminal(state: { readonly current: boolean; readonly wants: boolean } | null): void
+  /** The panes waiting on a notification, oldest first, across sessions. */
+  setNotifications(rows: readonly NotificationRow[]): void
   setVisible(visible: boolean): void
   setWidth(width: number): void
   readonly visible: boolean
@@ -153,6 +169,10 @@ const POWER_PATH = 'M8 2.6v5'
 const POWER_RING = 'M4.2 6.2A4.6 4.6 0 1 0 11.8 6.2'
 /* A box with its lid on: the archive. */
 const ARCHIVE_PATHS = ['M2.5 3.5h11v2.5h-11z', 'M3.5 6v6.5h9V6', 'M6.5 8.6h3']
+/* Three rows, each with a dot in front: the list of sessions. */
+const SESSIONS_PATH = 'M2.5 4h.01M6 4h7.5M2.5 8h.01M6 8h7.5M2.5 12h.01M6 12h7.5'
+/* A bell with its clapper below. */
+const BELL_PATHS = ['M3 12.5 4 11V7a4 4 0 0 1 8 0v4l1 1.5z', 'M6.5 14.2h3']
 
 export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): SessionSidebar {
   const aside = document.createElement('aside')
@@ -162,9 +182,27 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   const header = document.createElement('header')
   header.className = 'sidebar__header'
 
-  const title = document.createElement('span')
-  title.className = 'sidebar__title'
-  title.textContent = t.sidebar.title
+  // The tabs take the title's place, so the header keeps its height.
+  const tabs = document.createElement('div')
+  tabs.className = 'sidebar__tabs'
+  tabs.setAttribute('role', 'tablist')
+
+  function makeTab(label: string, glyph: string | readonly string[]): HTMLButtonElement {
+    const tab = document.createElement('button')
+    tab.type = 'button'
+    tab.className = 'sidebar__tab'
+    tab.setAttribute('role', 'tab')
+    tab.title = label
+    tab.setAttribute('aria-label', label)
+    tab.append(icon(glyph))
+    return tab
+  }
+  const sessionsTab = makeTab(t.sidebar.title, SESSIONS_PATH)
+  const notificationsTab = makeTab(t.sidebar.notifications, BELL_PATHS)
+  const notificationsCount = document.createElement('span')
+  notificationsCount.className = 'sidebar__tab-count'
+  notificationsTab.append(notificationsCount)
+  tabs.append(sessionsTab, notificationsTab)
 
   const refresh = document.createElement('button')
   refresh.type = 'button'
@@ -187,15 +225,23 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
   headerActions.className = 'sidebar__actions'
   headerActions.append(create, refresh)
 
-  header.append(title, headerActions)
+  header.append(tabs)
+
+  // Outside the list: the buttons must not scroll away with the rows.
+  const listHeader = document.createElement('div')
+  listHeader.className = 'sidebar__list-header'
+  const listTitle = document.createElement('span')
+  listTitle.className = 'sidebar__title'
+  listTitle.textContent = t.sidebar.title
+  listHeader.append(listTitle, headerActions)
 
   const list = document.createElement('div')
   list.className = 'sidebar__list'
 
   /*
-   * The default terminal's slot. Outside the list, across a hairline, as the
-   * archive dock is below it: the list's wheel dial and drag listen on the list
-   * alone, so neither can reach this row.
+   * The default terminal's slot, under the "Sessions" label. Outside the list,
+   * as the archive dock is below it: the list's wheel dial and drag listen on the
+   * list alone, so neither can reach this row.
    */
   const pinned = document.createElement('div')
   pinned.className = 'sidebar__pinned'
@@ -262,7 +308,52 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     )
   })
 
-  aside.append(header, pinned, list)
+  const notifications = document.createElement('div')
+  notifications.className = 'sidebar__notifications'
+  const notificationsEmpty = document.createElement('div')
+  notificationsEmpty.className = 'sidebar__notifications-empty'
+  notificationsEmpty.textContent = t.sidebar.notificationsEmpty
+  notifications.append(notificationsEmpty)
+
+  // Every string here is program output; textContent keeps it from being parsed.
+  function notificationButton(row: NotificationRow): HTMLButtonElement {
+    const part = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement('span')
+      el.className = `sidebar__notification-${cls}`
+      el.textContent = text
+      return el
+    }
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'sidebar__notification'
+    button.dataset['paneId'] = row.paneId
+    const meta = document.createElement('span')
+    meta.className = 'sidebar__notification-meta'
+    const where = document.createElement('span')
+    where.className = 'sidebar__notification-where'
+    where.append(part('session', row.session), part('pane', row.pane))
+    meta.append(where, part('time', row.time))
+    button.append(meta)
+    if (row.title !== '') button.append(part('title', row.title))
+    // An OSC 9 notification is a body alone: it is the message, so it reads as one.
+    if (row.title === '') button.classList.add('sidebar__notification--untitled')
+    if (row.body !== '') button.append(part('body', row.body))
+    button.addEventListener('click', () => hooks.onOpenNotification(row.paneId))
+    return button
+  }
+
+  // Runtime only, always opens on sessions. CSS does the swap off one class.
+  function selectTab(showNotifications: boolean): void {
+    aside.classList.toggle('sidebar--notifications', showNotifications)
+    sessionsTab.setAttribute('aria-selected', String(!showNotifications))
+    notificationsTab.setAttribute('aria-selected', String(showNotifications))
+  }
+  sessionsTab.addEventListener('click', () => selectTab(false))
+  notificationsTab.addEventListener('click', () => selectTab(true))
+  selectTab(false)
+  let queued = 0
+
+  aside.append(header, listHeader, pinned, list, notifications)
   // Before the canvas: CSS places the grid cells, but tab order follows the DOM.
   host.prepend(aside, grip)
 
@@ -1013,6 +1104,19 @@ export function createSessionSidebar(host: HTMLElement, hooks: SidebarHooks): Se
     setDefaultTerminal(state) {
       terminalRunning = state !== null
       pinned.replaceChildren(defaultTerminalRow(state))
+    },
+
+    setNotifications(rows) {
+      notificationsCount.textContent = rows.length === 0 ? '' : String(rows.length)
+      // Only the last card leaving sends you back: a tab opened by hand while empty stays.
+      if (rows.length === 0 && queued > 0 && aside.classList.contains('sidebar--notifications')) {
+        selectTab(false)
+      }
+      queued = rows.length
+      // The list is a handful of rows, so it is rebuilt rather than diffed.
+      notifications.replaceChildren(
+        ...(rows.length === 0 ? [notificationsEmpty] : rows.map(notificationButton)),
+      )
     },
 
     render(sessions, live, current, wanting) {

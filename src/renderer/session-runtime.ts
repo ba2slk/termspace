@@ -164,6 +164,8 @@ export interface SessionRuntime {
   noteAttention(paneId: string): boolean
   /** Whether any pane of this session is still asking to be looked at. */
   wantsAttention(): boolean
+  /** Whether this one pane is asking: marked, and still here. */
+  wants(paneId: string): boolean
   /**
    * Focus a pane and scroll it into view. False when the pane is not this
    * session's, so the caller can find whose it is.
@@ -820,6 +822,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
     if (record.resizeTimer !== null) window.clearTimeout(record.resizeTimer)
     record.terminal.dispose()
     records.delete(paneId)
+    // A gone pane cannot be looked at, so nothing else would ever clear its mark.
+    if (attention.delete(paneId)) options.onAttentionChanged()
     attached = attached.filter((id) => id !== paneId)
     frozen = frozen.filter((id) => id !== paneId)
     lastSeen.delete(paneId)
@@ -1288,6 +1292,8 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
 
     wantsAttention: () => attention.size > 0,
 
+    wants: (paneId) => attention.has(paneId) && records.has(paneId),
+
     focusPane(paneId) {
       if (!records.has(paneId)) return false
       // A caller names the pane, so it lands in one go: behind a zoom or the
@@ -1369,6 +1375,9 @@ export function startSession(options: StartSessionOptions): SessionRuntime {
       detachDrag()
       offData()
       offExit()
+      // The caller redraws once teardown is over; unmountPane would call back
+      // per waiting pane into a runtime that is half gone.
+      attention.clear()
       for (const paneId of [...records.keys()]) unmountPane(paneId)
       canvas.destroy()
     },

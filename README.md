@@ -57,7 +57,7 @@ while you're looking somewhere else.
 | Archiving a session | Drag a row onto the archive dock at the bottom of the sidebar, or right-click → archive. With the dock open, a row dropped anywhere in it lands on the slot under the pointer; otherwise it lands last. Archived rows reorder by drag, and show a handle under the pointer. An archived session is out of the list, `Alt` + `1`–`9` and the session ring until you drag or right-click it back, which puts it at the end of the list. The ids are kept in `~/.config/termspace/session-archive.json`. |
 | Switching sessions | The wheel over the session list steps through sessions, and `Alt` + `1`–`9` opens one directly. Pressing the current session's number again returns to the previous one. |
 | Panning and resizing with the mouse | Mice have no horizontal wheel, so the wheel over the middle of the title bar pans the canvas, as does `Shift` + wheel anywhere. At either end the canvas follows the continuing gesture up to a soft limit, then returns smoothly without bouncing past the edge. The gaps between panes are drag handles for resizing. |
-| Notifications from off-screen panes | A pane that rings marks its session in the list. `OSC 9` and `OSC 777` notifications also reach the desktop, unless you were watching that pane at the time. |
+| Notifications from off-screen panes | A pane that rings marks its session in the list. `OSC 9` and `OSC 777` notifications also reach the desktop, unless you were watching that pane at the time. The sidebar's Notifications tab lists those panes across all sessions, oldest first, with the time each arrived; clicking a row goes to the pane, and a row leaves the list once you have looked at its pane. A bell marks the session but is not listed. |
 | Links in output | `Ctrl` + click (`Cmd` + click on macOS) opens a URL in the browser. `OSC 8` hyperlinks work the same way. A plain click still selects. |
 
 ## Install
@@ -175,6 +175,7 @@ in the list to stop every herdr session it holds.
 | `Alt` + `M` | `Cmd+Shift+M` | Overview of the whole session |
 | `F2` | `F2` | Rename the selected pane, in the overview |
 | `Alt` + `K` | `Cmd+Shift+K` | Go to a pane by name, command or window title |
+| `Alt` + `N` | `Cmd+Shift` + `N` | Go to the pane that has waited longest for you; does nothing when none is waiting |
 | `Alt` + `S` | `Cmd` + `B` | Toggle the session sidebar |
 | `Alt` + `G` | `Cmd` + `G` | Scroll back to the focused pane |
 | `Alt` + `1`–`9` | `Cmd` + `1`–`9` | Jump to a session; the same number again bounces back |

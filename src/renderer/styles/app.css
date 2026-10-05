@@ -401,16 +401,51 @@ body {
 .sidebar__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex: 0 0 auto;
   height: 30px;
-  padding: 0 6px 0 10px;
+  padding: 0 6px;
 }
 
-.sidebar__title {
+.sidebar__tabs {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar__tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
   font-size: var(--fs-ui-sm);
-  letter-spacing: 0.06em;
   color: var(--fg-faint);
+  cursor: default;
+}
+
+.sidebar__tab:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.sidebar__tab[aria-selected='true'] {
+  background: var(--fill-selected);
+  color: var(--fg);
+}
+
+/* The count is the signal: it is never the part that gets cut. */
+.sidebar__tab-count {
+  flex: none;
+  color: var(--wants);
+}
+
+/* Nothing waiting: no text, and the gap goes with it. */
+.sidebar__tab-count:empty {
+  display: none;
 }
 
 .sidebar__action {
@@ -432,6 +467,22 @@ body {
   color: var(--fg);
 }
 
+/* The label starts where a row's dot does: the list's 6px plus the row's 8px. */
+.sidebar__list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 6px 0 14px;
+}
+
+.sidebar__title {
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+}
+
 .sidebar__list {
   flex: 1;
   min-height: 0;
@@ -439,13 +490,129 @@ body {
   padding: 0 6px 8px;
 }
 
-/* The default terminal: above the list and not in it, across the same hairline
-   that sets the archive dock apart below. The row inside is an ordinary row. */
+.sidebar__notifications {
+  display: none;
+}
+
+/* One class on the aside swaps the tabs; the dock is appended at runtime, so
+   it is hidden by rule and not by removal. */
+.sidebar--notifications .sidebar__pinned,
+.sidebar--notifications .sidebar__list-header,
+.sidebar--notifications .sidebar__list,
+.sidebar--notifications .sidebar__dock {
+  display: none;
+}
+
+.sidebar--notifications .sidebar__notifications {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 8px;
+}
+
+/* The message leads; where it came from and when is metadata above it. */
+.sidebar__notification {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+/* Cards are tall and multi-line: a hairline keeps neighbours apart, the first has none. */
+.sidebar__notification + .sidebar__notification {
+  border-top: 1px solid var(--border);
+}
+
+.sidebar__notification:hover {
+  background: var(--fill-hover-faint);
+}
+
+.sidebar__notification-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-ui-sm);
+}
+
+.sidebar__notification-where {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar__notification-session,
+.sidebar__notification-pane,
+.sidebar__notification-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__notification-session {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-dim);
+}
+
+.sidebar__notification-pane {
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.sidebar__notification-time {
+  flex: none;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+.sidebar__notification-title {
+  font-size: var(--fs-ui-lg);
+  color: var(--fg);
+}
+
+.sidebar__notification-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* A long path or URL has no break points and would widen the card. */
+  overflow-wrap: anywhere;
+  font-size: var(--fs-ui);
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* No title: the body is the message, so it takes the title's colour. */
+.sidebar__notification--untitled .sidebar__notification-body {
+  color: var(--fg);
+}
+
+.sidebar__notifications-empty {
+  padding: 6px 8px;
+  font-size: var(--fs-ui-sm);
+  color: var(--fg-faint);
+}
+
+/* The default terminal: under the sessions label, outside the list. The container
+   is plain and takes the list's side padding, so the row lines up with the saved
+   rows; the row alone is the recessed well (see below). The label's 28px box
+   already gives the gap above it; the bottom padding is the gap to the first row. */
 .sidebar__pinned {
   flex: 0 0 auto;
   padding: 0 6px 6px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--border);
 }
 
 .sidebar__row {
@@ -462,6 +629,24 @@ body {
 /* The session on screen — exactly one row is lit. */
 .sidebar__row--current {
   background: var(--fill-selected);
+}
+
+/* The default terminal's row is a well, not a list row: it keeps its dark fill in
+   every state, so a resting fill never reads as the current session. Hover layers
+   the faint fill over the well; the current one gains a ring, drawn as an inset
+   outline like the wheel dial's, so the box never changes size. */
+.sidebar__pinned .sidebar__row {
+  background: var(--bg-well);
+}
+
+.sidebar__pinned .sidebar__row:hover:not(.sidebar__row--current) {
+  background: linear-gradient(var(--fill-hover-faint), var(--fill-hover-faint)), var(--bg-well);
+}
+
+.sidebar__pinned .sidebar__row--current {
+  background: var(--bg-well);
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
 }
 
 /* Where the wheel dial points; the session opens once the wheel rests. */
@@ -2072,7 +2257,7 @@ button.keys__chord:hover {
   color: var(--fg);
 }
 
-/* Divider in the app bar, separating window controls from pane controls. */
+/* Divider in the app bar, setting the menu apart from the layout controls after it. */
 .app-bar__divider {
   width: 1px;
   height: 16px;
@@ -2300,10 +2485,11 @@ button.keys__chord:hover {
   gap: 8px;
 }
 
-/* Header actions, sitting together on the right. */
+/* The session actions, sitting together on the right of the list's header. */
 .sidebar__actions {
   display: flex;
   align-items: center;
+  flex: none;
   gap: 2px;
 }
 

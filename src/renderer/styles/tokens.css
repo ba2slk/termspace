@@ -2,6 +2,8 @@
 :root {
   --bg-canvas: #141414;
   --bg-pane: #1b1b1b;
+  /* A recess in the panel: darker than it, but short of the canvas so it stays soft. */
+  --bg-well: color-mix(in srgb, var(--bg-canvas) 60%, var(--bg-pane));
   --bg-raised: #262624;
 
   --border: rgba(255, 255, 255, 0.07);

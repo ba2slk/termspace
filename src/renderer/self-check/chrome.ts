@@ -109,7 +109,7 @@ export async function checkAppBarMenu(report: Report): Promise<void> {
 /** Split control: one button opening a dropdown of all four directions. */
 export async function checkSplitControl(report: Report): Promise<void> {
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('.app-bar__btn')]
-  // menu, sidebar, split, save
+  // menu, split, save, sidebar
   report['splitControlPresent'] = buttons.length >= 4 ? 'ok' : `FAIL (${buttons.length} buttons)`
 
   const chevron = buttons.find((b) => b.dataset['action'] === 'split-menu')

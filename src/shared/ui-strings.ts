@@ -137,6 +137,8 @@ const en = {
     endSession: 'End session',
     endSessionNamed: (name: string) => `End the ${name} session`,
     archive: 'Archive',
+    notifications: 'Notifications',
+    notificationsEmpty: 'No pane is waiting.',
   },
 
   /** session-runtime.ts: in-session notices. */
@@ -316,6 +318,7 @@ const en = {
     'reveal-focus': 'Scroll back to the focused pane',
     overview: 'Open the overview map',
     'pane-jump': 'Go to a pane by name',
+    'next-notification': 'Go to the next waiting pane',
     'split-up': 'Split upwards',
     'split-down': 'Split downwards',
     'add-column-left': 'Add a column to the left',
@@ -523,6 +526,8 @@ const ko: Catalog = {
     endSession: '세션 끝내기',
     endSessionNamed: (name: string) => `${name} 세션 끝내기`,
     archive: '아카이브',
+    notifications: '알림',
+    notificationsEmpty: '기다리는 pane이 없습니다.',
   },
 
   runtime: {
@@ -694,6 +699,7 @@ const ko: Catalog = {
     'reveal-focus': '포커스한 pane으로 돌아가기',
     overview: '오버뷰 맵 열기',
     'pane-jump': '이름으로 pane 찾아가기',
+    'next-notification': '다음 알림 pane으로 가기',
     'split-up': '위로 분할하기',
     'split-down': '아래로 분할하기',
     'add-column-left': '왼쪽에 컬럼 추가하기',

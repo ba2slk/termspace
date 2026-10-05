@@ -320,10 +320,14 @@ group starts from nothing open. The save half runs first in `sessions`.
   — the feature is what the app shows before anything else
 - The pane's shell prints something (`defaultTerminalShell`) — a slot with a dead pty
   looks the same in the DOM. No prompt at all is `skipped`, not `FAIL`
-- The slot is drawn above the list, by its rectangle (`defaultTerminalAboveList`) — DOM
-  order alone does not say where it lands
-- The slot's bottom border is solid and between 0 and 1px (`defaultTerminalHairline`) —
-  computed widths snap to device pixels, so 1px can read as 0.6px
+- The slot is drawn above the list, under the "Sessions" label and its buttons, by its
+  rectangle (`defaultTerminalAboveList`) — DOM order alone does not say where it lands
+- The row is a recessed well: its own fill differs from the sidebar panel, the container
+  paints nothing, and the corners match a saved row's (`defaultTerminalWell`). A fill that
+  was lighter than the panel would read as hover or as the current session
+- The well's left and right edges equal the first saved row's within 1px, and a gap
+  separates the two (`defaultTerminalWellAligned`). With no saved session laid out it is
+  `skipped`
 - The pane is as wide as the canvas beside the sidebar, within 1px of the column cap
   (`defaultTerminalFillsCanvas`) — boot waits for the window manager to finish sizing
   the window first. A window resized after the pane opened is `skipped`, with both widths
@@ -526,6 +530,46 @@ group starts from nothing open. The save half runs first in `sessions`.
   preview appears, holds while the wheel keeps moving, the settled row's session opens,
   and the rows rolled past stay cold — a step that opened every session it passed would
   spawn a shell per notch
+
+**Notification queue (the sidebar's Notifications tab)**
+
+Run in `sessions` after the attention check: a temporary session is put on screen and
+an OSC 777 with a known title and body is written to the focused pane of `verify`,
+which is then not being watched. Nothing else shows whether the attention stream, the
+sessions' attention sets and the tab agree, and no unit test reaches that wiring.
+
+- The tab's count reads `1` in the same colour `--wants` paints (`notifyQueueCount`;
+  the token is resolved through a probe element, not compared with a literal)
+- The header stays 30px tall, the tab strip is centred in it (the gaps on its left and
+  right differ by at most 1px), the strip and the count lie inside the header, the
+  count has a width, and each tab holds an icon that was painted with a size
+  (`notifyQueueHeader`). A passing line also records the
+  sidebar's width, e.g. `ok (220px)`: the number is there to be read, not asserted
+- Opening the tab shows exactly one row, inside the sidebar's width, naming the session,
+  the title and the body, the title painted in `--fg` and the body inside the row's
+  width, while the sessions list takes no space (`notifyQueueRow`)
+- With the tab open, the row that holds the new-session and refresh buttons
+  (`.sidebar__list-header`) takes no space either, so neither button shows
+  (`notifyQueueHidesSessionActions`)
+- **A bell marks the session's dot and adds no row** (`notifyQueueBellSkipsQueue`): the
+  bell is written to the focused pane of another session that already runs. A window
+  with no such session reports `skipped (no second unwatched pane)` instead of starting
+  one, since opening a session spawns a shell per pane
+- Clicking the row opens `verify`, removes the row, empties the count and, back on the
+  Sessions tab, takes `--wants` off the session's dot, which was `--wants` before the
+  click so the colour read can tell the two apart (`notifyQueueClickGoes`). On that
+  Sessions tab the buttons are back, above the default terminal's row, which is above
+  the list (`notifySessionActionsPlace`)
+- **The click empties the queue, and the sidebar leaves the Notifications tab by
+  itself** (`notifyQueueReturnsToSessions`): no click on the Sessions tab is made, and
+  the check waits for that tab's `aria-selected` and for the list to have a height.
+  Opening the tab by hand while it is empty does not bounce (unit-tested only)
+- **`Alt+N` (`Cmd+Shift+N`) goes to the oldest waiting pane with the Sessions tab
+  showing** (`notifyQueueKeyGoes`): the pane is rung again from another session, the
+  chord is read from the stored bindings, and the check wants `verify` on screen and the
+  tab's count empty. With nothing waiting the key does nothing
+- The Sessions tab is selected again and the temporary session is gone
+  (`notifyQueueLeftAsFound`)
 
 **herdr keys (`Alt+H` / `Alt+Shift+H`)**
 

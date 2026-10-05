@@ -61,6 +61,7 @@ import {
   checkHerdrKeys,
   checkImeInput,
   checkNewSession,
+  checkNotificationQueue,
   checkResizeSync,
   checkSaveCurrentLayout,
   checkSaveSession,
@@ -171,6 +172,7 @@ const GROUPS: Readonly<
     await checkSessionStepShortcut(report)
     await checkHerdrKeys(report)
     await checkAttentionClearsOnReturn(report)
+    await checkNotificationQueue(report)
     await checkSidebarReorder(report)
     await checkArchiveDock(report)
     await checkSidebarNarrowName(report)

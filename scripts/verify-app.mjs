@@ -11,6 +11,10 @@
  *   npm run verify:app                  every group, side by side
  *   npm run verify:app -- core motion   only these
  *   npm run verify:app -- --serial      one window, everything in order
+ *
+ * TERMSPACE_SELFCHECK_CLASS=<name> gives every window that window class / app id,
+ * so a compositor window rule can match it. Unset by default; what a rule does
+ * with the class is up to the user's own config.
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
@@ -44,6 +48,8 @@ const TIMEOUT_MS = 240_000
  * window that is not active.
  */
 const GROUPS = ['core', 'chrome', 'sessions', 'motion']
+
+const WINDOW_CLASS = process.env.TERMSPACE_SELFCHECK_CLASS ?? ''
 
 const configHome = (group) => join(CONFIG_ROOT, group)
 const sessionDir = (group) => join(configHome(group), 'termspace', 'sessions')
@@ -220,7 +226,7 @@ function build() {
 /** One window running one group. Resolves with its output whatever happens. */
 function run(group, tile, total) {
   return new Promise((resolve) => {
-    const child = spawn('npx', ['electron', '.'], {
+    const child = spawn('npx', ['electron', '.', ...(WINDOW_CLASS ? [`--class=${WINDOW_CLASS}`] : [])], {
       cwd: root,
       detached: true, // so the whole process group can be killed together
       env: {
@@ -228,6 +234,7 @@ function run(group, tile, total) {
         ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('HERDR_'))),
         VITE_SELFCHECK: '1',
         SELFCHECK_SCOPE: group,
+        ...(WINDOW_CLASS ? { SELFCHECK_CLASS: WINDOW_CLASS } : {}),
         // Only tile when there is something to tile against.
         ...(total > 1 ? { SELFCHECK_TILE: `${tile}/${total}` } : {}),
         XDG_CONFIG_HOME: configHome(group),
@@ -275,6 +282,13 @@ async function main() {
   const serial = args.includes('--serial')
   const picked = args.filter((a) => !a.startsWith('--'))
   const groups = serial ? ['all'] : picked.length > 0 ? picked : GROUPS
+
+  // It ends up in a command-line argument.
+  if (WINDOW_CLASS && !/^[A-Za-z0-9._-]+$/.test(WINDOW_CLASS)) {
+    console.error('TERMSPACE_SELFCHECK_CLASS may only contain letters, digits, ".", "_" and "-".')
+    process.exitCode = 1
+    return
+  }
 
   const unknown = groups.filter((g) => g !== 'all' && !GROUPS.includes(g))
   if (unknown.length > 0) {
