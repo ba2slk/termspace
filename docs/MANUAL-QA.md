@@ -840,7 +840,7 @@ What is left here is what a pointer has to show, and whether the shells really d
 
 ### Update check (no self-check covers this)
 
-- [ ] **Update chip.** Run the previous release (`~/Applications/Termspace.AppImage`
+- [ ] **Update chip.** Run the previous release (`~/Applications/termspace/AppRun`
       before `install:local`, or an older AppImage from the releases page). Within a few
       seconds of startup the title bar's left group ends in a chip naming the new
       version. Clicking it opens that release's GitHub page in the browser. Close the

@@ -520,6 +520,15 @@ detected, and point at the proper fix (registering a profile).
 into place: the running process holds on to the old file and the next launch gets the
 new one.
 
+**The AppImage took 3.8s to show a window; the same app unpacked took 0.8s.** The
+legacy FUSE2 runtime decompresses a gzip squashfs on every launch, and the Electron
+binary alone is 221MB of it. `toolsets.appimage: 1.0.3` (static runtime, zstd) brings
+the AppImage to about 2.1s. `install:local` goes further and installs the extracted
+tree at `~/Applications/termspace`, launched through its `AppRun`, which keeps the
+bundled fallback libraries in `usr/lib` on `LD_LIBRARY_PATH`. Extraction lands in a
+temporary directory beside the target and is swapped in with renames, for the same
+reason as above. The released artifact is still the AppImage.
+
 **EPIPE killed main.** If the terminal that launched the app closes first, the pipe
 breaks, and Electron puts the exception thrown by later writes into an error dialog.
 It only means there's nowhere left to write logs, so pass over it silently.

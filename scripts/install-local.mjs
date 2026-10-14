@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Install the built AppImage into ~/Applications with a desktop launcher.
- * Writes only inside the user's home and never needs sudo.
+ * Install the built AppImage, unpacked, into ~/Applications/termspace with a
+ * desktop launcher. Writes only inside the user's home and never needs sudo.
+ *
+ * Unpacked because an AppImage decompresses its squashfs through FUSE on every
+ * launch, which costs seconds before a window appears.
  */
-import { chmod, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdtemp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -17,11 +20,17 @@ const home = homedir()
 const APP_DIR = join(home, 'Applications')
 const DESKTOP_DIR = join(home, '.local', 'share', 'applications')
 const ICON_DIR = join(home, '.local', 'share', 'icons', 'hicolor')
-const TARGET = join(APP_DIR, 'Termspace.AppImage')
+const TARGET_DIR = join(APP_DIR, 'termspace')
+// AppRun, not the binary: it puts the bundled fallback libraries (usr/lib) on
+// LD_LIBRARY_PATH, as the AppImage did.
+const TARGET = join(TARGET_DIR, 'AppRun')
+// The binary is what AppArmor sees exec'd, so the profile names it.
+const BINARY = join(TARGET_DIR, 'termspace')
 const DESKTOP_FILE = join(DESKTOP_DIR, 'termspace.desktop')
 
 /**
- * chrome-sandbox inside an AppImage sits on squashfs and cannot be setuid, so
+ * chrome-sandbox from an AppImage is not setuid root (and installing it so
+ * would need sudo), so
  * --no-sandbox is added only where the kernel blocks unprivileged user
  * namespaces and Electron would otherwise die on launch.
  */
@@ -89,11 +98,28 @@ async function main() {
   const source = await findAppImage()
 
   await mkdir(APP_DIR, { recursive: true })
-  // A running AppImage can't be overwritten, so write beside it and rename.
-  const staged = `${TARGET}.new`
-  await copyFile(source, staged)
-  await chmod(staged, 0o755)
-  await rename(staged, TARGET)
+  // Extract beside the target and swap with renames: a running instance keeps
+  // its files open and is never overwritten.
+  const work = await mkdtemp(join(APP_DIR, '.termspace-'))
+  try {
+    await run(source, ['--appimage-extract'], { cwd: work, maxBuffer: 64 * 1024 * 1024 })
+    const old = join(work, 'old')
+    let hadOld = true
+    try {
+      await rename(TARGET_DIR, old)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+      hadOld = false
+    }
+    try {
+      await rename(join(work, 'squashfs-root'), TARGET_DIR)
+    } catch (err) {
+      if (hadOld) await rename(old, TARGET_DIR)
+      throw err
+    }
+  } finally {
+    await rm(work, { recursive: true, force: true })
+  }
 
   await installIcons()
   const pruned = await pruneOldAppImages(source)
@@ -136,7 +162,7 @@ async function main() {
 
   // Print what was installed. Without this a wrong pick looks like a success.
   console.log(`installed  Termspace ${await appVersion()}`)
-  console.log(`AppImage   ${TARGET}`)
+  console.log(`app        ${TARGET_DIR}`)
   console.log(`launcher   ${DESKTOP_FILE}`)
   if (pruned.length > 0) console.log(`pruned     ${pruned.length} older AppImage(s) in release/`)
   console.log('')
@@ -144,7 +170,7 @@ async function main() {
   if (!noSandbox) {
     console.log('sandbox    on')
     console.log('')
-    console.log('Find Termspace in your app list, or run the AppImage above directly.')
+    console.log(`Find Termspace in your app list, or run ${TARGET} directly.`)
     return
   }
 
@@ -155,7 +181,7 @@ async function main() {
     [
       'abi <abi/4.0>,',
       'include <tunables/global>',
-      `profile termspace ${TARGET} flags=(unconfined) {`,
+      `profile termspace ${BINARY} flags=(unconfined) {`,
       '  userns,',
       '  include if exists <local/termspace>',
       '}',
@@ -168,8 +194,8 @@ async function main() {
   console.log('')
   console.log('  This system blocks unprivileged user namespaces through AppArmor')
   console.log('  (kernel.apparmor_restrict_unprivileged_userns = 1). chrome-sandbox')
-  console.log('  inside an AppImage sits on squashfs and cannot be setuid, so Electron')
-  console.log('  would die on launch. The launcher carries --no-sandbox instead.')
+  console.log('  is not setuid root, so Electron would die on launch. The launcher')
+  console.log('  carries --no-sandbox instead.')
   console.log('')
   console.log('  Renderer isolation (contextIsolation, nodeIntegration: false,')
   console.log('  sandbox: true) and the CSP stay in place. What is off is the')
@@ -181,7 +207,7 @@ async function main() {
   console.log('    sudo apparmor_parser -r /etc/apparmor.d/termspace')
   console.log(`    sed -i 's/ --no-sandbox//' ${DESKTOP_FILE}`)
   console.log('')
-  console.log('Find Termspace in your app list, or run the AppImage above directly.')
+  console.log(`Find Termspace in your app list, or run ${TARGET} directly.`)
 }
 
 main().catch((err) => {

@@ -15,7 +15,7 @@ npm run typecheck                   # main and renderer tsconfigs, separately
 npm run verify:app                  # drive the real app and check it (see below)
 npm run icons                       # build/icon.svg -> the PNGs the packager reads
 npm run dist                        # AppImage into release/
-npm run install:local               # install that AppImage into ~/Applications
+npm run install:local               # install that AppImage, unpacked, into ~/Applications/termspace
 ```
 
 One test file, or one case:
