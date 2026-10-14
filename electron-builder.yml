@@ -31,3 +31,7 @@ mac:
   # No identity configured: electron-builder ad-hoc signs, which is what the
   # Apple Silicon kernel requires. Notarization is deliberately absent.
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
+# The static runtime with zstd starts faster than the legacy FUSE2 gzip one,
+# which decompresses the whole Electron binary on every launch.
+toolsets:
+  appimage: 1.0.3
